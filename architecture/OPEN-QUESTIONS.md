@@ -25,10 +25,10 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 
 | # | Pertanyaan | Saran | Status |
 |---|---|---|---|
-| **Q9** | Java 21 (lokal) atau 25 (parity admin-be)? | **Java 25** | 🟡 |
+| **Q9** | Java 21 (lokal) atau 25 (parity admin-be)? | **Java 25** | 🟢 Diputuskan & dipakai — toolchain dikunci ke Java 25 (ADR-0001) |
 | **Q10** | **RFID USB bridge** — browser tak bisa baca USB/serial langsung. Opsi: WebHID, WebSerial, atau agent lokal (Node/Electron)? | Perlu spike; **belum di PRD §13 poin 5** | 🔴 |
 | **Q11** | PostgreSQL kantin: DB terpisah, tapi server sama dengan admin-be? | DB terpisah | 🟡 |
-| **Q12** | Strategi locking ledger: pessimistic (`FOR UPDATE`) vs optimistic? | Pessimistic untuk debit; putuskan saat ADR-0003 | 🟡 |
+| **Q12** | Strategi locking ledger: pessimistic (`FOR UPDATE`) vs optimistic? | Pessimistic untuk debit | 🟢 Diputuskan (ADR-0003): pessimistic `FOR UPDATE` untuk debit |
 | **Q13** | Pemisahan layanan tap berlatensi rendah (Java vs service ringan)? | **Java dulu**; split hanya bila gagal SLO p95<1dtk | 🟡 |
 
 ---

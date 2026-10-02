@@ -1,6 +1,6 @@
 # ADR-0002 — JWT RS256, kantin-be Tanpa Login Sendiri
 
-- **Status:** Diusulkan
+- **Status:** Diterima (2026-10-02) — diimplementasi: decoder 2-issuer `KantinJwtDecoder`, `KlaimResolver` toleran, tanpa endpoint login/refresh. Sisa: public key produksi (Q1/Q2)
 - **Tanggal:** 2026-10-02
 - **Pengusul:** BE-1
 - **Terkait:** PRD §4.1, §11.10, Q1, Q2

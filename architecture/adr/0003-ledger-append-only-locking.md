@@ -1,6 +1,6 @@
 # ADR-0003 — Ledger Append-Only + Locking Pessimistic
 
-- **Status:** Diusulkan
+- **Status:** Diterima (2026-10-02) — diimplementasi: ledger append-only, `SELECT ... FOR UPDATE` pessimistic pada debit, isolasi tenant teruji (`IsolasiTenantLockIT`)
 - **Tanggal:** 2026-10-02
 - **Pengusul:** BE-2
 - **Terkait:** PRD §11.1, §11.2, §11.3, Q12

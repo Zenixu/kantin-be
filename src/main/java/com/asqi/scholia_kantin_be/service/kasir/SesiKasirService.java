@@ -124,8 +124,11 @@ public class SesiKasirService {
     }
 
     /**
-     * Tutup sesi: hitung rekap, tandai DITUTUP, kunci transaksi sesi ini
-     * (PRD §6.4). Setelah ditutup, void tidak lagi diizinkan pada sesi ini.
+     * Tutup sesi: hitung rekap lalu tandai DITUTUP (PRD §6.4).
+     *
+     * <p>Status transaksi {@code SUKSES} <b>tidak</b> diubah — "mengunci" ditegakkan
+     * lewat status sesi: {@link VoidService} menolak void bila sesi tak terbuka,
+     * sehingga transaksi sesi ini tak bisa lagi di-void setelah ditutup.
      *
      * @param oleh user penutup (audit)
      * @param auto true bila ditutup otomatis oleh sistem (mis. 23:59)

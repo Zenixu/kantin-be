@@ -72,7 +72,7 @@
 2. **Semua mutasi wajib idempotency key** (`referensiId`), agar retry jaringan tidak menggandakan efek (Aturan Emas §3.3).
 3. **Operasi tulis stok** harus lewat `StokOperasiService` (pembuka transaksi), karena `LedgerStokService` `propagation = MANDATORY`.
 4. **Endpoint file upload/view** belum ada — saat dibuat wajib paksa prefix tenant `sekolah-<id>/` (lihat B19).
-5. **Rate limit & blacklist token** (Redis) belum aktif (lihat B23 & `SECURITY.md` §7).
+5. **Rate limit & cabut token** (Redis) **sudah aktif** (B27 & B28, `SECURITY.md` §7). Rate limit **fail-open**: Redis mati ⇒ request tetap dilayani.
 
 ---
 

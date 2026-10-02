@@ -224,6 +224,17 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Fail-open:** Redis mati ⇒ token dianggap belum dicabut. Konsisten dengan kebijakan rate limit (B27).
 - **Belajar (`/bug-hunter`):** (1) simpan **hash**, bukan token mentah — bila Redis bocor, penyerang tak langsung dapat token yang bisa dipakai. (2) Periksa blacklist **setelah** verifikasi signature, agar token palsu tidak menghabiskan query Redis.
 
+## B29 — (audit) Dokumen arsitektur basi vs kondisi kode
+
+- **Gejala:** audit menyeluruh menemukan **tidak ada bug kode baru**, tetapi **dokumen/ADR tertinggal** dari kenyataan — berisiko menyesatkan tim (manusia & agen AI).
+- **Rincian yang diperbaiki:** ✅
+  1. **ADR-0001, 0002, 0003 masih "Diusulkan"** padahal sudah diimplementasi & teruji → diubah jadi **"Diterima"** dengan bukti implementasi.
+  2. **`OPEN-QUESTIONS.md` Q9 & Q12 masih 🟡** padahal sudah diputuskan (Java 25; locking pessimistic ADR-0003) → **🟢**.
+  3. **`API-ENDPOINTS.md` §6.5** masih menulis "rate limit & blacklist token belum aktif" → **sudah aktif** (B27 & B28).
+- **Hasil audit kode (bersih):** tidak ada TODO/FIXME; semua request DTO `@Valid`; semua 11 repository tenant-scoped; indeks DB lengkap untuk query panas; `ddl-auto=none` + `open-in-view=false`; tanpa secret hardcoded; `VoidService` memvalidasi tenant + status sesi + audit (diperiksa manual).
+- **Catatan:** `SesiKasirService.tutupSesi` **tidak** mengubah status transaksi individual — "mengunci" ditegakkan lewat status **sesi** (`VoidService` menolak void bila sesi tidak terbuka). Javadoc diringkas agar tidak menyesatkan.
+- **Pelajaran:** dokumentasi adalah bagian dari DoD. Setiap commit fitur **wajib** memperbarui ADR/OPEN-QUESTIONS/API-ENDPOINTS sekaligus — bukan menyusul.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:

@@ -1,6 +1,6 @@
 # ADR-0001 — Ikuti Stack SKOOLIA
 
-- **Status:** Diusulkan
+- **Status:** Diterima (2026-10-02) — diimplementasi: Java 25, Spring Boot 4.0.2 webmvc, PostgreSQL, Flyway, Redis, JWT RS256, Docker multi-stage
 - **Tanggal:** 2026-10-02
 - **Pengusul:** Tim kantin-be
 - **Terkait:** PRD §4, Q9, Q11
