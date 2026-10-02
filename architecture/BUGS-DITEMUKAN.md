@@ -172,6 +172,18 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
   - DTO baru: `VoidRequest`, `BukaSesiRequest`.
   - Tes: `IdentitasKantinTest` (5), `KasirControllerTest` (3, MockMvc standalone).
 
+## B25 — (perbaikan) Endpoint saldo & stok belum di-expose
+
+- **Gejala:** `SaldoTopUpService`, `LedgerSaldoService`, `LedgerStokService` lengkap & teruji, tetapi **tidak ada controller** — fitur top-up, koreksi, barang masuk, opname, baca saldo/stok tak bisa dipakai via HTTP.
+- **Akar:** controller belum dibuat; plus operasi tulis stok bertanda `@Transactional(MANDATORY)` sehingga controller tak boleh memanggil service langsung.
+- **Perbaikan:** ✅
+  - `SaldoController` (`/api/saldo`): topup, koreksi, lihat, rekonsiliasi.
+  - `StokController` (`/api/stok`): barang-masuk, opname, lihat, menipis, rekonsiliasi.
+  - Facade **transaksi-owning** `StokOperasiService` (membuka transaksi lalu mendelegasikan ke `LedgerStokService`) + `SaldoOperasiService` (baca-agregat).
+  - DTO: `TopUpRequest`, `KoreksiSaldoRequest`, `BarangMasukRequest`, `OpnameRequest`, `SaldoResponse`, `MutasiSaldoItem`, `StokResponse`.
+  - Dokumen baru `architecture/API-ENDPOINTS.md` (single source of truth endpoint).
+  - Tes: `SaldoControllerTest` (3), `StokControllerTest` (3).
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
