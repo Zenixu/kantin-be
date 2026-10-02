@@ -10,8 +10,8 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 
 | # | Pertanyaan | Untuk siapa | Status | Catatan |
 |---|---|---|---|---|
-| **Q1** | Format klaim JWT staf (nama field `user_id`/`sekolah_id`/`role`) + lokasi **public key RS256** admin-be? | Tim admin-be | 🔴 | Fondasi auth tidak bisa ditulis tanpa ini |
-| **Q2** | **Public key RS256 + format klaim JWT ortu** dari mobile-be? (repo belum ada di clone) | Tim mobile-be | 🔴 | Blokir filter JWT ortu |
+| **Q1** | Format klaim JWT staf (nama field `user_id`/`sekolah_id`/`role`) + lokasi **public key RS256** admin-be? | Tim admin-be | 🔴 | Decoder+filter sudah dibuat **toleran** (`KlaimResolver`) & fail-closed. Masih butuh **public key asli** untuk produksi |
+| **Q2** | **Public key RS256 + format klaim JWT ortu** dari mobile-be? (repo belum ada di clone) | Tim mobile-be | 🔴 | Idem Q1 — decoder sudah siap 2-issuer |
 | **Q3** | Tambah `refModul` kantin ke `migrateBukuKas()` admin-be, atau pakai `refModul=null`? | Tim admin-be | 🔴 | Menentukan cara posting Buku Kas |
 | **Q4** | Kontrak payload **callback top-up** dari callback-be (field `refId` PG)? | Tim callback-be | 🔴 | Blokir fitur top-up online |
 | **Q5** | Endpoint & format **push notification** mobile-be? | Tim mobile-be | 🔴 | Blokir notifikasi ortu |

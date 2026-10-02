@@ -16,9 +16,11 @@
 | 6 | [**INTEGRATIONS.md**](./INTEGRATIONS.md) | Cara nyambung ke SKOOLIA (JWT, Buku Kas, RFID, callback). |
 | 7 | [**CONVENTIONS.md**](./CONVENTIONS.md) | Gaya kode, penamaan, response, ledger, testing, toolchain. |
 | 8 | [**WORKFLOW.md**](./WORKFLOW.md) | Branching, commit, PR, review. |
-| 9 | [**OPEN-QUESTIONS.md**](./OPEN-QUESTIONS.md) | Pertanyaan belum terjawab & yang **memblokir**. |
-| 10 | [**adr/**](./adr/) | Architecture Decision Records — keputusan + alasannya. |
-| 11 | [**diagrams/**](./diagrams/) | Diagram alur (mis. alur tap kasir). |
+| 9 | [**SECURITY.md**](./SECURITY.md) | 🔐 Cara kerja auth: JWT RS256, RBAC, tenant guard, status HTTP. |
+| 10 | [**BUGS-DITEMUKAN.md**](./BUGS-DITEMUKAN.md) | 🐞 Bug nyata ditemukan + perbaikan (terutama warisan admin-be). |
+| 11 | [**OPEN-QUESTIONS.md**](./OPEN-QUESTIONS.md) | Pertanyaan belum terjawab & yang **memblokir**. |
+| 12 | [**adr/**](./adr/) | Architecture Decision Records — keputusan + alasannya. |
+| 13 | [**diagrams/**](./diagrams/) | Diagram alur (mis. alur tap kasir). |
 
 ---
 

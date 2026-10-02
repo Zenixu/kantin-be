@@ -19,7 +19,12 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - kantin_pgdata:/var/lib/postgresql/data
+      # ⚠️ PostgreSQL 18 mengubah tata letak data: mount di /var/lib/postgresql
+      # (BUKAN /var/lib/postgresql/data). Cara lama menyebabkan container
+      # restart-loop dengan pesan "there appears to be PostgreSQL data in
+      # /var/lib/postgresql/data (unused mount/volume)".
+      # Lihat https://github.com/docker-library/postgres/pull/1259
+      - kantin_pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kantin -d kantin_db"]
       interval: 5s

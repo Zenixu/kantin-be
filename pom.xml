@@ -49,6 +49,13 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
+		<!-- AOP: dipakai RBAC berbasis anotasi @PerluPeran (security/PeranAspect).
+		     ⚠️ Spring Boot 4: artifact lama spring-boot-starter-aop DIHAPUS,
+		     diganti spring-boot-starter-aspectj. Jangan pakai nama lama. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aspectj</artifactId>
+		</dependency>
 
 		<!-- ============================================================ -->
 		<!-- DATABASE: PostgreSQL + Flyway + JPA/JDBC                     -->
