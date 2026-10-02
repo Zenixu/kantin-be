@@ -146,7 +146,21 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 
 ---
 
-## Ringkasan untuk tim
+## B21 — (bukan bug) Audit top-up & void SUDAH ada
+
+- **Status:** ✅ Terverifikasi saat audit lanjutan — `SaldoTopUpService` (`TOPUP_TUNAI`, `KOREKSI_SALDO`) dan `VoidService` (`VOID_TRANSAKSI`) **sudah** memanggil `AuditLogger.catat`, hanya saat mutasi baru (`!isIdempotentReplay()`) agar replay tidak menggandakan jejak. Tidak ada perbaikan diperlukan.
+
+## B22 — `CommonResponse.serverError(Exception)` / `databaseError(Exception)` membocorkan pesan internal
+
+- **Gejala:** kedua method memakai `e.getMessage()` sebagai pesan respons ke klien — bisa memuat detail SQL/stack internal (info-leak).
+- **Akar:** warisan pola `admin-be`. Keduanya **tidak dipakai** di kantin-be (`GlobalExceptionHandler` selalu memakai pesan generik), tetapi berisiko disalin tim.
+- **Perbaikan:** ✅ `serverError(Exception)` kini mengembalikan pesan generik (`Terjadi kesalahan pada server`); `databaseError(Exception)` ditandai `@Deprecated(forRemoval=true)` + pesan generik. Detail asli tetap dicatat server-side via `ErrorLogger`.
+
+## B23 — Redis dead config (belum dipakai) & health check menyesatkan
+
+- **Gejala:** bean `RedisTemplate` ada & terkonfigurasi, tetapi **tidak ada pemakai** di kode bisnis. Health check Redis bawaan bisa melaporkan `DOWN` di dev yang sengaja tanpa Redis.
+- **Akar:** Redis disiapkan untuk rate-limit/blacklist token yang belum diimplementasi (`SECURITY.md` §7).
+- **Perbaikan:** ✅ `management.health.redis.enabled=${REDIS_HEALTH_ENABLED:false}` (dev tanpa Redis tidak DOWN palsu) + `spring.data.redis.timeout` + dokumentasi status di `SECURITY.md`. **Keputusan**: pertahankan (parity admin-be, siap dipakai) alih-alih hapus — tetapi **jangan** jadikan dependency wajib sampai benar-benar dipakai.
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
 1. Spring Boot 4: nama starter berubah (`-aop` → `-aspectj`).

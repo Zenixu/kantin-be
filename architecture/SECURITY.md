@@ -114,8 +114,16 @@ Lihat `BUGS-DITEMUKAN.md` B6–B8 tentang perbaikan status 403 dari `admin-be`.
 
 - 🔴 **Q1/Q2**: public key RS256 + format klaim JWT (admin & mobile). Decoder
   saat ini **fail-closed** bila key kosong — semua request → 401.
-- ⚠️ **CORS** masih longgar (`*`) untuk pengembangan. **Persempit sebelum production.**
-- 🔲 Pertimbangkan **rate limit** login/tap di Redis (blacklist token) — parity admin-be belum diimplementasi.
+- ✅ **CORS** — sudah diperbaiki (B11): origin eksplisit dari
+  `kantin.cors.allowed-origins` (tanpa wildcard saat kredensial aktif). Set
+  daftar origin production sebelum rilis.
+- 🔲 **Redis belum dipakai** (B23, dead config). Bean `RedisTemplate` sudah ada,
+  tetapi belum ada pemakai. Kandidat: **rate limit login/tap** + **blacklist
+  token**. Health check Redis di-disable default (`REDIS_HEALTH_ENABLED=false`)
+  agar dev tanpa Redis tidak DOWN palsu; aktifkan saat mulai dipakai.
+- ⚠️ **Audit top-up/void/barang-masuk/opname** sudah menulis `audit_log` (B18).
+  Aksi lain (ubah harga jual, blokir item, ubah limit) menunggu service terkait
+  dibuat — pastikan tiap service baru memanggil `AuditLogger.catat`.
 
 ---
 

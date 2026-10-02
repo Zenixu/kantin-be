@@ -214,12 +214,17 @@ public class CommonResponse {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(r);
     }
 
-    /** 500 — kesalahan server. */
+    /**
+     * 500 — kesalahan server.
+     *
+     * <p><b>⚠️ Jangan pakai varian {@code serverError(Exception)} (B22):</b>
+     * varian itu membocorkan {@code e.getMessage()} ke klien (bisa memuat detail
+     * SQL/stack internal). Selalu kirim pesan generik ke klien dan catat detail
+     * asli lewat {@code ErrorLogger} di server.
+     */
     public static <T> ResponseEntity<Response<T>> serverError(Exception e) {
-        Response<T> r = new Response<>();
-        r.setResponseCode(ResponseCode.SERVER_ERROR);
-        r.setMessage(e.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(r);
+        // B22: pesan generik — detail asli HANYA di log server, bukan ke klien.
+        return serverError("Terjadi kesalahan pada server");
     }
 
     public static <T> ResponseEntity<Response<T>> serverError(String message) {
@@ -229,10 +234,21 @@ public class CommonResponse {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(r);
     }
 
+    /**
+     * ⚠️ <b>DIHAPUS dari pemakaian (B22).</b> Method ini membocorkan
+     * {@code e.getMessage()} (detail SQL) ke klien. {@code GlobalExceptionHandler}
+     * sudah memetakan {@code DataIntegrityViolationException} → 409 dan exception
+     * lain → 500 dengan pesan generik. Dipertahankan hanya agar tak ada yang
+     * menyalin polanya — <b>jangan dipakai</b>.
+     *
+     * @deprecated bocor detail DB ke klien; pakai {@link #conflict(String)} untuk
+     * pelanggaran integritas atau {@link #serverError(String)} untuk 500 generik.
+     */
+    @Deprecated(since = "audit-B22", forRemoval = true)
     public static <T> ResponseEntity<Response<T>> databaseError(Exception e) {
         Response<T> r = new Response<>();
         r.setResponseCode(ResponseCode.DATABASE_ERROR);
-        r.setMessage(e.getMessage());
+        r.setMessage("Terjadi kesalahan pada server");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(r);
     }
 
