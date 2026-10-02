@@ -49,14 +49,29 @@ public class KantinJwtDecoder {
         if (key == null) {
             throw new JwtException("Public key untuk issuer " + sumber + " belum dikonfigurasi");
         }
-        var parser = Jwts.parser().verifyWith(key).build();
-        Claims claims = parser.parseSignedClaims(token).getPayload();
 
-        // Algam wajib RS256 (menolak token ber-header alg lain).
-        if (claims.get("alg") instanceof String alg && !"RS256".equalsIgnoreCase(alg)) {
+        var parserBuilder = Jwts.parser().verifyWith(key);
+        // Verifikasi issuer: token dari issuer lain (walau signature sah) DITOLAK.
+        // Mencegah token mobile-be dipakai sebagai staf, atau sebaliknya.
+        if (jwtProperties.isVerifyIssuer()) {
+            parserBuilder.requireIssuer(issuerUntuk(sumber));
+        }
+
+        var parsed = parserBuilder.build().parseSignedClaims(token);
+
+        // Cek algoritma di HEADER (bukan claims — 'alg' bukan klaim standar).
+        // RS256 sudah ditegakkan verifyWith(key); ini sabuk pengaman eksplisit.
+        String alg = parsed.getHeader().getAlgorithm();
+        if (alg == null || !"RS256".equalsIgnoreCase(alg)) {
             throw new JwtException("Algoritma token tidak didukung: " + alg);
         }
-        return claims;
+        return parsed.getPayload();
+    }
+
+    private String issuerUntuk(SumberToken sumber) {
+        return sumber == SumberToken.ADMIN
+                ? jwtProperties.getIssuerAdmin()
+                : jwtProperties.getIssuerMobile();
     }
 
     private PublicKey publicKey(SumberToken sumber) {

@@ -36,6 +36,13 @@ minio.url-final=http://localhost:9000/kantin/
 JWT_ADMIN_PUBLIC_KEY=
 JWT_MOBILE_PUBLIC_KEY=
 
+# Verifikasi issuer (klaim "iss"). Default true. Set false sementara hanya bila
+# token uji belum memuat issuer "skoolia-admin"/"skoolia-mobile".
+JWT_VERIFY_ISSUER=true
+
+# --- CORS: origin FE yang diizinkan (dipisah koma, TANPA nilai "*") ---
+KANTIN_CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
 # --- Integrasi SKOOLIA (REST internal) ---
 SKOOLIA_ADMIN_BE_URL=http://localhost:8081
 SKOOLIA_MOBILE_BE_URL=

@@ -75,6 +75,63 @@ Status: ✅ diperbaiki · ⚠️ perilaku disengaja (didokumentasikan) · 🔲 m
 
 ---
 
+## 🔍 Audit Keamanan Lanjutan (Fase 3+) — B11–B18
+
+Ditemukan pada audit menyeluruh (skill *backend-security-coder* + *bug-hunter*)
+terhadap kriteria **Security & Controller / Service & Repository / Database &
+Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
+
+## B11 — CORS `*` + `allowCredentials(true)` (celah lintas-origin)
+
+- **Gejala:** kombinasi origin wildcard **dan** kredensial aktif.
+- **Akar:** `WebSecurityConfig` memakai `setAllowedOriginPatterns(List.of("*"))` **bersamaan dengan** `setAllowCredentials(true)`. Ini membuat **setiap situs** dapat mengirim request ber-kredensial (cookie `skoolia-cookies`) dan membaca respons — isolasi origin praktis hilang.
+- **Perbaikan:** ✅ origin eksplisit dari properti `kantin.cors.allowed-origins` (default dev `http://localhost:5173,http://localhost:3000`), header di-allowlist, wildcard **dibuang** meski ada di config.
+- **Catatan:** wajib diset eksplisit sebelum production (via env `KANTIN_CORS_ORIGINS`).
+
+## B12 — Verifikasi `alg` dilakukan di *claims*, bukan *header* (proteksi palsu)
+
+- **Gejala:** blok kode "menolak token ber-header alg lain" tidak pernah berjalan.
+- **Akar:** `KantinJwtDecoder.verifikasi` memeriksa `claims.get("alg")`. `alg` adalah **header** JWT, bukan klaim — nilainya selalu `null` → blok terlewati (komentar menyesatkan).
+- **Perbaikan:** ✅ periksa `parsed.getHeader().getAlgorithm()` dan tolak bila ≠ `RS256`.
+
+## B13 — Issuer JWT tidak pernah diverifikasi (token lintas-issuer lolos)
+
+- **Gejala:** token dari issuer lain (walau signature sah dengan key yang sama) diterima.
+- **Akar:** `JwtProperties.verifyIssuer` default `false` dan `KantinJwtDecoder` **tidak pernah** memanggil `requireIssuer(...)`. Janji `SECURITY.md` ("verifikasi terhadap 2 issuer") tidak terwujud.
+- **Perbaikan:** ✅ `verifyIssuer` default **`true`**; decoder memanggil `requireIssuer(...)` sesuai `SumberToken` (admin vs mobile). Bisa dimatikan sementara via `jwt.verify-issuer=false` bila token uji belum memuat issuer yang sesuai (Q1/Q2).
+
+## B14 — Replay idempotency tap tidak memeriksa tenant (kebocoran lintas-sekolah)
+
+- **Gejala:** idempotency key yang sama dari sekolah lain dapat mengembalikan detail transaksi sekolah pemilik key.
+- **Akar:** `TapService.bangunReplay` memakai `findByIdempotencyKey` (tanpa filter `sekolah_id`) dan **tidak** membandingkan `trx.getSekolahId()` dengan sekolah pemanggil. Key dibuat klien → bisa bentrok/berulang.
+- **Perbaikan:** ✅ guard tenant di `bangunReplay` → `NotFoundEntity` (HTTP 404, bukan bocor) bila transaksi bukan milik sekolah pemanggil.
+
+## B15 — Koreksi saldo tanpa idempotency key (double-apply)
+
+- **Gejala:** retry jaringan / double-submit koreksi bendahara menambah/mengurangi saldo **dua kali**.
+- **Akar:** `SaldoTopUpService.koreksi` membangun `PerintahMutasiSaldo` **tanpa** `.idempotencyKey(...)` (bandingkan `topUpTunai` yang benar). Jalur penanganan balapan `DataIntegrityViolationException` di `LedgerSaldoService` hanya bekerja bila key ada → tanpa key, retry jadi error 500, bukan idempoten.
+- **Perbaikan:** ✅ `koreksi` kini **wajib** `referensiId` (nomor berita acara) → idempotency key `KOREKSI-<referensiId>`; validasi menolak bila kosong.
+
+## B16 — Audit koreksi mengisi `nilai_lama` dengan saldo *sesudah*
+
+- **Gejala:** audit log koreksi kehilangan saldo sebelum mutasi.
+- **Akar:** `SaldoTopUpService.koreksi` melempar `hasil.getSaldoSetelah()` ke slot `nilai_lama` (harusnya saldo sebelumnya).
+- **Perbaikan:** ✅ hitung saldo sebelum (`saldoSetelah ∓ nominal` sesuai arah) → `nilai_lama = saldoSebelum`, `nilai_baru = saldoSetelah`; audit hanya untuk mutasi baru (bukan replay).
+
+## B17 — Lock/read ledger tidak ter-scope tenant pada `WHERE`
+
+- **Gejala:** baris `saldo_cache`/`stok_cache`/`sesi_kasir` sekolah lain ikut terkunci/serialisasi (blast radius bila cek pasca-lock terlewat).
+- **Akar:** `SaldoCacheRepository.kunciUntukUpdate(subjekTipe, subjekId)`, `StokCacheRepository.kunciUntukUpdate(menuId)`, `SesiKasirRepository.kunciBerdasarkanTitikTanggal(...)` tidak menyertakan `sekolah_id` di `WHERE` (PK cache juga tidak memuat `sekolah_id`). Tenant baru dicek **setelah** lock di service.
+- **Keputusan:** ⚠️ **didokumentasikan** — tidak menyebabkan korupsi data (cek tenant pasca-lock ada), tetapi **melanggar aturan "tenant di setiap query"** (§3.4). ✅ Sudah ada query agregat yang benar (`SaldoLedgerRepository.hitungSaldoDariLedger`, `MutasiStokRepository.hitungStokDariLedger`) sebagai pola acuan. **Tindak lanjut:** tambah `sekolah_id` ke kunci lock saat refactor berikutnya.
+
+## B18 — Audit logger baru placeholder; opname & barang masuk belum diaudit
+
+- **Gejala:** audit §11.7 tidak tahan-restart & tidak bisa di-query (hanya `log.info`).
+- **Akar:** `AuditLogger.catat` masih placeholder (tabel `audit_log` belum ada). Selain itu `LedgerStokService.masukBarang` & `sesuaikanOpname` **belum** memanggil audit sama sekali, padahal "barang masuk & pembalik" + "opname" **wajib** diaudit (`CONVENTIONS.md` §6).
+- **Keputusan:** ⚠️ **menunggu** — (a) buat tabel `audit_log` + tulis entri nyata; (b) tambah panggilan audit di barang masuk & opname.
+
+---
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:

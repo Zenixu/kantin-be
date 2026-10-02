@@ -212,6 +212,14 @@ public class TapService {
                 .orElseThrow(() -> new InvalidOperationException(
                         "Transaksi idempoten tidak ditemukan: " + idempotencyKey));
 
+        // Tenant scoping: key dibuat klien, jadi transaksi yang ditemukan WAJIB
+        // milik sekolah pemanggil. Bila bukan → 404 (jangan bocorkan data
+        // sekolah lain lewat jalur idempotency — PRD §11.4).
+        if (!sekolahId.equals(trx.getSekolahId())) {
+            throw new com.asqi.scholia_kantin_be.component.exception.NotFoundEntity(
+                    "Transaksi tidak ditemukan");
+        }
+
         long saldoSisa = 0L;
         if (trx.getSubjekTipe() != null && trx.getSubjekId() != null) {
             saldoSisa = ledgerSaldo.saldo(sekolahId, trx.getSubjekTipe(), trx.getSubjekId());

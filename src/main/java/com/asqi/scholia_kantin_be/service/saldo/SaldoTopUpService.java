@@ -80,17 +80,26 @@ public class SaldoTopUpService {
     /**
      * Koreksi saldo oleh bendahara — mutasi pembalik dengan alasan (PRD §9.2).
      *
-     * @param arah {@link ArahMutasi#KREDIT} menambah, {@link ArahMutasi#DEBIT}
-     *             mengurangi (mis. membatalkan top-up salah input).
+     * @param arah        {@link ArahMutasi#KREDIT} menambah, {@link ArahMutasi#DEBIT}
+     *                    mengurangi (mis. membatalkan top-up salah input).
+     * @param referensiId nomor berita acara/referensi koreksi yang <b>unik</b>.
+     *                    <b>Wajib</b> — dipakai sebagai idempotency key agar retry
+     *                    jaringan/double-submit tidak menerapkan koreksi dua kali
+     *                    (Aturan Emas §3.3).
      */
     @Transactional
     public HasilMutasiSaldo koreksi(Long sekolahId, SubjekTipe subjekTipe, Long subjekId,
-                                    ArahMutasi arah, long nominal, String alasan, Long aktorId) {
+                                    ArahMutasi arah, long nominal, String alasan,
+                                    String referensiId, Long aktorId) {
         if (nominal <= 0) {
             throw new InvalidOperationException("Nominal koreksi harus > 0");
         }
         if (alasan == null || alasan.isBlank()) {
             throw new InvalidOperationException("Alasan koreksi wajib diisi (PRD §9.2)");
+        }
+        if (referensiId == null || referensiId.isBlank()) {
+            throw new InvalidOperationException(
+                    "Nomor referensi/berita acara koreksi wajib diisi (idempotency)");
         }
 
         PerintahMutasiSaldo perintah = PerintahMutasiSaldo.builder()
@@ -99,7 +108,9 @@ public class SaldoTopUpService {
                 .subjekId(subjekId)
                 .jenis(JenisMutasiSaldo.KOREKSI)
                 .nominal(nominal)
+                .idempotencyKey("KOREKSI-" + referensiId)
                 .referensiTipe("KOREKSI")
+                .referensiId(referensiId)
                 .keterangan("Koreksi: " + alasan)
                 .aktorId(aktorId)
                 .build();
@@ -108,9 +119,15 @@ public class SaldoTopUpService {
                 ? ledgerSaldo.kredit(perintah)
                 : ledgerSaldo.debit(perintah);
 
-        auditLogger.catat(aktorId, sekolahId, "KOREKSI_SALDO", "Saldo",
-                subjekTipe + ":" + subjekId, alasan,
-                String.valueOf(hasil.getSaldoSetelah()), arah.name() + " " + nominal);
+        // Audit hanya untuk mutasi baru (bukan replay idempotent).
+        if (!hasil.isIdempotentReplay()) {
+            long saldoSebelum = (arah == ArahMutasi.KREDIT)
+                    ? hasil.getSaldoSetelah() - nominal
+                    : hasil.getSaldoSetelah() + nominal;
+            auditLogger.catat(aktorId, sekolahId, "KOREKSI_SALDO", "Saldo",
+                    subjekTipe + ":" + subjekId, alasan,
+                    String.valueOf(saldoSebelum), String.valueOf(hasil.getSaldoSetelah()));
+        }
 
         return hasil;
     }

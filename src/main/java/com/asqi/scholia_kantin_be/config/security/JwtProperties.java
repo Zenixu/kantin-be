@@ -25,8 +25,14 @@ public class JwtProperties {
     private String issuerAdmin = "skoolia-admin";
     private String issuerMobile = "skoolia-mobile";
 
-    /** Bila true, verifikasi issuer juga ditegakkan (disarankan di produksi). */
-    private boolean verifyIssuer = false;
+    /**
+     * Bila true, verifikasi issuer juga ditegakkan — token dari issuer lain
+     * (walau signature sah) DITOLAK. Default {@code true} (aman). Set
+     * {@code jwt.verify-issuer=false} sementara hanya bila format issuer
+     * admin-be/mobile-be belum final (Q1/Q2) dan token uji belum memuat issuer
+     * yang sesuai.
+     */
+    private boolean verifyIssuer = true;
 
     public boolean adminSiap() {
         return adminPublicKey != null && !adminPublicKey.isBlank();

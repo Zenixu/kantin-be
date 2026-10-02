@@ -3,6 +3,7 @@ package com.asqi.scholia_kantin_be.config.security;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthTokenFilter;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -59,9 +60,10 @@ public class WebSecurityConfig {
     };
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           CorsConfigurationSource corsConfigurationSource) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable);
-        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource));
 
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
@@ -80,16 +82,32 @@ public class WebSecurityConfig {
     }
 
     /**
-     * CORS — mengizinkan FE kasir & back office. Daftar origin akhir menunggu
-     * konfigurasi deploy; untuk pengembangan longgar agar tidak menghambat tim.
-     * ⚠️ Persempit sebelum production.
+     * CORS — daftar origin diambil dari properti {@code kantin.cors.allowed-origins}
+     * (dipisah koma). Default pengembangan: {@code http://localhost:5173}.
+     *
+     * <p><b>PERBAIKAN KEAMANAN:</b> versi lama memakai
+     * {@code setAllowedOriginPatterns("*")} <b>bersamaan dengan</b>
+     * {@code setAllowCredentials(true)}. Kombinasi itu membuat <b>setiap situs</b>
+     * dapat mengirim request ber-kredensial (cookie) dan membaca respons —
+     * praktis menonaktifkan isolasi origin. Kini origin eksplisit &amp; tidak
+     * ada wildcard saat kredensial aktif.
      */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${kantin.cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+            List<String> allowedOrigins) {
+
+        List<String> origins = allowedOrigins.stream()
+                .map(String::trim)
+                .filter(o -> !o.isBlank())
+                .filter(o -> !"*".equals(o))
+                .toList();
+
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Request-Id"));
+        config.setExposedHeaders(List.of("X-Request-Id"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
