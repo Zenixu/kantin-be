@@ -122,8 +122,10 @@ Lihat `BUGS-DITEMUKAN.md` B6–B8 tentang perbaikan status 403 dari `admin-be`.
   `umum` 600/menit. **Fail-open** default (`kantin.rate-limit.fail-closed=false`):
   Redis mati ⇒ request tetap dilayani agar kantin tidak lumpuh. Balas **429** +
   `Retry-After` + `X-RateLimit-Limit`.
-- 🔲 **Blacklist token** (Redis) — belum dibuat; kandidat berikutnya memakai Redis
-  yang sudah aktif. Bukan blocker rilis (token berumur pendek).
+- ✅ **Cabut token (blacklist Redis)** (B28) — `POST /api/auth/cabut` (admin/TU).
+  Token disimpan sebagai SHA-256 (bukan mentah) dengan TTL = sisa umur token.
+  Filter menolak token tercabut **setelah** signature valid. **Fail-open**: Redis
+  mati ⇒ token dianggap belum dicabut (gangguan infra tidak melumpuhkan kantin).
 - ⚠️ **Audit top-up/void/barang-masuk/opname** sudah menulis `audit_log` (B18).
   Aksi lain (ubah harga jual, blokir item, ubah limit) menunggu service terkait
   dibuat — pastikan tiap service baru memanggil `AuditLogger.catat`.

@@ -7,6 +7,7 @@ import com.asqi.scholia_kantin_be.payload.response.Response;
 import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.KlaimResolver;
 import com.asqi.scholia_kantin_be.security.TenantContext;
+import com.asqi.scholia_kantin_be.security.blacklist.TokenBlacklistPort;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -60,6 +61,7 @@ public class JwtAuthTokenFilter extends OncePerRequestFilter {
     private final KantinJwtDecoder decoder;
     private final KlaimResolver klaimResolver;
     private final JwtConfigValues configValues;
+    private final TokenBlacklistPort blacklist;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     /** Hasil verifikasi: klaim + issuer yang cocok. */
@@ -88,6 +90,13 @@ public class JwtAuthTokenFilter extends OncePerRequestFilter {
             }
 
             IdentitasKantin identitas = klaimResolver.bangun(hasil.claims(), hasil.sumber());
+
+            // Token yang dicabut platform ditolak — dicek setelah signature valid,
+            // agar token palsu/rusak tidak menghabiskan query Redis.
+            if (blacklist.tercabut(token)) {
+                tolak(response, 401, "Token telah dicabut");
+                return;
+            }
 
             if (identitas.getUserId() == null || identitas.getUserId().isBlank()) {
                 tolak(response, 401, "Token tidak memuat identitas pengguna");

@@ -14,6 +14,7 @@
 | Method | Path | Peran | Keterangan |
 |---|---|---|---|
 | `GET` | `/api/auth/me` | semua | Identitas + tenant + peran dari token (diagnostik) |
+| `POST` | `/api/auth/cabut` | admin, TU | Cabut token pemanggil (blacklist Redis, TTL = sisa umur) |
 
 > kantin-be **tanpa login sendiri** (ADR-0002) — token RS256 dari SKOOLIA.
 

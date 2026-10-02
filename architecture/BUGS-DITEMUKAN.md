@@ -211,6 +211,19 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Belajar (`/bug-hunter`):** hitung pakai `INCR` + `EXPIRE` **harus atomik** (Lua) — bila dipisah, request paralel bisa lolos tanpa TTL → kunci bocor permanen.
 - ⚠️ **DILARANG** memakai Redis untuk cache status blokir kartu (PRD §11.11) — tetap diperiksa di DB setiap tap.
 
+## B28 — (fitur) Cabut token / blacklist Redis (SECURITY.md §7)
+
+- **Gejala:** token yang dikelola platform tidak bisa dicabut sebelum kedaluwarsa — akun dinonaktifkan / token bocor tetap bisa dipakai sampai `exp`.
+- **Perbaikan:** ✅
+  - `TokenBlacklistPort` + `TokenBlacklistRedis` — kunci `bl:<sha256(token)>`, TTL = sisa umur token.
+  - `SidikJari` — SHA-256 heksadesimal (token mentah **tidak** disimpan di Redis).
+  - `JwtAuthTokenFilter` menolak token tercabut (401) **setelah** signature valid.
+  - `AuthController.cabut` — `POST /api/auth/cabut` (`@PerluPeran` ADMIN_SEKOLAH/TU_SEKOLAH).
+  - Tes: `SidikJariTest` (4), `TokenBlacklistRedisTest` (7), `AuthControllerTest` (4).
+- **Konteks penting (ADR-0002):** kantin-be tidak punya login/logout sendiri; endpoint `/cabut` untuk mencabut token yang **dikelola platform** (akun nonaktif, token bocor, sesi dipaksa berakhir).
+- **Fail-open:** Redis mati ⇒ token dianggap belum dicabut. Konsisten dengan kebijakan rate limit (B27).
+- **Belajar (`/bug-hunter`):** (1) simpan **hash**, bukan token mentah — bila Redis bocor, penyerang tak langsung dapat token yang bisa dipakai. (2) Periksa blacklist **setelah** verifikasi signature, agar token palsu tidak menghabiskan query Redis.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
