@@ -197,6 +197,20 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
   - Tes: `KatalogServiceIT` (7, Testcontainers), `KatalogControllerTest` (3).
 - **Belajar (`/bug-hunter`):** dua bean `@Primary` untuk `MenuLookupPort` (adapter + fake test) menyebabkan `NoUniqueBeanDefinitionException`. Solusi: adapter **tanpa `@Primary`** (di produksi hanya satu bean); fake test tetap `@Primary` sehingga menang. `@ConditionalOnMissingBean` pada `@Service` component-scan **tidak andal** — hindari.
 
+## B27 — (fitur) Rate limit Redis (SECURITY.md §7)
+
+- **Gejala:** Redis terpasang tapi **belum dipakai** (dead config, B23) → tidak ada proteksi banjir request / brute force.
+- **Perbaikan:** ✅
+  - `RateLimitProperties` (`kantin.rate-limit.*`) — saklar, jendela, batas per kategori, mode gagal.
+  - `RateLimiterRedis` — fixed-window **atomik via Lua** (INCR+EXPIRE), kunci `rl:{kategori}:{identitas}`.
+  - `RateLimitFilter` — kategori dari path; **429** + `Retry-After` + `X-RateLimit-Limit`; identitas `sekolahId:userId` atau IP.
+  - `CommonResponse.tooManyRequests` + `ResponseCode.TOO_MANY_REQUESTS`.
+  - Terdaftar di chain **sebelum** JWT filter (tolak banjir sebelum verifikasi kripto mahal).
+  - Tes: `RateLimiterRedisTest` (6), `RateLimitFilterTest` (6).
+- **Keputusan desain — FAIL-OPEN default:** Redis mati ⇒ request tetap dilayani. Alasannya: melumpuhkan seluruh transaksi kantin karena infra cache rusak lebih merugikan daripada melewatkan sebagian limit. Bisa diubah ke fail-closed via `KANTIN_RATE_LIMIT_FAIL_CLOSED=true` bila kebijakan menuntut.
+- **Belajar (`/bug-hunter`):** hitung pakai `INCR` + `EXPIRE` **harus atomik** (Lua) — bila dipisah, request paralel bisa lolos tanpa TTL → kunci bocor permanen.
+- ⚠️ **DILARANG** memakai Redis untuk cache status blokir kartu (PRD §11.11) — tetap diperiksa di DB setiap tap.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:

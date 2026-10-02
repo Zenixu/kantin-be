@@ -215,6 +215,20 @@ public class CommonResponse {
     }
 
     /**
+     * 429 — terlalu banyak permintaan (rate limit, SECURITY.md §7).
+     *
+     * <p>Klien disarankan menghormati header {@code Retry-After} yang
+     * disertakan filter rate limit.
+     */
+    public static <T> ResponseEntity<Response<T>> tooManyRequests(String message) {
+        Response<T> r = new Response<>();
+        r.setCode(429);
+        r.setResponseCode(ResponseCode.TOO_MANY_REQUESTS);
+        r.setMessage(message);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(r);
+    }
+
+    /**
      * 500 — kesalahan server.
      *
      * <p><b>⚠️ Jangan pakai varian {@code serverError(Exception)} (B22):</b>

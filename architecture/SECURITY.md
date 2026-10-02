@@ -117,10 +117,13 @@ Lihat `BUGS-DITEMUKAN.md` B6–B8 tentang perbaikan status 403 dari `admin-be`.
 - ✅ **CORS** — sudah diperbaiki (B11): origin eksplisit dari
   `kantin.cors.allowed-origins` (tanpa wildcard saat kredensial aktif). Set
   daftar origin production sebelum rilis.
-- 🔲 **Redis belum dipakai** (B23, dead config). Bean `RedisTemplate` sudah ada,
-  tetapi belum ada pemakai. Kandidat: **rate limit login/tap** + **blacklist
-  token**. Health check Redis di-disable default (`REDIS_HEALTH_ENABLED=false`)
-  agar dev tanpa Redis tidak DOWN palsu; aktifkan saat mulai dipakai.
+- ✅ **Rate limit Redis** (B27, SECURITY.md §7) — fixed-window atomik (Lua),
+  per kategori: `auth` 20/menit, `sensitif` (kasir/saldo/stok/katalog) 60/menit,
+  `umum` 600/menit. **Fail-open** default (`kantin.rate-limit.fail-closed=false`):
+  Redis mati ⇒ request tetap dilayani agar kantin tidak lumpuh. Balas **429** +
+  `Retry-After` + `X-RateLimit-Limit`.
+- 🔲 **Blacklist token** (Redis) — belum dibuat; kandidat berikutnya memakai Redis
+  yang sudah aktif. Bukan blocker rilis (token berumur pendek).
 - ⚠️ **Audit top-up/void/barang-masuk/opname** sudah menulis `audit_log` (B18).
   Aksi lain (ubah harga jual, blokir item, ubah limit) menunggu service terkait
   dibuat — pastikan tiap service baru memanggil `AuditLogger.catat`.

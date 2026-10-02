@@ -1,5 +1,7 @@
 package com.asqi.scholia_kantin_be.config.security;
 
+import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitFilter;
+import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitProperties;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthTokenFilter;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
@@ -44,12 +46,14 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 @EnableConfigurationProperties({JwtProperties.class,
-        com.asqi.scholia_kantin_be.config.security.jwt.JwtConfigValues.class})
+        com.asqi.scholia_kantin_be.config.security.jwt.JwtConfigValues.class,
+        RateLimitProperties.class})
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
     private final JwtAuthTokenFilter jwtAuthTokenFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final RateLimitFilter rateLimitFilter;
 
     /** Endpoint tanpa autentikasi. */
     private static final String[] PUBLIC_ENDPOINTS = {
@@ -76,7 +80,10 @@ public class WebSecurityConfig {
         http.exceptionHandling(ex ->
                 ex.authenticationEntryPoint(jwtAuthenticationEntryPoint));
 
-        http.addFilterBefore(jwtAuthTokenFilter, UsernamePasswordAuthenticationFilter.class);
+        // Rate limit lebih dulu: tolak banjir request sebelum verifikasi JWT
+        // (verifikasi kripto mahal) — sekaligus melindungi endpoint publik.
+        http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(jwtAuthTokenFilter, RateLimitFilter.class);
 
         return http.build();
     }
