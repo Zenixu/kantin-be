@@ -162,6 +162,18 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Akar:** Redis disiapkan untuk rate-limit/blacklist token yang belum diimplementasi (`SECURITY.md` §7).
 - **Perbaikan:** ✅ `management.health.redis.enabled=${REDIS_HEALTH_ENABLED:false}` (dev tanpa Redis tidak DOWN palsu) + `spring.data.redis.timeout` + dokumentasi status di `SECURITY.md`. **Keputusan**: pertahankan (parity admin-be, siap dipakai) alih-alih hapus — tetapi **jangan** jadikan dependency wajib sampai benar-benar dipakai.
 
+## B24 — (perbaikan) Endpoint tap stub + duplikasi konversi aktor id
+
+- **Gejala:** (a) `KasirController.tap()` masih `throw InvalidOperationException` — `TapService` yang sudah lengkap & teruji **tidak terpanggil**, fitur inti kasir tak bisa dipakai; (b) konversi `userId` (String) → `Long` aktor id diduplikasi di tiap pemanggil (`TapService.idPetugas`), rawan inkonsistensi pesan error.
+- **Akar:** controller sengaja di-stub menunggu Q1/Q2/Q7 (sudah usang karena service selesai).
+- **Perbaikan:** ✅
+  - `KasirController` kini memanggil service nyata: `POST tap`, `POST transaksi/{id}/void`, `POST sesi/buka`, `GET sesi/{id}/rekap`, `POST sesi/{id}/tutup`, `GET sesi/{id}`. Tenant dari `TenantContext` (bukan body).
+  - Konversi aktor dipusatkan di `IdentitasKantin.aktorIdWajib()` (single source of truth); `TapService` memakainya.
+  - DTO baru: `VoidRequest`, `BukaSesiRequest`.
+  - Tes: `IdentitasKantinTest` (5), `KasirControllerTest` (3, MockMvc standalone).
+
+## Ringkasan untuk tim
+
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
 1. Spring Boot 4: nama starter berubah (`-aop` → `-aspectj`).
 2. Jackson 3 (`tools.jackson`), bukan `com.fasterxml`.

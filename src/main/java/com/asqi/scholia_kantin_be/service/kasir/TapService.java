@@ -97,7 +97,7 @@ public class TapService {
 
     /** Inti eksekusi — berjalan di dalam satu transaksi DB. */
     private TapResponse eksekusi(Long sekolahId, IdentitasKantin identitas, TapRequest request) {
-        Long petugasId = idPetugas(identitas);
+        Long petugasId = identitas.aktorIdWajib();
 
         // 2) Lookup kartu (port). Status blokir diperiksa server tiap tap.
         InfoKartu kartu = kartuLookup.cariBerdasarkanUid(sekolahId, request.getRfidUid());
@@ -243,18 +243,5 @@ public class TapService {
                 .namaItem(namaItem)
                 .metode(MetodeRequestKartu.UID)
                 .build();
-    }
-
-    /** Ambil id petugas (Long) dari principal; token SKOOLIA memakai user id numerik. */
-    private Long idPetugas(IdentitasKantin identitas) {
-        if (identitas == null || identitas.getUserId() == null) {
-            throw new InvalidOperationException("Identitas petugas tidak tersedia");
-        }
-        try {
-            return Long.valueOf(identitas.getUserId().trim());
-        } catch (NumberFormatException e) {
-            throw new InvalidOperationException(
-                    "ID petugas tidak valid pada token: " + identitas.getUserId());
-        }
     }
 }

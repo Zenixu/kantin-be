@@ -64,4 +64,26 @@ public class IdentitasKantin implements Principal {
     public boolean orangTua() {
         return sumber == SumberToken.MOBILE;
     }
+
+    /**
+     * ID petugas sebagai {@code Long} untuk kolom audit/transaksi
+     * ({@code aktor_id}, {@code void_oleh}, dst).
+     *
+     * <p>Token SKOOLIA membawa {@code userId} sebagai string, sedangkan skema
+     * kantin menyimpan aktor sebagai BIGINT. Konversi ini <b>dipusatkan di sini</b>
+     * (bukan diulang di setiap controller) — mencegah duplikasi &amp; inkonsistensi.
+     *
+     * @throws IllegalStateException bila userId kosong
+     * @throws IllegalArgumentException bila userId bukan numerik
+     */
+    public Long aktorIdWajib() {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalStateException("Identitas petugas tidak tersedia (userId kosong)");
+        }
+        try {
+            return Long.valueOf(userId.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("ID petugas tidak valid pada token: " + userId);
+        }
+    }
 }
