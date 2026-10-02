@@ -25,13 +25,24 @@ public interface SaldoCacheRepository extends JpaRepository<SaldoCache, SaldoCac
     /**
      * Ambil &amp; kunci baris saldo ({@code SELECT ... FOR UPDATE}).
      *
+     * <p><b>Tenant-scoped (PRD §11.4):</b> {@code sekolah_id} WAJIB ikut di
+     * {@code WHERE} — bukan sekadar diperiksa setelah lock. Dengan begitu baris
+     * milik sekolah lain tidak pernah terkunci/diserialisasi oleh sekolah yang
+     * bukan pemiliknya (memperkecil blast radius, B17).
+     *
      * <p>Wajib dipanggil di dalam {@code @Transactional}: lock dilepas saat
      * transaksi selesai. Bila baris tidak ada → {@code Optional.empty()}
      * (pemanggil harus membuatnya lewat {@link #pastikanBarisAda}).
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM SaldoCache s WHERE s.subjekTipe = :subjekTipe AND s.subjekId = :subjekId")
-    Optional<SaldoCache> kunciUntukUpdate(@Param("subjekTipe") SubjekTipe subjekTipe,
+    @Query("""
+            SELECT s FROM SaldoCache s
+            WHERE s.sekolahId = :sekolahId
+              AND s.subjekTipe = :subjekTipe
+              AND s.subjekId = :subjekId
+            """)
+    Optional<SaldoCache> kunciUntukUpdate(@Param("sekolahId") Long sekolahId,
+                                          @Param("subjekTipe") SubjekTipe subjekTipe,
                                           @Param("subjekId") Long subjekId);
 
     Optional<SaldoCache> findBySubjekTipeAndSubjekId(SubjekTipe subjekTipe, Long subjekId);

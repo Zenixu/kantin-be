@@ -92,10 +92,11 @@ public class LedgerSaldoService {
 
         // 2) Pastikan baris cache ada, lalu KUNCI (FOR UPDATE) — serialisasi per subjek.
         cacheRepo.pastikanBarisAda(perintah.getSubjekTipe().name(), perintah.getSubjekId(), perintah.getSekolahId());
-        SaldoCache cache = cacheRepo.kunciUntukUpdate(perintah.getSubjekTipe(), perintah.getSubjekId())
+        SaldoCache cache = cacheRepo.kunciUntukUpdate(perintah.getSekolahId(), perintah.getSubjekTipe(), perintah.getSubjekId())
                 .orElseThrow(() -> new NotFoundEntity("Baris saldo tidak ditemukan"));
 
-        // 3) Verifikasi tenant (PRD §11.4) — data sekolah lain → 404.
+        // 3) Verifikasi tenant (PRD §11.4) — pertahanan berlapis: kunci sudah
+        //    tenant-scoped (B17), tapi tetap dicek agar data sekolah lain → 404.
         if (!cache.getSekolahId().equals(perintah.getSekolahId())) {
             throw new NotFoundEntity("Saldo tidak ditemukan");
         }

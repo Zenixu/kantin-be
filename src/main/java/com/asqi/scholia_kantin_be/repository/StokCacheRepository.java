@@ -25,10 +25,19 @@ public interface StokCacheRepository extends JpaRepository<StokCache, Long> {
      * Ambil &amp; kunci baris stok ({@code SELECT ... FOR UPDATE}). Wajib di dalam
      * {@code @Transactional}. Bila tidak ada → pemanggil memakai
      * {@link #pastikanBarisAda} lalu mengunci ulang.
+     *
+     * <p><b>Tenant-scoped (PRD §11.4, B17):</b> {@code sekolah_id} ikut di
+     * {@code WHERE} agar baris sekolah lain tidak terkunci oleh sekolah yang
+     * bukan pemiliknya.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM StokCache s WHERE s.menuId = :menuId")
-    Optional<StokCache> kunciUntukUpdate(@Param("menuId") Long menuId);
+    @Query("""
+            SELECT s FROM StokCache s
+            WHERE s.sekolahId = :sekolahId
+              AND s.menuId = :menuId
+            """)
+    Optional<StokCache> kunciUntukUpdate(@Param("sekolahId") Long sekolahId,
+                                         @Param("menuId") Long menuId);
 
     Optional<StokCache> findByMenuId(Long menuId);
 

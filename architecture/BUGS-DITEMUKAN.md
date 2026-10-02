@@ -122,13 +122,27 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 
 - **Gejala:** baris `saldo_cache`/`stok_cache`/`sesi_kasir` sekolah lain ikut terkunci/serialisasi (blast radius bila cek pasca-lock terlewat).
 - **Akar:** `SaldoCacheRepository.kunciUntukUpdate(subjekTipe, subjekId)`, `StokCacheRepository.kunciUntukUpdate(menuId)`, `SesiKasirRepository.kunciBerdasarkanTitikTanggal(...)` tidak menyertakan `sekolah_id` di `WHERE` (PK cache juga tidak memuat `sekolah_id`). Tenant baru dicek **setelah** lock di service.
-- **Keputusan:** ⚠️ **didokumentasikan** — tidak menyebabkan korupsi data (cek tenant pasca-lock ada), tetapi **melanggar aturan "tenant di setiap query"** (§3.4). ✅ Sudah ada query agregat yang benar (`SaldoLedgerRepository.hitungSaldoDariLedger`, `MutasiStokRepository.hitungStokDariLedger`) sebagai pola acuan. **Tindak lanjut:** tambah `sekolah_id` ke kunci lock saat refactor berikutnya.
+- **Perbaikan:** ✅ `sekolah_id` kini **wajib** ikut di `WHERE` ketiga query kunci (`SaldoCacheRepository`, `StokCacheRepository`, `SesiKasirRepository.kunciUntukUpdate` & `kunciBerdasarkanTitikTanggal`); pemanggil di `LedgerSaldoService`/`LedgerStokService`/`SesiKasirService` diperbarui. Cek tenant pasca-lock **tetap** dipertahankan sebagai pertahanan berlapis. Diuji oleh `IsolasiTenantLockIT`.
+- **Catatan:** query read (`findBySekolahIdAnd…`) sudah tenant-scoped sebelumnya.
 
 ## B18 — Audit logger baru placeholder; opname & barang masuk belum diaudit
 
 - **Gejala:** audit §11.7 tidak tahan-restart & tidak bisa di-query (hanya `log.info`).
 - **Akar:** `AuditLogger.catat` masih placeholder (tabel `audit_log` belum ada). Selain itu `LedgerStokService.masukBarang` & `sesuaikanOpname` **belum** memanggil audit sama sekali, padahal "barang masuk & pembalik" + "opname" **wajib** diaudit (`CONVENTIONS.md` §6).
-- **Keputusan:** ⚠️ **menunggu** — (a) buat tabel `audit_log` + tulis entri nyata; (b) tambah panggilan audit di barang masuk & opname.
+- **Perbaikan:** ✅ dibuat migrasi `V5__CreateAuditLog.sql` (tabel `audit_log` append-only + trigger + indeks), model `AuditLog` (`@Immutable`, `Persistable`), repositori `AuditLogRepository`, dan `AuditLogger` kini **menulis baris DB nyata** (`Propagation.MANDATORY` → audit ikut transaksi aksi). `masukBarang` & `sesuaikanOpname` memanggil audit (`BARANG_MASUK` / `OPNAME_STOK` + alasan + `nilai_lama`→`nilai_baru`). Diuji oleh `AuditLoggerIT`.
+
+## B19 — `S3Storage.viewFile`/`deleteFile` tanpa validasi nama objek (path-traversal / IDOR)
+
+- **Gejala:** pemanggil bisa meminta objek di luar prefix tenant-nya (mis. menyisipkan `../`) atau membaca objek internal mana pun di bucket.
+- **Akar:** `viewFile`/`deleteFile` langsung meneruskan `objectName` ke MinIO tanpa validasi; hanya `uploadFile` yang memvalidasi **ekstensi**.
+- **Perbaikan:** ✅ ditambahkan `validasiObjectName(...)` (tolak absolut/`..`/`\`/NUL, allowlist karakter `[A-Za-z0-9._-]`) yang dipanggil di `uploadFile`, `viewFile`, dan `deleteFile`.
+- **Catatan:** endpoint HTTP file belum dibuat; bila nanti dibuat, **wajib** juga memaksa prefix tenant (`sekolah-<id>/`) sebelum memanggil helper ini.
+
+## B20 — Artefak generator ID tak-aman di `Constants` berisiko diwarisi
+
+- **Gejala:** `Constants.idGenerator()` (epoch-millis + 3 digit acak) & `sortableIdGenerator()` berpotensi **tabrakan PK** pada trafik tinggi bila disalin dari `admin-be`.
+- **Akar:** method statis lama tetap ada meski seluruh entitas sudah memakai bean `IdGenerator` (monoton + offset per-JVM).
+- **Perbaikan:** ✅ `sortableIdGenerator()` ditandai `@Deprecated(forRemoval=true)`; dokumentasi `idGenerator()` diberi peringatan tegas "JANGAN dipakai"; semua pemakaian internal sudah memakai bean `IdGenerator`.
 
 ---
 

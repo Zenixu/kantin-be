@@ -20,12 +20,12 @@ public final class Constants {
 
     /**
      * Generator ID entitas bisnis (pola admin-be: epoch-millis + 3 digit acak).
-     * Jangan pakai autoincrement untuk entitas bisnis yang butuh ID global.
      *
-     * <p>⚠️ <b>PERINGATAN (temuan docs/spesifikasi-fase4-ledger.md §5.5):</b>
-     * pola ini berisiko <b>tabrakan PK</b> pada trafik tinggi (tap bersamaan).
-     * Untuk entitas ledger/transaksi, <b>gunakan {@link #sortableIdGenerator()}</b>
-     * atau kolom ber-sequence. Jangan pakai {@code idGenerator()} untuk ledger.
+     * <p><b>⚠️ DIHAPUS (B20) — JANGAN dipakai.</b> Pola ini berisiko
+     * <b>tabrakan PK</b> pada trafik tinggi (tap bersamaan) dan tidak monoton
+     * (urutan id ≠ urutan waktu). Seluruh entitas ledger/transaksi kini memakai
+     * bean {@code IdGenerator} ({@code helper/IdGenerator.java}) yang monoton &amp;
+     * anti-tabrakan. Lihat {@code docs/spesifikasi-fase4-ledger.md §5.5}.
      */
     public static Long idGenerator() {
         Random random = new Random();
@@ -38,9 +38,13 @@ public final class Constants {
      * acak DI DEPAN epoch-millis sehingga urutan tetap kira-kira naik, tetapi
      * tabrakan dalam milidetik yang sama sangat kecil.
      *
-     * <p>Ini mitigasi sementara; keputusan final (sequence vs ULID) menunggu
-     * ADR (lihat OPEN-QUESTIONS).
+     * <p><b>⚠️ Usang (B20).</b> Gunakan bean {@code IdGenerator} (monoton + offset
+     * per-JVM) sebagai gantinya. Method ini hanya disisakan agar tak ada kode lama
+     * yang menyalinnya.
+     *
+     * @deprecated pakai {@code helper/IdGenerator} (bean Spring).
      */
+    @Deprecated(since = "audit-B20", forRemoval = true)
     public static Long sortableIdGenerator() {
         Random random = new Random();
         int rand = random.nextInt(900) + 100;

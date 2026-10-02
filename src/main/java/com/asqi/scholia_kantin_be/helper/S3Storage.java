@@ -85,12 +85,41 @@ public class S3Storage {
         return ext;
     }
 
+    /**
+     * Validasi nama objek agar tak bisa keluar dari namespace yang diizinkan
+     * (cegah path-traversal / IDOR baca objek sembarang — B19, PRD §11.4).
+     *
+     * <p>Aturan: tidak kosong, tidak absolut, tanpa segmen {@code ..} atau
+     * {@code .}, tidak memuat backslash/NUL, dan seluruh segmen hanya berisi
+     * karakter aman ({@code [A-Za-z0-9._-]}). Karena penyimpanan sudah
+     * menyimpan objek ber-prefix tenant (mis. {@code sekolah-7/...}), ketatnya
+     * validasi ini memastikan pemanggil tak bisa meminta objek di luar prefix-nya
+     * dengan menyisipkan {@code ../}.
+     */
+    private void validasiObjectName(String objectName) {
+        if (objectName == null || objectName.isBlank()) {
+            throw new IllegalArgumentException("Nama objek wajib diisi");
+        }
+        if (objectName.startsWith("/") || objectName.contains("\\") || objectName.contains("\0")) {
+            throw new IllegalArgumentException("Nama objek tidak valid");
+        }
+        for (String segmen : objectName.split("/")) {
+            if (segmen.isEmpty() || segmen.equals(".") || segmen.equals("..")) {
+                throw new IllegalArgumentException("Nama objek tidak valid (segmen terlarang)");
+            }
+            if (!segmen.matches("[A-Za-z0-9._-]+")) {
+                throw new IllegalArgumentException("Nama objek memuat karakter tidak diizinkan");
+            }
+        }
+    }
+
     public String uploadFile(String folderName, MultipartFile file) throws Exception {
         try (InputStream inputStream = file.getInputStream()) {
             String originalFileName = file.getOriginalFilename();
             String extension = validateAndExtractExtension(originalFileName);
             String fileName = UUID.randomUUID().toString().replace("-", "") + extension;
             String objectName = folderName + "/" + fileName;
+            validasiObjectName(objectName);
 
             client().putObject(
                     PutObjectArgs.builder()
@@ -108,6 +137,7 @@ public class S3Storage {
     }
 
     public void deleteFile(String objectName) throws Exception {
+        validasiObjectName(objectName);
         client().removeObject(
                 RemoveObjectArgs.builder()
                         .bucket(bucketName)
@@ -117,6 +147,8 @@ public class S3Storage {
     }
 
     public InputStream viewFile(String objectName) throws Exception {
+        // Guard path-traversal/IDOR: jangan pernah meneruskan objek tak tervalidasi (B19).
+        validasiObjectName(objectName);
         try {
             GetObjectResponse response = client().getObject(
                     GetObjectArgs.builder()

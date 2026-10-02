@@ -54,7 +54,7 @@ public class SesiKasirService {
     @Transactional(propagation = Propagation.MANDATORY)
     public SesiKasir sesiTerbukaAtauBuka(Long sekolahId, Long titikKasirId) {
         LocalDate hariIni = jam.hariIni();
-        var ada = sesiRepo.kunciBerdasarkanTitikTanggal(titikKasirId, hariIni);
+        var ada = sesiRepo.kunciBerdasarkanTitikTanggal(sekolahId, titikKasirId, hariIni);
         if (ada.isPresent()) {
             SesiKasir sesi = ada.get();
             if (!sesi.getSekolahId().equals(sekolahId)) {
@@ -72,7 +72,7 @@ public class SesiKasirService {
     @Transactional
     public SesiKasir bukaSesi(Long sekolahId, Long titikKasirId) {
         LocalDate hariIni = jam.hariIni();
-        var ada = sesiRepo.kunciBerdasarkanTitikTanggal(titikKasirId, hariIni);
+        var ada = sesiRepo.kunciBerdasarkanTitikTanggal(sekolahId, titikKasirId, hariIni);
         if (ada.isPresent()) {
             SesiKasir sesi = ada.get();
             if (!sesi.getSekolahId().equals(sekolahId)) {
@@ -132,7 +132,7 @@ public class SesiKasirService {
      */
     @Transactional
     public SesiKasir tutupSesi(Long sekolahId, Long sesiId, Long oleh, boolean auto) {
-        SesiKasir sesi = sesiRepo.kunciUntukUpdate(sesiId)
+        SesiKasir sesi = sesiRepo.kunciUntukUpdate(sekolahId, sesiId)
                 .orElseThrow(() -> new NotFoundEntity("Sesi kasir tidak ditemukan"));
         sekolahGuard.pastikanMilikSekolah(sesi.getSekolahId(), "Sesi kasir");
         if (!sesi.getSekolahId().equals(sekolahId)) {

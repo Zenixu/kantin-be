@@ -32,17 +32,30 @@ public interface SesiKasirRepository extends JpaRepository<SesiKasir, Long> {
     /**
      * Ambil &amp; kunci sesi ({@code FOR UPDATE}) agar buka/tutup kasir tidak
      * balapan pada titik kasir yang sama.
+     *
+     * <p><b>Tenant-scoped (PRD §11.4, B17):</b> {@code sekolah_id} ikut di
+     * {@code WHERE} sehingga sesi sekolah lain tidak pernah terkunci.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM SesiKasir s WHERE s.id = :id")
-    Optional<SesiKasir> kunciUntukUpdate(@Param("id") Long id);
+    @Query("SELECT s FROM SesiKasir s WHERE s.sekolahId = :sekolahId AND s.id = :id")
+    Optional<SesiKasir> kunciUntukUpdate(@Param("sekolahId") Long sekolahId,
+                                         @Param("id") Long id);
 
-    /** Sesi terbuka pada satu titik kasir (untuk validasi transaksi). */
+    /**
+     * Sesi terbuka pada satu titik kasir (untuk validasi transaksi).
+     *
+     * <p><b>Tenant-scoped (PRD §11.4, B17):</b> {@code sekolah_id} ikut di
+     * {@code WHERE}. Karena UNIQUE di DB adalah {@code (titik_kasir_id, tanggal)},
+     * menambahkan tenant di sini <b>tidak</b> melemahkan jaminan satu-sesi-per-hari.
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT s FROM SesiKasir s
-            WHERE s.titikKasirId = :titikKasirId AND s.tanggal = :tanggal
+            WHERE s.sekolahId = :sekolahId
+              AND s.titikKasirId = :titikKasirId
+              AND s.tanggal = :tanggal
             """)
-    Optional<SesiKasir> kunciBerdasarkanTitikTanggal(@Param("titikKasirId") Long titikKasirId,
+    Optional<SesiKasir> kunciBerdasarkanTitikTanggal(@Param("sekolahId") Long sekolahId,
+                                                     @Param("titikKasirId") Long titikKasirId,
                                                      @Param("tanggal") LocalDate tanggal);
 }

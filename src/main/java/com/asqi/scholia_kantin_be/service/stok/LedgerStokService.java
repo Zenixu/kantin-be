@@ -3,6 +3,7 @@ package com.asqi.scholia_kantin_be.service.stok;
 import com.asqi.scholia_kantin_be.component.exception.ConflictException;
 import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
+import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
 import com.asqi.scholia_kantin_be.enums.ArahStok;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.helper.IdGenerator;
@@ -41,6 +42,7 @@ public class LedgerStokService {
     private final MutasiStokRepository mutasiRepo;
     private final StokCacheRepository cacheRepo;
     private final HppService hppService;
+    private final AuditLogger auditLogger;
     private final IdGenerator idGenerator;
     private final JamKantin jam;
 
@@ -78,6 +80,12 @@ public class LedgerStokService {
         cache.setHpp(hppBaru);
         cache.setUpdatedAt(jam.sekarang());
         cacheRepo.save(cache);
+
+        // Audit (PRD §11.7): barang masuk wajib tercatat (nilai_lama → nilai_baru).
+        auditLogger.catat(aktorId, sekolahId, "BARANG_MASUK", "Stok",
+                "MENU:" + menuId, null,
+                "stok=" + stokSebelum + ";hpp=" + hppSebelum,
+                "stok=" + stokBaru + ";hpp=" + hppBaru);
 
         log.info("Barang masuk menu={} qty={} hargaBeli={} → stok={} hpp={}",
                 menuId, qty, hargaBeliPerUnit, stokBaru, hppBaru);
@@ -173,6 +181,11 @@ public class LedgerStokService {
         cache.setUpdatedAt(jam.sekarang());
         cacheRepo.save(cache);
 
+        // Audit (PRD §11.7): penyesuaian stok (opname) wajib tercatat + alasan.
+        auditLogger.catat(aktorId, sekolahId, "OPNAME_STOK", "Stok",
+                "MENU:" + menuId, alasan,
+                "stok=" + stokSekarang, "stok=" + qtyFisik);
+
         return HasilMutasiStok.baru(mutasi, qtyFisik, cache.getHpp());
     }
 
@@ -215,8 +228,9 @@ public class LedgerStokService {
     /** Pastikan baris cache ada &amp; terkunci (FOR UPDATE) — serialisasi per menu. */
     private StokCache kunciStok(Long sekolahId, Long menuId) {
         cacheRepo.pastikanBarisAda(menuId, sekolahId);
-        StokCache cache = cacheRepo.kunciUntukUpdate(menuId)
+        StokCache cache = cacheRepo.kunciUntukUpdate(sekolahId, menuId)
                 .orElseThrow(() -> new NotFoundEntity("Stok menu tidak ditemukan"));
+        // Pertahanan berlapis: kunci sudah tenant-scoped (B17); cek tetap dijaga.
         if (!cache.getSekolahId().equals(sekolahId)) {
             throw new NotFoundEntity("Stok menu tidak ditemukan");
         }
