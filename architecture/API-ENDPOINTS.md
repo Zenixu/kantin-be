@@ -49,7 +49,23 @@
 
 ---
 
-## 5. Hal yang perlu diperhatikan tim
+## 5. Katalog (KatalogController) — 🆕
+
+| Method | Path | Peran | Keterangan |
+|---|---|---|---|
+| `GET` | `/api/katalog/kategori?hanyaAktif=` | petugas, pengelola, TU, admin | Daftar kategori |
+| `POST` | `/api/katalog/kategori` | pengelola, TU, admin | Buat kategori |
+| `PUT` | `/api/katalog/kategori/{id}` | pengelola, TU, admin | Ubah kategori |
+| `DELETE` | `/api/katalog/kategori/{id}` | pengelola, TU, admin | Nonaktifkan (soft delete) — gagal bila masih dipakai item aktif |
+| `GET` | `/api/katalog/menu?kategoriId=&hanyaAktif=` | petugas, pengelola, TU, admin | Daftar item |
+| `GET` | `/api/katalog/menu/{id}` | petugas, pengelola, TU, admin | Detail item |
+| `POST` | `/api/katalog/menu` | pengelola, TU, admin | Buat item |
+| `PUT` | `/api/katalog/menu/{id}` | pengelola, TU, admin | Ubah item (perubahan harga tercatat audit `UBAH_HARGA_JUAL`) |
+| `DELETE` | `/api/katalog/menu/{id}` | pengelola, TU, admin | Nonaktifkan item (soft delete) |
+
+---
+
+## 6. Hal yang perlu diperhatikan tim
 
 1. **Tenant dari token, bukan query/body.** Sekolah lain → **404** (bukan 403) agar tidak membocorkan keberadaan data (PRD §11.4).
 2. **Semua mutasi wajib idempotency key** (`referensiId`), agar retry jaringan tidak menggandakan efek (Aturan Emas §3.3).
@@ -59,11 +75,10 @@
 
 ---
 
-## 6. Endpoint yang BELUM dibuat (menunggu modul/fase)
+## 7. Endpoint yang BELUM dibuat (menunggu modul/fase)
 
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|
-| Katalog menu | CRUD menu & kategori | — (dapat dikerjakan) |
 | Kartu Tamu | daftar/kartu & saldo | Q7 |
 | Blokir kartu | blokir/buka blokir | Q7 |
 | Limit & blokir item | set limit harian, blokir item | Q7 |

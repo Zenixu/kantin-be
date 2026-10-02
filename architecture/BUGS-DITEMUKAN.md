@@ -184,6 +184,19 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
   - Dokumen baru `architecture/API-ENDPOINTS.md` (single source of truth endpoint).
   - Tes: `SaldoControllerTest` (3), `StokControllerTest` (3).
 
+## B26 — (fitur) Modul Katalog Menu & Kategori
+
+- **Gejala:** `MenuLookupPort` masih dilayani `MenuLookupFallback` yang selalu `null` → kasir tak bisa menjual menu apa pun; barang masuk/opname tak punya master item.
+- **Perbaikan:** ✅
+  - Migrasi `V6__CreateKatalog.sql`: tabel `kategori_menu` & `menu` (soft delete `is_active`, `stok_minimum`, FK `ON DELETE RESTRICT`, CHECK satuan `PCS/PORSI/BOTOL`).
+  - Entity `KategoriMenu`, `Menu` (`Persistable`, id dari `IdGenerator`) + enum `SatuanMenu`.
+  - Repository `KategoriMenuRepository`, `MenuRepository` (semua query **tenant-scoped**).
+  - `KatalogService`: CRUD + soft delete; **ubah harga jual → audit `UBAH_HARGA_JUAL`** (PRD §7.1); kategori terpakai tak bisa dinonaktifkan.
+  - `MenuLookupKatalogAdapter`: implementasi **nyata** `MenuLookupPort` (menggantikan fallback) → kasir kini dapat snapshot harga/kategori/status aktif.
+  - `KatalogController` (`/api/katalog`): 8 endpoint kategori/menu.
+  - Tes: `KatalogServiceIT` (7, Testcontainers), `KatalogControllerTest` (3).
+- **Belajar (`/bug-hunter`):** dua bean `@Primary` untuk `MenuLookupPort` (adapter + fake test) menyebabkan `NoUniqueBeanDefinitionException`. Solusi: adapter **tanpa `@Primary`** (di produksi hanya satu bean); fake test tetap `@Primary` sehingga menang. `@ConditionalOnMissingBean` pada `@Service` component-scan **tidak andal** — hindari.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
