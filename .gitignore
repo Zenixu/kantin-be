@@ -1,0 +1,44 @@
+# ============================================================
+# .gitignore - kantin-be
+# ============================================================
+
+### Build ###
+target/
+HELP.md
+
+### Maven wrapper (distributionType=only-script: tanpa jar) ###
+.mvn/wrapper/maven-wrapper.jar
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+### VS Code ###
+.vscode/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+build/
+
+### Local config (kredensial - JANGAN commit) ###
+*-local.properties
+application-local.properties
+.env
+
+### OS ###
+.DS_Store
+Thumbs.db

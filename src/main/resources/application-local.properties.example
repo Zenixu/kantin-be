@@ -1,0 +1,43 @@
+# ============================================================
+# TEMPLATE config lokal - DATABASE & INTEGRATION
+#
+# Cara pakai:
+#   cp src/main/resources/application-local.properties.example \
+#      src/main/resources/application-local.properties
+#   Isi nilai bertanda <GANTI_...>
+#   Jalankan: ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+#
+# application-local.properties sudah di-.gitignore.
+# JANGAN commit file application-local.properties (AGENTS.md §10).
+# ============================================================
+
+# --- Database: PostgreSQL (docker compose up -d) ---
+spring.datasource.url=jdbc:postgresql://localhost:5432/kantin_db?stringtype=unspecified
+spring.datasource.username=kantin
+spring.datasource.password=<GANTI_DB_PASSWORD>
+
+# --- Redis (docker compose up -d) ---
+spring.data.redis.host=localhost
+spring.data.redis.port=6379
+spring.data.redis.password=
+
+# --- MinIO (opsional di lokal) ---
+# MinIO lokal: docker run -p 9000:9000 -p 9001:9001 minio/minio server /data --console-address ":9001"
+minio.url=http://localhost:9000
+minio.access-key=<GANTI_MINIO_ACCESS_KEY>
+minio.secret-key=<GANTI_MINIO_SECRET_KEY>
+minio.bucket-name=kantin
+minio.url-final=http://localhost:9000/kantin/
+
+# --- JWT RS256: public key penerbit (base64 X.509 DER) ---
+# ⛔ BLOCKING Q1/Q2: minta ke tim admin-be (staf) & mobile-be (ortu).
+# Format klaim JWT saat ini HANYA sub/typ/jti/iat/exp (tanpa sekolah_id & role)
+# -> verifikasi ulang ke tim admin-be sebelum implementasi filter JWT.
+JWT_ADMIN_PUBLIC_KEY=
+JWT_MOBILE_PUBLIC_KEY=
+
+# --- Integrasi SKOOLIA (REST internal) ---
+SKOOLIA_ADMIN_BE_URL=http://localhost:8081
+SKOOLIA_MOBILE_BE_URL=
+SKOOLIA_INTERNAL_BE_URL=
+SKOOLIA_CALLBACK_BE_URL=

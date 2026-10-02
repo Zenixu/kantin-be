@@ -1,0 +1,30 @@
+# ──────────────────────────────────────────
+# Dockerfile-dev — image untuk DEV / debugging
+#
+# Berbeda dari Dockerfile (production): image ini menyertakan
+# JDK + Maven + tools, agar bisa exec ke dalam container dan
+# menjalankan migrasi / query manual.
+#   docker build -f Dockerfile-dev -t kantin-be:dev .
+# ──────────────────────────────────────────
+FROM azul/zulu-openjdk-alpine:25
+
+RUN apk add --no-cache maven bash tzdata ttf-dejavu curl postgresql-client
+ENV TZ=Asia/Jakarta
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+WORKDIR /app
+
+COPY pom.xml .
+COPY .mvn/ .mvn/
+COPY mvnw .
+RUN chmod +x mvnw && ./mvnw dependency:go-offline -B -q
+
+COPY src ./src
+
+# Buka port debugger (JDWP) — attach dari IDE ke localhost:5005
+EXPOSE 8082 5005
+
+ENV SPRING_PROFILES_ACTIVE=local
+ENV JAVA_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+
+ENTRYPOINT ["sh", "-c", "exec ./mvnw spring-boot:run -Dspring-boot.run.jvmArguments=\"$JAVA_OPTS\""]
