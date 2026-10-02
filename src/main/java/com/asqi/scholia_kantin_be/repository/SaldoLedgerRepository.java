@@ -1,0 +1,96 @@
+package com.asqi.scholia_kantin_be.repository;
+
+import com.asqi.scholia_kantin_be.enums.ArahMutasi;
+import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
+import com.asqi.scholia_kantin_be.enums.SubjekTipe;
+import com.asqi.scholia_kantin_be.model.SaldoLedger;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Akses data ledger saldo ({@code saldo_ledger}).
+ *
+ * <p><b>Append-only (PRD §11.1):</b> repository ini sengaja <b>tidak</b>
+ * menyediakan method {@code delete}/{@code update}. Hanya {@code save} (INSERT)
+ * dan query baca. {@link SaldoLedger} juga {@code @Immutable}.
+ *
+ * <p>Semua query menerima {@code sekolahId} eksplisit agar tenant scoping
+ * (PRD §11.4) terlihat jelas di setiap pemanggilan.
+ */
+@Repository
+public interface SaldoLedgerRepository extends JpaRepository<SaldoLedger, Long> {
+
+    /** Idempotency: satu key hanya boleh menghasilkan satu mutasi (PRD §11.3). */
+    Optional<SaldoLedger> findByIdempotencyKey(String idempotencyKey);
+
+    boolean existsByIdempotencyKey(String idempotencyKey);
+
+    /** Mutasi yang lahir dari sebuah transaksi (untuk audit/rekonsiliasi). */
+    List<SaldoLedger> findBySekolahIdAndTransaksiId(Long sekolahId, Long transaksiId);
+
+    /**
+     * Saldo berjalan = Σ KREDIT − Σ DEBIT untuk satu subjek (PRD §11.1).
+     *
+     * <p>Dipakai untuk <b>verifikasi</b> terhadap {@code saldo_cache} dan
+     * penghitungan ulang bila cache dicurigai drift.
+     */
+    @Query("""
+            SELECT COALESCE(SUM(CASE WHEN l.arah = :kredit THEN l.nominal ELSE -l.nominal END), 0)
+            FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.subjekTipe = :subjekTipe
+              AND l.subjekId = :subjekId
+            """)
+    Long hitungSaldoDariLedger(@Param("sekolahId") Long sekolahId,
+                               @Param("subjekTipe") SubjekTipe subjekTipe,
+                               @Param("subjekId") Long subjekId,
+                               @Param("kredit") ArahMutasi kredit);
+
+    /**
+     * Belanja bersih hari ini untuk satu subjek — dasar pemeriksaan <b>limit
+     * harian</b> (PRD §6.1 tahap 5, reset 00:00 waktu sekolah).
+     *
+     * <p>Dihitung <b>net</b>: Σ DEBIT PENJUALAN − Σ KREDIT VOID_PENJUALAN sejak
+     * {@code sejak}. Dengan begitu transaksi yang sudah di-void tidak lagi
+     * memakan jatah limit (PRD §6.3: "belanja hari ini ikut berkurang").
+     * Koreksi bendahara tidak dihitung (bukan belanja).
+     */
+    @Query("""
+            SELECT COALESCE(SUM(CASE WHEN l.arah = :debit THEN l.nominal ELSE -l.nominal END), 0)
+            FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.subjekTipe = :subjekTipe
+              AND l.subjekId = :subjekId
+              AND l.jenis IN :jenis
+              AND l.waktu >= :sejak
+            """)
+    Long hitungBelanjaBersihSejak(@Param("sekolahId") Long sekolahId,
+                                  @Param("subjekTipe") SubjekTipe subjekTipe,
+                                  @Param("subjekId") Long subjekId,
+                                  @Param("debit") ArahMutasi debit,
+                                  @Param("jenis") java.util.Collection<JenisMutasiSaldo> jenis,
+                                  @Param("sejak") OffsetDateTime sejak);
+
+    /**
+     * Riwayat mutasi terbaru satu subjek (PRD §8.4) — urut id turun (id
+     * sortable ≈ urut waktu). {@link Pageable} untuk membatasi jumlah.
+     */
+    @Query("""
+            SELECT l FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.subjekTipe = :subjekTipe
+              AND l.subjekId = :subjekId
+            ORDER BY l.id DESC
+            """)
+    List<SaldoLedger> riwayatTerbaru(@Param("sekolahId") Long sekolahId,
+                                     @Param("subjekTipe") SubjekTipe subjekTipe,
+                                     @Param("subjekId") Long subjekId,
+                                     Pageable pageable);
+}
