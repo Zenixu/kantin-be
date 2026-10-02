@@ -137,4 +137,34 @@ class SesiKasirServiceIT {
                 "SELECT COUNT(*) FROM sesi_kasir WHERE status = 'TERBUKA'", Integer.class);
         assertThat(masihTerbuka).isZero();
     }
+
+    /**
+     * Penjadwal harian (PRD §6.4) hanya boleh menutup sesi yang tanggalnya
+     * SUDAH LEWAT — sesi hari ini yang masih berjalan tidak ikut tertutup,
+     * meski penjadwal jalan menjelang tengah malam.
+     */
+    @Test
+    @DisplayName("auto-tutup lintas-tenant: sesi hari ini TIDAK ditutup, sesi kemarin ditutup")
+    void autoTutupLintasTenantHanyaSesiTertinggal() {
+        tap("s1", 1); // membuka sesi hari ini
+
+        // Ciptakan sesi tertinggal (kemarin) untuk sekolah yang sama.
+        Long titik2 = 2L;
+        jdbc.update("INSERT INTO titik_kasir (id, sekolah_id, nama, is_active, created_at, updated_at) "
+                + "VALUES (?, ?, 'Kasir 2', true, now(), now())", titik2, SEKOLAH);
+        jdbc.update("INSERT INTO sesi_kasir (id, sekolah_id, titik_kasir_id, tanggal, status, "
+                + "total_bruto, total_void, total_bersih, dibuka_at, auto_tutup, posting_buku_kas, "
+                + "created_at, updated_at) "
+                + "VALUES (9001, ?, ?, CURRENT_DATE - 1, 'TERBUKA', 0, 0, 0, now(), false, false, now(), now())",
+                SEKOLAH, titik2);
+
+        int ditutup = sesiKasir.tutupOtomatisLintasTenant();
+
+        // Hanya sesi kemarin (9001) yang ditutup; sesi hari ini tetap terbuka.
+        assertThat(ditutup).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM sesi_kasir WHERE id = 9001", String.class)).isEqualTo("DITUTUP");
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM sesi_kasir WHERE status = 'TERBUKA'", Integer.class)).isEqualTo(1);
+    }
 }

@@ -191,6 +191,60 @@ public class SesiKasirService {
         return jumlah;
     }
 
+    /**
+     * Auto-tutup <b>lintas-tenant</b>: tutup semua sesi TERBUKA yang tertinggal
+     * (tanggal &lt; hari ini) untuk SELURUH sekolah. Dipakai penjadwal harian
+     * (mis. 23:59 zona sekolah, PRD §6.4).
+     *
+     * <p>Hanya sesi <b>hari-hari sebelumnya</b> yang ditutup — bila penjadwal
+     * tergeser/terlambat jalan beberapa menit, sesi yang baru dibuka lewat
+     * tengah malam tidak ikut tertutup keliru. Tiap sekolah diproses satu
+     * transaksi agar kegagalan satu tenant tidak menggagalkan tenant lain.
+     *
+     * @return jumlah total sesi yang ditutup
+     */
+    public int tutupOtomatisLintasTenant() {
+        LocalDate batas = jam.hariIni();
+        int total = 0;
+        for (Long sekolahId : sesiRepo.daftarSekolahIdDenganStatus(StatusSesiKasir.TERBUKA)) {
+            try {
+                total += tutupSesiTertinggal(sekolahId, batas);
+            } catch (RuntimeException e) {
+                // Satu sekolah gagal jangan menggagalkan yang lain.
+                log.error("Auto-tutup gagal sekolah={}: {}", sekolahId, e.getMessage(), e);
+            }
+        }
+        if (total > 0) {
+            log.info("Auto-tutup lintas-tenant selesai: {} sesi ditutup", total);
+        }
+        return total;
+    }
+
+    /** Tutup sesi TERBUKA satu sekolah yang tanggalnya sebelum {@code batas}. */
+    @Transactional
+    public int tutupSesiTertinggal(Long sekolahId, LocalDate batas) {
+        List<SesiKasir> tertinggal =
+                sesiRepo.findBySekolahIdAndStatusAndTanggalBefore(sekolahId, StatusSesiKasir.TERBUKA, batas);
+        int jumlah = 0;
+        for (SesiKasir sesi : tertinggal) {
+            RekapSesi rekap = hitungRekap(sekolahId, sesi);
+            OffsetDateTime now = jam.sekarang();
+            sesi.setTotalBruto(rekap.getTotalBruto());
+            sesi.setTotalVoid(rekap.getTotalVoid());
+            sesi.setTotalBersih(rekap.getTotalBersih());
+            sesi.setStatus(StatusSesiKasir.DITUTUP);
+            sesi.setDitutupAt(now);
+            sesi.setAutoTutup(true);
+            sesi.setUpdatedAt(now);
+            sesiRepo.save(sesi);
+            jumlah++;
+        }
+        if (jumlah > 0) {
+            log.info("Auto-tutup {} sesi tertinggal sekolah={} (sebelum {})", jumlah, sekolahId, batas);
+        }
+        return jumlah;
+    }
+
     @Transactional(readOnly = true)
     public SesiKasir ambil(Long sekolahId, Long sesiId) {
         SesiKasir sesi = sesiRepo.findById(sesiId)

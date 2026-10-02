@@ -30,6 +30,28 @@ public interface SesiKasirRepository extends JpaRepository<SesiKasir, Long> {
     List<SesiKasir> findBySekolahIdAndStatus(Long sekolahId, StatusSesiKasir status);
 
     /**
+     * Daftar {@code sekolah_id} unik yang masih punya sesi berstatus tertentu.
+     *
+     * <p>Dipakai auto-tutup lintas-tenant: kantin-be tidak menyimpan tabel
+     * {@code sekolah} (milik admin-be), jadi daftar tenant yang perlu diproses
+     * diturunkan dari data sesi itu sendiri. <b>Tidak</b> tenant-scoped karena
+     * tugas terjadwal ini memang bekerja untuk SEMUA tenant.
+     */
+    @Query("""
+            SELECT DISTINCT s.sekolahId FROM SesiKasir s
+            WHERE s.status = :status
+            """)
+    List<Long> daftarSekolahIdDenganStatus(@Param("status") StatusSesiKasir status);
+
+    /** Sesi terbuka yang tanggalnya SEBELUM tanggal tertentu (sesi tertinggal). */
+    List<SesiKasir> findByStatusAndTanggalBefore(StatusSesiKasir status, LocalDate tanggal);
+
+    /** Sesi terbuka milik satu sekolah yang tanggalnya sebelum tanggal tertentu. */
+    List<SesiKasir> findBySekolahIdAndStatusAndTanggalBefore(Long sekolahId,
+                                                             StatusSesiKasir status,
+                                                             LocalDate tanggal);
+
+    /**
      * Ambil &amp; kunci sesi ({@code FOR UPDATE}) agar buka/tutup kasir tidak
      * balapan pada titik kasir yang sama.
      *

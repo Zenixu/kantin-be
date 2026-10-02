@@ -235,6 +235,18 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Catatan:** `SesiKasirService.tutupSesi` **tidak** mengubah status transaksi individual — "mengunci" ditegakkan lewat status **sesi** (`VoidService` menolak void bila sesi tidak terbuka). Javadoc diringkas agar tidak menyesatkan.
 - **Pelajaran:** dokumentasi adalah bagian dari DoD. Setiap commit fitur **wajib** memperbarui ADR/OPEN-QUESTIONS/API-ENDPOINTS sekaligus — bukan menyusul.
 
+## B30 — (fitur) Penjadwal auto-tutup sesi kasir (PRD §6.4)
+
+- **Gejala:** `SesiKasirService.tutupOtomatis()` sudah ada & teruji, tetapi **tidak ada `@Scheduled`** yang memanggilnya — sesi kasir yang lupa ditutup bisa tertinggal `TERBUKA` selamanya (total bersih tak terkunci, Buku Kas tak lengkap).
+- **Perbaikan:** ✅
+  - `SesiKasirScheduler` (`@Scheduled` cron `0 59 23 * * *`, zona kantin) — aktif via `@EnableScheduling`.
+  - `SesiKasirService.tutupOtomatisLintasTenant()` — proses **semua sekolah** secara terpisah (satu tenant gagal ≠ menggagalkan yang lain).
+  - Repository: `daftarSekolahIdDenganStatus`, `findBySekolahIdAndStatusAndTanggalBefore`.
+  - Bisa dimatikan: `kantin.scheduler.sesi.enabled=false` (test/dev).
+  - Tes: `SesiKasirSchedulerTest` (2), skenario IT tertinggal (1) di `SesiKasirServiceIT`.
+- **Desain kunci — hanya tutup sesi bertanggal `< hari ini`:** aman bila penjadwal tergeser/terlambat; sesi yang baru dibuka lewat tengah malam tidak ikut tertutup keliru. Idempoten.
+- **Catatan multi-tenant:** kantin-be tidak menyimpan tabel `sekolah` (milik admin-be) — daftar tenant diturunkan dari `SELECT DISTINCT sekolah_id` pada `sesi_kasir`.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
