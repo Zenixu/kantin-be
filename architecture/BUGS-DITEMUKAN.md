@@ -247,6 +247,19 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Desain kunci — hanya tutup sesi bertanggal `< hari ini`:** aman bila penjadwal tergeser/terlambat; sesi yang baru dibuka lewat tengah malam tidak ikut tertutup keliru. Idempoten.
 - **Catatan multi-tenant:** kantin-be tidak menyimpan tabel `sekolah` (milik admin-be) — daftar tenant diturunkan dari `SELECT DISTINCT sekolah_id` pada `sesi_kasir`.
 
+## B31 — (perbaikan FE) `stokBerjalan` di katalog & endpoint unggah berkas
+
+- **Gejala (dilaporkan FE):**
+  1. Tabel katalog menu perlu menampilkan **total stok berjalan** per item, tetapi `GET /api/katalog/menu` hanya mengirim `stokMinimum`. Memanggil `GET /api/stok/{menuId}` per item = **N+1 query** (lambat).
+  2. Form buat menu butuh **unggah foto**, tetapi belum ada endpoint upload (`API-ENDPOINTS.md §6.4` lama).
+- **Perbaikan:** ✅
+  1. **`stokBerjalan` pada `MenuResponse`.** Field baru `int stokBerjalan` diisi dari `stok_cache` lewat **satu query batch** `StokCacheRepository.findBySekolahIdAndMenuIdIn(sekolahId, menuIds)` (tenant-scoped) — bukan per-item. `KatalogService.stokBerjalan(sekolahId, menuIds)` mengembalikan peta `menuId → stok`; controller memakai `getOrDefault(id, 0)`. `GET /api/katalog/menu/{id}` juga menyertakan `stokBerjalan` (satu menu).
+  2. **Endpoint unggah** `POST /api/storage/upload` (`multipart/form-data`, field `file`, `folder` opsional) → mengembalikan `{ path, url, namaAsli, ukuran }`; FE menyimpan `url`/`path` ke `fotoUrl` pada `MenuRequest`. Plus `GET /api/storage/file?path=` untuk menampilkan (bila URL publik belum diset).
+- **Keamanan (B19, PRD §11.4):** prefix objek `sekolah-<id>/` dibentuk **server-side** dari tenant token (bukan input klien); `folder` dibatasi allowlist (`menu`/`nota`/`kartu-tamu`/`lain`); berkas sekolah lain ⇒ **404** (`NotFoundEntity`), bukan 403. Error validasi ekstensi → **400**; error infra MinIO → pesan generik (detail hanya di log server).
+- **Konfigurasi:** `minio.url-final` (opsional) menjadi basis URL publik; bila kosong, `url` = `path`.
+- **Tes:** `StorageServiceTest` (9), `StorageControllerTest` (1), `KatalogControllerTest` (+3), `KatalogServiceIT` (+2).
+- **Catatan:** tak ada migrasi Flyway baru — `stok_cache` sudah ada (V3) dan `menu.foto_url` sudah ada (V6).
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
