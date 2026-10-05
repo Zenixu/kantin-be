@@ -5,6 +5,7 @@ import com.asqi.scholia_kantin_be.dto.MenuRequest;
 import com.asqi.scholia_kantin_be.dto.MenuResponse;
 import com.asqi.scholia_kantin_be.enums.AktorKantin;
 import com.asqi.scholia_kantin_be.model.KategoriMenu;
+import com.asqi.scholia_kantin_be.model.Menu;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
 import com.asqi.scholia_kantin_be.payload.response.Response;
 import com.asqi.scholia_kantin_be.security.IdentitasKantin;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Katalog menu &amp; kategori (PRD §7.1).
@@ -97,10 +99,14 @@ public class KatalogController {
     public ResponseEntity<Response<List<MenuResponse>>> daftarMenu(
             @RequestParam(required = false) Long kategoriId,
             @RequestParam(defaultValue = "false") boolean hanyaAktif) {
-        List<MenuResponse> daftar = katalog
-                .daftarMenu(TenantContext.sekolahIdWajib(), kategoriId, hanyaAktif)
-                .stream()
-                .map(MenuResponse::dari)
+        Long sekolahId = TenantContext.sekolahIdWajib();
+        List<Menu> menu = katalog.daftarMenu(sekolahId, kategoriId, hanyaAktif);
+        // Stok berjalan diambil sekaligus (satu query) agar FE tak memanggil
+        // GET /api/stok/{menuId} per item (hindari N+1).
+        Map<Long, Integer> stok = katalog.stokBerjalan(sekolahId,
+                menu.stream().map(Menu::getId).toList());
+        List<MenuResponse> daftar = menu.stream()
+                .map(m -> MenuResponse.dari(m, stok.getOrDefault(m.getId(), 0)))
                 .toList();
         return CommonResponse.data(daftar);
     }
@@ -109,8 +115,9 @@ public class KatalogController {
             AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
     @GetMapping("menu/{menuId}")
     public ResponseEntity<Response<MenuResponse>> lihatMenu(@PathVariable Long menuId) {
-        return CommonResponse.data(MenuResponse.dari(
-                katalog.lihatMenu(TenantContext.sekolahIdWajib(), menuId)));
+        Long sekolahId = TenantContext.sekolahIdWajib();
+        Menu menu = katalog.lihatMenu(sekolahId, menuId);
+        return CommonResponse.data(MenuResponse.dari(menu, katalog.stokBerjalan(sekolahId, menuId)));
     }
 
     @PerluPeran({AktorKantin.PENGELOLA_KANTIN, AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
@@ -135,7 +142,8 @@ public class KatalogController {
                 TenantContext.sekolahIdWajib(), menuId, request.getKategoriId(), request.getNama(),
                 request.getHargaJual(), request.getSatuan(), request.getFotoUrl(),
                 request.getStokMinimum(), null, identitas.aktorIdWajib());
-        return CommonResponse.data(MenuResponse.dari(menu), "Menu diperbarui");
+        return CommonResponse.data(MenuResponse.dari(menu,
+                katalog.stokBerjalan(TenantContext.sekolahIdWajib(), menuId)), "Menu diperbarui");
     }
 
     /** Nonaktifkan item (soft delete) — item nonaktif tidak bisa dijual. */

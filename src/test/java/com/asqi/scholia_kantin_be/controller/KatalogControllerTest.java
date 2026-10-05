@@ -112,4 +112,48 @@ class KatalogControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray());
     }
+
+    @Test
+    @DisplayName("daftarMenu menyertakan stokBerjalan dari stok_cache (hindari N+1)")
+    void daftarMenuMenyertakanStokBerjalan() throws Exception {
+        Menu menu = Menu.builder().id(99L).sekolahId(7L).nama("Nasi Goreng")
+                .hargaJual(15_000L).satuan(SatuanMenu.PORSI).stokMinimum(5).isActive(true).build();
+        when(katalog.daftarMenu(eq(7L), eq(null), eq(false))).thenReturn(java.util.List.of(menu));
+        when(katalog.stokBerjalan(eq(7L), eq(java.util.List.of(99L))))
+                .thenReturn(java.util.Map.of(99L, 12));
+
+        mockMvc.perform(get("/api/katalog/menu"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(99))
+                .andExpect(jsonPath("$.data[0].stokMinimum").value(5))
+                .andExpect(jsonPath("$.data[0].stokBerjalan").value(12));
+    }
+
+    @Test
+    @DisplayName("menu tanpa baris stok → stokBerjalan 0")
+    void daftarMenuStokNolBilaTidakAdaBaris() throws Exception {
+        Menu menu = Menu.builder().id(99L).sekolahId(7L).nama("Kue")
+                .hargaJual(2_000L).satuan(SatuanMenu.PCS).stokMinimum(0).isActive(true).build();
+        when(katalog.daftarMenu(eq(7L), eq(null), eq(false))).thenReturn(java.util.List.of(menu));
+        when(katalog.stokBerjalan(eq(7L), eq(java.util.List.of(99L))))
+                .thenReturn(java.util.Map.of());
+
+        mockMvc.perform(get("/api/katalog/menu"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].stokBerjalan").value(0));
+    }
+
+    @Test
+    @DisplayName("lihatMenu menyertakan stokBerjalan")
+    void lihatMenuMenyertakanStokBerjalan() throws Exception {
+        Menu menu = Menu.builder().id(99L).sekolahId(7L).nama("Es Teh")
+                .hargaJual(3_000L).satuan(SatuanMenu.BOTOL).stokMinimum(0).isActive(true).build();
+        when(katalog.lihatMenu(eq(7L), eq(99L))).thenReturn(menu);
+        when(katalog.stokBerjalan(eq(7L), eq(99L))).thenReturn(7);
+
+        mockMvc.perform(get("/api/katalog/menu/99"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(99))
+                .andExpect(jsonPath("$.data.stokBerjalan").value(7));
+    }
 }

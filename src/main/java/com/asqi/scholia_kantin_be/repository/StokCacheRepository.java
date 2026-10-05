@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,6 +41,19 @@ public interface StokCacheRepository extends JpaRepository<StokCache, Long> {
                                          @Param("menuId") Long menuId);
 
     Optional<StokCache> findByMenuId(Long menuId);
+
+    /**
+     * Stok berjalan untuk sekumpulan menu dalam <b>satu</b> query
+     * (tenant-scoped) — dipakai mengisi {@code stokBerjalan} pada daftar menu
+     * agar tidak terjadi N+1 (PRD §7.1).
+     */
+    @Query("""
+            SELECT s FROM StokCache s
+            WHERE s.sekolahId = :sekolahId
+              AND s.menuId IN :menuIds
+            """)
+    List<StokCache> findBySekolahIdAndMenuIdIn(@Param("sekolahId") Long sekolahId,
+                                               @Param("menuIds") Collection<Long> menuIds);
 
     /** Item "stok menipis": stok ≤ stok_minimum (PRD §7.5). */
     @Query("SELECT s FROM StokCache s WHERE s.sekolahId = :sekolahId AND s.stok <= s.stokMinimum")
