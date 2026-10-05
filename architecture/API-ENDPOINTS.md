@@ -58,25 +58,43 @@
 | `POST` | `/api/katalog/kategori` | pengelola, TU, admin | Buat kategori |
 | `PUT` | `/api/katalog/kategori/{id}` | pengelola, TU, admin | Ubah kategori |
 | `DELETE` | `/api/katalog/kategori/{id}` | pengelola, TU, admin | Nonaktifkan (soft delete) — gagal bila masih dipakai item aktif |
-| `GET` | `/api/katalog/menu?kategoriId=&hanyaAktif=` | petugas, pengelola, TU, admin | Daftar item |
-| `GET` | `/api/katalog/menu/{id}` | petugas, pengelola, TU, admin | Detail item |
+| `GET` | `/api/katalog/menu?kategoriId=&hanyaAktif=` | petugas, pengelola, TU, admin | Daftar item — menyertakan **`stokBerjalan`** dari `stok_cache` (satu query, hindari N+1) |
+| `GET` | `/api/katalog/menu/{id}` | petugas, pengelola, TU, admin | Detail item (+ `stokBerjalan`) |
 | `POST` | `/api/katalog/menu` | pengelola, TU, admin | Buat item |
 | `PUT` | `/api/katalog/menu/{id}` | pengelola, TU, admin | Ubah item (perubahan harga tercatat audit `UBAH_HARGA_JUAL`) |
 | `DELETE` | `/api/katalog/menu/{id}` | pengelola, TU, admin | Nonaktifkan item (soft delete) |
 
+> **`stokBerjalan` (baru).** `MenuResponse` kini memuat `stokBerjalan` (integer) sehingga
+> FE menampilkan total stok per menu **tanpa** memanggil `GET /api/stok/{menuId}` satu per satu.
+> Nilai diambil dari `stok_cache` via satu query batch (`StokCacheRepository.findBySekolahIdAndMenuIdIn`),
+> tenant-scoped; menu tanpa baris stok ⇒ `0`.
+
 ---
 
-## 6. Hal yang perlu diperhatikan tim
+## 6. Storage — Unggah/Tampil Berkas (StorageController) — 🆕
+
+| Method | Path | Peran | Keterangan |
+|---|---|---|---|
+| `POST` | `/api/storage/upload` | pengelola, TU, admin | Unggah berkas `multipart/form-data` (field `file`), `folder` opsional (`menu`/`nota`/`kartu-tamu`; default `menu`). Mengembalikan `{ path, url, namaAsli, ukuran }` — simpan `url`/`path` ke `fotoUrl` |
+| `GET` | `/api/storage/file?path=` | petugas, pengelola, TU, admin | Tampilkan berkas milik tenant (bila URL publik belum dikonfigurasi) |
+
+> **Isolasi tenant wajib (B19, PRD §11.4).** Prefix `sekolah-<id>/` dibentuk **server-side**
+> dari tenant token — bukan dari input klien. Berkas sekolah lain ⇒ **404**.
+> `folder` dibatasi allowlist agar klien tak membuat struktur folder sembarang.
+
+---
+
+## 7. Hal yang perlu diperhatikan tim
 
 1. **Tenant dari token, bukan query/body.** Sekolah lain → **404** (bukan 403) agar tidak membocorkan keberadaan data (PRD §11.4).
 2. **Semua mutasi wajib idempotency key** (`referensiId`), agar retry jaringan tidak menggandakan efek (Aturan Emas §3.3).
 3. **Operasi tulis stok** harus lewat `StokOperasiService` (pembuka transaksi), karena `LedgerStokService` `propagation = MANDATORY`.
-4. **Endpoint file upload/view** belum ada — saat dibuat wajib paksa prefix tenant `sekolah-<id>/` (lihat B19).
+4. **Endpoint file upload/view** kini ada (`/api/storage/*`) — prefix tenant `sekolah-<id>/` dipaksa di `StorageService` (lihat B19).
 5. **Rate limit & cabut token** (Redis) **sudah aktif** (B27 & B28, `SECURITY.md` §7). Rate limit **fail-open**: Redis mati ⇒ request tetap dilayani.
 
 ---
 
-## 7. Endpoint yang BELUM dibuat (menunggu modul/fase)
+## 8. Endpoint yang BELUM dibuat (menunggu modul/fase)
 
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|

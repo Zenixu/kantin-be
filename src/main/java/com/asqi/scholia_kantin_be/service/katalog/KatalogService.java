@@ -8,14 +8,19 @@ import com.asqi.scholia_kantin_be.helper.IdGenerator;
 import com.asqi.scholia_kantin_be.helper.JamKantin;
 import com.asqi.scholia_kantin_be.model.KategoriMenu;
 import com.asqi.scholia_kantin_be.model.Menu;
+import com.asqi.scholia_kantin_be.model.StokCache;
 import com.asqi.scholia_kantin_be.repository.KategoriMenuRepository;
 import com.asqi.scholia_kantin_be.repository.MenuRepository;
+import com.asqi.scholia_kantin_be.repository.StokCacheRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Katalog menu &amp; kategori (PRD §7.1).
@@ -38,6 +43,7 @@ public class KatalogService {
 
     private final KategoriMenuRepository kategoriRepo;
     private final MenuRepository menuRepo;
+    private final StokCacheRepository stokRepo;
     private final IdGenerator idGenerator;
     private final JamKantin jam;
     private final AuditLogger auditLogger;
@@ -141,6 +147,34 @@ public class KatalogService {
     public Menu lihatMenu(Long sekolahId, Long menuId) {
         return menuRepo.findByIdAndSekolahId(menuId, sekolahId)
                 .orElseThrow(() -> new NotFoundEntity("Menu tidak ditemukan"));
+    }
+
+    /**
+     * Stok berjalan untuk sekumpulan menu dalam <b>satu</b> query (tenant-scoped)
+     * — dipakai controller mengisi {@code stokBerjalan} pada daftar menu agar
+     * FE tak perlu memanggil {@code GET /api/stok/{menuId}} per item (hindari N+1).
+     *
+     * @return peta {@code menuId → stok}; menu tanpa baris stok tidak disertakan
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> stokBerjalan(Long sekolahId, Collection<Long> menuIds) {
+        if (menuIds == null || menuIds.isEmpty()) {
+            return Map.of();
+        }
+        return stokRepo.findBySekolahIdAndMenuIdIn(sekolahId, menuIds).stream()
+                .collect(Collectors.toMap(
+                        StokCache::getMenuId,
+                        c -> c.getStok() == null ? 0 : c.getStok(),
+                        (a, b) -> a));
+    }
+
+    /** Stok berjalan satu menu (0 bila belum ada baris stok). */
+    @Transactional(readOnly = true)
+    public int stokBerjalan(Long sekolahId, Long menuId) {
+        return stokRepo.findByMenuId(menuId)
+                .filter(c -> c.getSekolahId().equals(sekolahId))
+                .map(StokCache::getStok)
+                .orElse(0);
     }
 
     @Transactional
