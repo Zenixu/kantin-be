@@ -96,9 +96,12 @@
 
 ## 8. Endpoint yang BELUM dibuat (menunggu modul/fase)
 
+> **Kartu Tamu sudah dibuat** (`KartuTamuController`, `/api/kartu-tamu`) —
+> lihat `docs/API-KARTU-TAMU.md` & `KartuTamuServiceIT` (20 uji integrasi).
+> Blocker Q7 yang tersisa hanyalah **anti-tabrakan `rfid_uid` dengan siswa admin-be**.
+
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|
-| Kartu Tamu | daftar/kartu & saldo | Q7 |
 | Blokir kartu | blokir/buka blokir | Q7 |
 | Limit & blokir item | set limit harian, blokir item | Q7 |
 | Laporan | ekspor Excel/PDF | Q3, Q5 |
