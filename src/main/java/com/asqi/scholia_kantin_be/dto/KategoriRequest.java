@@ -14,4 +14,11 @@ public class KategoriRequest {
 
     /** Urutan tampil di kasir (opsional, default 0). */
     private Integer urutan;
+
+    /**
+     * Status aktif kategori (opsional). Bila diisi, dipakai untuk mengaktifkan
+     * kembali kategori yang sebelumnya dinonaktifkan (soft delete undo). Bila
+     * {@code null}, status lama dipertahankan.
+     */
+    private Boolean aktif;
 }

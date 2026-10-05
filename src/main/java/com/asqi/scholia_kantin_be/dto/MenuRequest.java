@@ -30,4 +30,11 @@ public class MenuRequest {
 
     @Min(value = 0, message = "Stok minimum tidak boleh negatif")
     private Integer stokMinimum;
+
+    /**
+     * Status aktif item (opsional). Bila diisi, dipakai untuk mengaktifkan
+     * kembali item yang sebelumnya dinonaktifkan (soft delete undo). Bila
+     * {@code null}, status lama dipertahankan.
+     */
+    private Boolean aktif;
 }

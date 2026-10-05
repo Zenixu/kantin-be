@@ -74,7 +74,7 @@ public class KatalogController {
             @AuthenticationPrincipal IdentitasKantin identitas) {
         KategoriMenu kategori = katalog.ubahKategori(
                 TenantContext.sekolahIdWajib(), kategoriId, request.getNama(),
-                request.getUrutan(), null, identitas.aktorIdWajib());
+                request.getUrutan(), request.getAktif(), identitas.aktorIdWajib());
         return CommonResponse.data(kategori, "Kategori diperbarui");
     }
 
@@ -141,7 +141,7 @@ public class KatalogController {
         var menu = katalog.ubahMenu(
                 TenantContext.sekolahIdWajib(), menuId, request.getKategoriId(), request.getNama(),
                 request.getHargaJual(), request.getSatuan(), request.getFotoUrl(),
-                request.getStokMinimum(), null, identitas.aktorIdWajib());
+                request.getStokMinimum(), request.getAktif(), identitas.aktorIdWajib());
         return CommonResponse.data(MenuResponse.dari(menu,
                 katalog.stokBerjalan(TenantContext.sekolahIdWajib(), menuId)), "Menu diperbarui");
     }
