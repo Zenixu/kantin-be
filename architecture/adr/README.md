@@ -13,5 +13,6 @@
 | [0003](./0003-ledger-append-only-locking.md) | Ledger append-only + locking pessimistic | Diusulkan | 2026-10-02 |
 | [0004](./0004-pola-lookup-kartu.md) | Pola lookup kartu RFID | Diusulkan | 2026-10-02 |
 | [0005](./0005-rfid-usb-bridge.md) | RFID USB bridge untuk kasir | Diusulkan | 2026-10-02 |
+| [0006](./0006-prosedur-darurat-offline.md) | Prosedur darurat saat kantin kehilangan koneksi | Diusulkan | 2026-10-06 |
 
 > Status: `Diusulkan` → `Diterima` → (`Ditolak` / `Digantikan oleh NNNN`).

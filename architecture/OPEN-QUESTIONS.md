@@ -37,7 +37,7 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 
 | # | Topik | Status | Pemilik |
 |---|---|---|---|
-| **Q14** | **Internet/server mati → kantin tak bisa jualan.** Butuh prosedur darurat? | 🔴 Perlu keputusan | Produk/Sekolah |
+| **Q14** | **Internet/server mati → kantin tak bisa jualan.** Butuh prosedur darurat? | 🔴 Perlu keputusan | Produk/Sekolah — usulan di [ADR-0006](./adr/0006-prosedur-darurat-offline.md) |
 | **Q15** | **Regulasi BI** soal dana titipan closed-loop — aman dari ketentuan uang elektronik? | 🔴 **Wajib konfirmasi legal sebelum rilis** | Legal |
 | **Q16** | **Kebijakan saldo mengendap** yang tak diklaim setelah siswa lulus? | 🟡 Perlu keputusan | Sekolah/Legal |
 | **Q17** | Spesifikasi **RFID reader USB** kasir = reader Kiosk Presensi? | 🟡 Cek tim RFID | Tim RFID |
