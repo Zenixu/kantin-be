@@ -72,6 +72,15 @@ BukuKasService.catatTransaksi(
 | Koreksi sesi tertutup | `MASUK`/`KELUAR` | `"Penyesuaian Kantin"` | sesuai | `KANTIN_KOREKSI` ⚠️ |
 | **Top-up** | ❌ **TIDAK diposting** | — | — | — |
 
+> **Arah koreksi saldo (dijaga invariant PRD §5).** Karena `Σ top-up − Σ refund
+> = Σ saldo + Σ penjualan kantin (bersih setelah void & koreksi)`, koreksi
+> **KREDIT** (menambah saldo siswa) menurunkan pendapatan kantin → `KELUAR`;
+> koreksi **DEBIT** (mengurangi saldo) → `MASUK`. Metode `NON_TUNAI` (jalur
+> saldo/dana titipan, bukan uang fisik). refId deterministik
+> `KANTIN-KOR-<berita acara>` → idempoten; fail-open (kegagalan posting tidak
+> membatalkan koreksi saldo). Diimplementasikan di
+> `BukuKasPostingService.postingKoreksiSaldo()` (issue #32).
+
 ### 3.4 ⚠️ Temuan kritis
 1. **`refModul` baru belum dikenal `migrateBukuKas()`** (switch di baris ~396). Entri kantin berisiko dianggap orphan/duplikat saat migrasi. **Mitigasi sementara:** set `refModul = null` → masuk `remainingBks`, tidak dihapus (baris ~390). **Jangka panjang:** minta tim admin-be menambah case kantin.
 2. **Buku Kas tidak idempoten** — `catatTransaksi()` selalu `save`. **kantin-be wajib** cek `existsByReferensiIdAndReferensiModul` atau simpan flag "sudah diposting" di tabel sesi kantin.

@@ -63,6 +63,9 @@ public class BukuKasPostingService {
     /** Prefix referensi entri Buku Kas untuk koreksi barang masuk (pembalik). */
     public static final String PREFIX_REF_PEMBALIK = "KANTIN-BMP-";
 
+    /** Prefix referensi entri Buku Kas untuk koreksi saldo (penyesuaian). */
+    public static final String PREFIX_REF_KOREKSI_SALDO = "KANTIN-KOR-";
+
     private final BukuKasPort bukuKasPort;
     private final SesiKasirRepository sesiRepo;
     private final PostingBukuKasRepository postingRepo;
@@ -106,6 +109,11 @@ public class BukuKasPostingService {
     /** Referensi entri Buku Kas untuk pembalik barang masuk — deterministik. */
     public static String refIdPembalik(String referensiId) {
         return PREFIX_REF_PEMBALIK + referensiId;
+    }
+
+    /** Referensi entri Buku Kas untuk koreksi saldo — deterministik &amp; unik. */
+    public static String refIdKoreksiSaldo(String referensiId) {
+        return PREFIX_REF_KOREKSI_SALDO + referensiId;
     }
 
     /**
@@ -288,6 +296,76 @@ public class BukuKasPostingService {
                     String.valueOf(mutasiId), null, null, refId);
             log.info("Pembalik barang masuk {} diposting ke Buku Kas (ref={}, total={}).",
                     mutasiId, refId, total);
+        }
+        return hasil;
+    }
+
+    /**
+     * Posting <b>koreksi saldo</b> bendahara ke Buku Kas sebagai entri
+     * penyesuaian pos {@code "Penyesuaian Kantin"} (PRD §5.1, §9.2).
+     *
+     * <p>Koreksi saldo (top-up salah input / transaksi sesi tertutup) dilakukan
+     * sebagai mutasi pembalik beralasan; entri lama <b>tidak</b> diubah.
+     *
+     * <p><b>Arah (menjaga invariant PRD §5):</b> {@code Σ top-up − Σ refund =
+     * Σ saldo + Σ penjualan kantin (bersih setelah void &amp; koreksi)}. Karena
+     * itu koreksi <b>KREDIT</b> (menambah saldo siswa) menurunkan pendapatan
+     * kantin → {@link TipeBukuKas#KELUAR}; koreksi <b>DEBIT</b> (mengurangi
+     * saldo) → {@link TipeBukuKas#MASUK}. Metode mengikuti jalur saldo:
+     * {@link MetodeBukuKas#NON_TUNAI} (dana titipan/saldo, bukan uang fisik).
+     *
+     * <p><b>Idempoten</b> lewat refId deterministik {@code KANTIN-KOR-<berita acara>}
+     * (nomor berita acara koreksi sudah unik per tenant). Retry tidak
+     * menggandakan entri (Buku Kas admin-be tidak idempoten, §3.4).
+     *
+     * <p><b>Fail-open:</b> kegagalan posting <b>tidak</b> membatalkan koreksi
+     * saldo (pola sama seperti {@link #postingBarangMasuk}).
+     *
+     * @param kredit true bila koreksi menambah saldo (KREDIT), false bila
+     *               mengurangi (DEBIT) — menentukan arah entri Buku Kas
+     * @param ledgerId id baris {@code saldo_ledger} koreksi (telusur; boleh null)
+     * @return hasil posting
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public HasilPostingBukuKas postingKoreksiSaldo(Long sekolahId, boolean kredit, long nominal,
+                                                   String referensiId, String alasan,
+                                                   Long ledgerId, Long aktorId) {
+        String refId = refIdKoreksiSaldo(referensiId);
+        if (postingRepo.existsBySekolahIdAndReferensiId(sekolahId, refId)) {
+            log.debug("Koreksi saldo {} sudah diposting (ref={}) — dilewati (idempoten).",
+                    referensiId, refId);
+            return HasilPostingBukuKas.sukses(refId, "Sudah diposting sebelumnya");
+        }
+
+        if (nominal <= 0) {
+            log.info("Koreksi saldo {} nominal={} — tidak ada yang diposting.", referensiId, nominal);
+            return HasilPostingBukuKas.dilewati("Nominal koreksi 0 — tidak ada yang diposting");
+        }
+
+        // KREDIT (saldo bertambah) → KELUAR; DEBIT (saldo berkurang) → MASUK.
+        // Menjaga invariant PRD §5: koreksi ikut menyesuaikan pendapatan kantin.
+        TipeBukuKas tipe = kredit ? TipeBukuKas.KELUAR : TipeBukuKas.MASUK;
+        PerintahBukuKas perintah = PerintahBukuKas.builder()
+                .sekolahId(sekolahId)
+                .tanggal(jam.sekarang())
+                .tipe(tipe)
+                .kategori(kategoriPenyesuaian)
+                .jumlah(BigDecimal.valueOf(nominal))
+                .metode(MetodeBukuKas.NON_TUNAI)
+                .keterangan("Koreksi saldo kantin (berita acara " + referensiId + ")"
+                        + (alasan == null || alasan.isBlank() ? "" : ": " + alasan))
+                .refId(refId)
+                .refModul(refModulAktif())
+                .build();
+
+        HasilPostingBukuKas hasil = kirim(perintah, refId);
+        if (hasil.sukses()) {
+            simpanPenanda(sekolahId, refId, "KOREKSI_SALDO", ledgerId, nominal,
+                    hasil.referensi() != null ? hasil.referensi() : refId);
+            auditLogger.catat(aktorId, sekolahId, "POSTING_BUKU_KAS", "Saldo",
+                    referensiId, null, null, refId);
+            log.info("Koreksi saldo {} diposting ke Buku Kas (ref={}, tipe={}, nominal={}).",
+                    referensiId, refId, tipe, nominal);
         }
         return hasil;
     }
