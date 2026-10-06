@@ -91,14 +91,40 @@ public class WebSecurityConfig {
         // Urutan filter: JWT dulu agar identitas (sekolah:user) tersedia untuk
         // rate limit, lalu verifikasi signature webhook (khusus /api/webhook/**),
         // lalu rate limit sebelum pemrosesan request.
-        // (Catatan: RateLimitFilter punya @Order lebih rendah sehingga bila
-        //  di-auto-register servlet container ia juga jalan lebih dulu; lihat
-        //  BUGS-DITEMUKAN B33 tentang risiko urutan ganda.)
+        // Ketiga filter didaftarkan manual di sini; auto-registrasi servlet
+        // container dimatikan lewat FilterRegistrationBean di bawah (B33/#13).
         http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(jwtAuthTokenFilter, RateLimitFilter.class);
         http.addFilterAfter(webhookSignatureFilter, JwtAuthTokenFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Matikan auto-registrasi servlet container untuk filter yang didaftarkan
+     * manual di {@link #filterChain(HttpSecurity, CorsConfigurationSource)}.
+     *
+     * <p><b>BUG B33 (#13):</b> sebagai {@code @Component}, Spring Boot
+     * mendaftarkan {@code RateLimitFilter} &amp; {@code JwtAuthTokenFilter} ke
+     * rantai filter servlet <b>dan</b> keduanya didaftarkan lagi lewat
+     * {@code addFilterBefore}. Filter berjalan dua kali per request — untuk rate
+     * limit ini memotong kuota (tiap request dihitung 2×). Bean ini
+     * menonaktifkan registrasi otomatis; bean tetap ada untuk SecurityFilterChain.
+     */
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
+            RateLimitFilter filter) {
+        FilterRegistrationBean<RateLimitFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    @Bean
+    public FilterRegistrationBean<JwtAuthTokenFilter> jwtAuthTokenFilterRegistration(
+            JwtAuthTokenFilter filter) {
+        FilterRegistrationBean<JwtAuthTokenFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
     }
 
     /**

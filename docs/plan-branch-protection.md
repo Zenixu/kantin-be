@@ -1,7 +1,8 @@
-# 📋 Plan — Aktifkan Proteksi Branch `main` & `develop`
+# 📋 Plan — Proteksi Branch `main` & `develop`
 
-> **Status: ⏳ MENUNGGU OWNER.** Dokumen ini untuk **owner repo** (`Zenixu`)
-> melanjutkan pekerjaan yang belum selesai. Cukup ikuti langkah di §3.
+> **Status: ✅ AKTIF (sejak 2026-10-06).** Owner (`Zenixu`) sudah mengaktifkan
+> proteksi. Dokumen ini menyimpan **konteks, cara verifikasi, dan riwayat** —
+> berguna bila proteksi perlu diubah/diperiksa ulang.
 >
 > Rujukan aturan: [`WORKFLOW.md` §1](./WORKFLOW.md) — *"Tidak boleh push langsung
 > ke `main` atau `develop`. Selalu via PR."* Proteksi branch adalah cara GitHub
@@ -32,91 +33,89 @@ Risiko nyata yang dicegah:
 
 ## 2. Kondisi saat ini (per 2026-10-06)
 
-Owner sudah **mulai** membuat proteksi lewat jalur **rulesets** (mekanisme baru
-GitHub), tetapi **belum aktif** — masih ada 3 masalah:
+**Proteksi SUDAH AKTIF.** Bukti yang bisa diverifikasi ulang:
 
-| Pemeriksaan | Hasil | Artinya |
+- `gh pr merge` ke `develop` **ditolak**: *"the base branch policy prohibits the merge"*.
+- `gh pr merge --admin` juga **ditolak**: *"At least 2 approving reviews are required by reviewers with write access."*
+- PR tanpa review → `mergeStateStatus: BLOCKED`, `reviewDecision: REVIEW_REQUIRED`.
+
+> ⚠️ **Jumlah approval = 2.** Cukup berat untuk tim kecil: penulis PR **tidak boleh**
+> meng-approve PR-nya sendiri, jadi butuh **2 orang lain** hadir. Bila terasa
+> menghambat, pertimbangkan turunkan ke **1** (lihat §3).
+
+**Catatan penting soal cara verifikasi (sempat menyesatkan):**
+
+| Cara cek | Hasil | Akurasi |
 |---|---|---|
-| Ruleset `develop` ada? | ✅ ada (`id 24553483`) | sudah dibuat |
-| `enforcement` | ❌ `disabled` | aturan **tidak ditegakkan** |
-| `conditions.ref_name.include` | ❌ `[]` (kosong) | **tidak menyasar branch apa pun** |
-| Rules efektif di `develop` | `[]` | tidak ada aturan berlaku |
-| Ruleset untuk `main` | ❌ belum ada | `main` sama sekali terbuka |
+| `branches/{b}.protected` | `true` | ✅ menandakan ada proteksi |
+| `rules/branches/{b}` (rulesets) | `[]` | ⚠️ **kosong walau proteksi aktif** |
+| `rulesets` | 1 ruleset `develop`, `enforcement=disabled` | ⚠️ **menyesatkan** |
+| `gh pr merge` (praktik nyata) | ditolak | ✅ **paling andal** |
 
-> Catatan: API `branches/{branch}.protected` melaporkan `true`, tetapi itu
-> **menyesatkan** — rules yang benar-benar berlaku masih kosong. Cek yang benar:
-> `GET /repos/{owner}/{repo}/rules/branches/{branch}`.
+Artinya: proteksi di repo ini tampaknya memakai **branch protection rule klasik**
+(bukan rulesets — ruleset `develop` yang lama masih `disabled` dan boleh
+diabaikan/dihapus). Endpoint klasik `branches/{b}/protection` mengembalikan
+**404** karena akun kita **bukan admin** — itu **bukan** tanda proteksi tidak ada.
 
-Cara memeriksa ulang (butuh login `gh`):
+**Cara paling andal memeriksa:** buat PR ke `develop`, lalu lihat
+`gh pr view <n> --json mergeStateStatus,reviewDecision`. `BLOCKED` +
+`REVIEW_REQUIRED` = proteksi bekerja.
 
 ```bash
-gh api repos/Zenixu/kantin-be/rules/branches/develop   # harus TIDAK kosong []
-gh api repos/Zenixu/kantin-be/rules/branches/main      # harus TIDAK kosong []
-gh api repos/Zenixu/kantin-be/rulesets \
-  --jq '.[] | {id, name, enforcement, include: .conditions.ref_name.include}'
+gh pr view <nomor> --repo Zenixu/kantin-be --json mergeStateStatus,reviewDecision
+# BLOCKED + REVIEW_REQUIRED -> proteksi aktif & menunggu review
 ```
 
 ---
 
-## 3. Langkah penyelesaian (pilih salah satu)
+## 3. Bila perlu mengubah setelan (owner saja)
 
-### Opsi A — lewat UI GitHub (paling mudah)
+### Mengubah jumlah approval (mis. 2 → 1)
 
-1. Buka **Settings → Rules → Rulesets**:
-   `https://github.com/Zenixu/kantin-be/rules/24553483`
-2. Pada ruleset **"develop"**:
-   - **Enforcement status**: *Disabled* → **Active**
-   - **Target branches → Add target → Include by pattern** → isi `develop`
-   - **Save**
-3. Klik **New ruleset → New branch ruleset** untuk **`main`**:
-   - Enforcement: **Active**
-   - Target: pola `main`
-   - Centang **Require a pull request before merging**
-   - **Create**
+**UI:** Settings → Branches → (edit rule `develop`/`main`) → *Require a pull request
+before merging* → *Require approvals* → ubah angkanya → **Save**.
 
-### Opsi B — lewat `gh` CLI (butuh role admin/owner)
+**`gh` CLI (owner):**
 
 ```bash
-# 1) Aktifkan + pasang target pada ruleset "develop" yang sudah ada
+gh api -X PATCH repos/Zenixu/kantin-be/branches/develop/protection/required_pull_request_reviews \
+  -F "required_approving_review_count=1"
+```
+
+### Bila ingin memakai rulesets (mekanisme baru) sebagai ganti rule klasik
+
+Ruleset lama (`id 24553483`) saat ini `disabled` dan bisa **diabaikan atau dihapus**.
+Bila owner mau pindah ke rulesets, pastikan **enforcement=active** dan
+**target ref diisi** — dua hal inilah yang membuat ruleset lama tidak berfungsi:
+
+```bash
 gh api -X PUT repos/Zenixu/kantin-be/rulesets/24553483 \
   -f "name=develop" -f "target=branch" -f "enforcement=active" \
   -f "conditions[ref_name][include][]=refs/heads/develop" \
   -f "rules[][type]=deletion" \
   -f "rules[][type]=non_fast_forward" \
   -f "rules[][type]=pull_request" \
-  -F "rules[][parameters][required_approving_review_count]=1" \
-  -F "rules[][parameters][dismiss_stale_reviews_on_push]=true" \
-  -F "rules[][parameters][required_review_thread_resolution]=true" \
-  -F "rules[][parameters][allowed_merge_methods][]=merge" \
-  -F "rules[][parameters][allowed_merge_methods][]=squash" \
-  -F "rules[][parameters][allowed_merge_methods][]=rebase"
-
-# 2) Buat ruleset untuk "main"
-gh api -X POST repos/Zenixu/kantin-be/rulesets \
-  -f "name=main" -f "target=branch" -f "enforcement=active" \
-  -f "conditions[ref_name][include][]=refs/heads/main" \
-  -f "rules[][type]=deletion" \
-  -f "rules[][type]=non_fast_forward" \
-  -f "rules[][type]=pull_request" \
   -F "rules[][parameters][required_approving_review_count]=1"
 ```
 
-> **Jumlah approval: gunakan `1`, bukan `2`.** Tim kecil (2–3 orang) → penulis PR
-> tidak boleh meng-approve PR-nya sendiri, jadi `2` approval rawan *deadlock*
-> (butuh 2 orang lain hadir bersamaan). `1` sudah cukup sebagai gerbang review.
-> (Ruleset awal owner disetel `2` — pertimbangkan turunkan ke `1`.)
+> **Jumlah approval:** `1` sudah cukup sebagai gerbang review untuk tim kecil.
+> `2` rawan *deadlock* (penulis tak boleh approve PR sendiri).
 
 ---
 
-## 4. Verifikasi setelah selesai
+## 4. Verifikasi
 
 ```bash
-gh api repos/Zenixu/kantin-be/rules/branches/develop   # harus ada rules (pull_request, deletion, non_fast_forward)
-gh api repos/Zenixu/kantin-be/rules/branches/main      # idem
+# Paling andal: lihat PR -> BLOCKED + REVIEW_REQUIRED = proteksi aktif
+gh pr view <nomor> --repo Zenixu/kantin-be --json mergeStateStatus,reviewDecision
+
+# Flag cepat (true = ada proteksi)
+gh api repos/Zenixu/kantin-be/branches/develop --jq .protected
+gh api repos/Zenixu/kantin-be/branches/main    --jq .protected
 ```
 
-Uji cepat: coba `git push` langsung ke `develop` dari branch lokal → harus
-**ditolak** GitHub. (Jangan diuji dengan `--force` ke `develop` sungguhan.)
+Uji langsung: push ke `develop` dari branch lokal → **ditolak** GitHub.
+(Jangan diuji dengan `--force` ke `develop` sungguhan.)
 
 ---
 
@@ -125,5 +124,7 @@ Uji cepat: coba `git push` langsung ke `develop` dari branch lokal → harus
 | Tanggal | Kejadian |
 |---|---|
 | 2026-10-06 | Anggota tim mencoba memasang proteksi via API → `404` (role bukan admin). Diteruskan ke owner. |
-| 2026-10-06 | Owner membuat ruleset `develop` (id 24553483) tetapi `enforcement=disabled` & target kosong → **belum aktif**. |
-| 2026-10-06 | Dokumen ini dibuat agar owner dapat menyelesaikan tanpa perlu konteks tambahan. |
+| 2026-10-06 | Owner membuat ruleset `develop` (id 24553483) tetapi `enforcement=disabled` & target kosong → belum berfungsi. |
+| 2026-10-06 | Dokumen ini dibuat agar owner dapat menyelesaikan tanpa konteks tambahan. |
+| 2026-10-06 | Owner **mengaktifkan proteksi** (rule klasik). Terbukti: merge PR #5 ke `develop` ditolak *"base branch policy prohibits the merge"*; `--admin` pun ditolak (*"At least 2 approving reviews"*). Owner lalu menembusnya via admin override. |
+| 2026-10-06 | Dokumen diperbarui: status → **AKTIF**, + catatan 2 approval & cara verifikasi yang andal. |

@@ -10,7 +10,7 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 
 | # | Pertanyaan | Untuk siapa | Status | Catatan |
 |---|---|---|---|---|
-| **Q1** | Format klaim JWT staf (nama field `user_id`/`sekolah_id`/`role`) + lokasi **public key RS256** admin-be? | Tim admin-be | 🟡 TEMPORARY | ⚠️ **WORKAROUND aktif (2026-10-05):** Temporary keypair di `.env.jwt-temporary` (admin-be) + `application-local.properties` (kantin-be). Token sudah include `sekolah_id`/`role`/`user_id`/`nama`. **WAJIB ganti production key sebelum staging/prod** |
+| **Q1** | Format klaim JWT staf (nama field `user_id`/`sekolah_id`/`role`) + lokasi **public key RS256** admin-be? | Tim admin-be | 🟡 SEBAGIAN TERJAWAB | ✅ **Format klaim TERKONFIRMASI (2026-10-06)** dari sumber `admin-be/JwtUtils.buildToken()`: `sub`(username), `typ`(access/refresh), `user_id`(Long), `nama`(String), `role`(String nama role), `sekolah_id`(Long), `jti`/`iat`/`exp`. **TIDAK menyetel `iss`.** 2 bug integrasi ditemukan & diperbaiki (lihat #14 / `KompatibilitasTokenStafAdminTest`): (a) `user_id` numerik terbaca `"42.0"` (jjwt-gson → Double) → `aktorIdWajib()` gagal; (b) `iss` absen → token staf sah ditolak. ⚠️ **Public key MASIH temporary** (`.env.jwt-temporary`) — WAJIB ganti production key sebelum staging/prod |
 | **Q2** | **Public key RS256 + format klaim JWT ortu** dari mobile-be? (repo belum ada di clone) | Tim mobile-be | 🔴 | Idem Q1 — decoder sudah siap 2-issuer |
 | **Q3** | Tambah `refModul` kantin ke `migrateBukuKas()` admin-be, atau pakai `refModul=null`? | Tim admin-be | 🔴 (ada mitigasi) | Menentukan cara posting Buku Kas. ⚠️ **Mitigasi aktif (2026-10-06):** posting kantin sudah dibangun di balik `BukuKasPort` + fallback `DILEWATI`; `refModul` dikirim **null** (properti `kantin.bukukas.ref-modul` kosong) agar entri masuk `remainingBks` & tidak dihapus `migrateBukuKas`. Isi `KANTIN_BUKUKAS_REF_MODUL` hanya setelah admin-be menambah case kantin |
 | **Q4** | Kontrak payload **callback top-up** dari callback-be (field `refId` PG)? | Tim callback-be | 🔴 | Blokir fitur top-up online |
@@ -37,7 +37,7 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 
 | # | Topik | Status | Pemilik |
 |---|---|---|---|
-| **Q14** | **Internet/server mati → kantin tak bisa jualan.** Butuh prosedur darurat? | 🔴 Perlu keputusan | Produk/Sekolah |
+| **Q14** | **Internet/server mati → kantin tak bisa jualan.** Butuh prosedur darurat? | 🔴 Perlu keputusan | Produk/Sekolah — usulan di [ADR-0006](./adr/0006-prosedur-darurat-offline.md) |
 | **Q15** | **Regulasi BI** soal dana titipan closed-loop — aman dari ketentuan uang elektronik? | 🔴 **Wajib konfirmasi legal sebelum rilis** | Legal |
 | **Q16** | **Kebijakan saldo mengendap** yang tak diklaim setelah siswa lulus? | 🟡 Perlu keputusan | Sekolah/Legal |
 | **Q17** | Spesifikasi **RFID reader USB** kasir = reader Kiosk Presensi? | 🟡 Cek tim RFID | Tim RFID |
