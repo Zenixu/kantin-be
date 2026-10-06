@@ -166,4 +166,38 @@ public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long> {
             """)
     List<Object[]> totalDibalikPerAsal(@Param("sekolahId") Long sekolahId,
                                        @Param("asalIds") Collection<Long> asalIds);
+
+    /**
+     * Rekap kerugian stok per jenis pada rentang waktu (PRD §9.5): Σ qty &amp;
+     * Σ (qty × hpp_snapshot). Mengembalikan baris {@code [jenis, jumlah, Σqty,
+     * Σnilai]}. Dipakai laporan kerugian (opname keluar &amp; barang rusak).
+     */
+    @Query("""
+            SELECT m.jenis, COUNT(m), COALESCE(SUM(m.qty), 0),
+                   COALESCE(SUM(m.qty * COALESCE(m.hppSnapshot, 0)), 0)
+            FROM MutasiStok m
+            WHERE m.sekolahId = :sekolahId
+              AND m.jenis IN :jenis
+              AND m.waktu >= :dari AND m.waktu < :sampai
+            GROUP BY m.jenis
+            """)
+    List<Object[]> rekapKerugianRentang(@Param("sekolahId") Long sekolahId,
+                                        @Param("jenis") Collection<JenisMutasiStok> jenis,
+                                        @Param("dari") OffsetDateTime dari,
+                                        @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Barang masuk per periode (PRD §9.5) — baris mutasi {@code BARANG_MASUK},
+     * terbaru dulu.
+     */
+    @Query("""
+            SELECT m FROM MutasiStok m
+            WHERE m.sekolahId = :sekolahId
+              AND m.jenis = com.asqi.scholia_kantin_be.enums.JenisMutasiStok.BARANG_MASUK
+              AND m.waktu >= :dari AND m.waktu < :sampai
+            ORDER BY m.id ASC
+            """)
+    List<MutasiStok> barangMasukRentang(@Param("sekolahId") Long sekolahId,
+                                        @Param("dari") OffsetDateTime dari,
+                                        @Param("sampai") OffsetDateTime sampai);
 }

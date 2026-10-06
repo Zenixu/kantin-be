@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -82,4 +83,19 @@ public interface TransaksiRepository extends JpaRepository<Transaksi, Long> {
                          @Param("status") StatusTransaksi status,
                          @Param("dari") OffsetDateTime dari,
                          @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Rekap per status pada rentang waktu — laporan penjualan/laba kotor
+     * (PRD §9.5). Mengembalikan baris {@code [status, jumlah, Σ total]}.
+     */
+    @Query("""
+            SELECT t.status, COUNT(t), COALESCE(SUM(t.total), 0)
+            FROM Transaksi t
+            WHERE t.sekolahId = :sekolahId
+              AND t.waktu >= :dari AND t.waktu < :sampai
+            GROUP BY t.status
+            """)
+    List<Object[]> rekapPerStatusRentang(@Param("sekolahId") Long sekolahId,
+                                         @Param("dari") OffsetDateTime dari,
+                                         @Param("sampai") OffsetDateTime sampai);
 }

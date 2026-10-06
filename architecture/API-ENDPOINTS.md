@@ -146,6 +146,31 @@
 
 ---
 
+## 6b. Laporan & Ekspor Excel (LaporanController) — 🆕
+
+> Semua laporan **tenant-scoped** dari token. Periode: kirim `tanggal`
+> (YYYY-MM-DD, default hari ini zona kantin) **atau** rentang `dari`/`sampai`
+> (ISO date-time). Keduanya kosong ⇒ hari ini. Peran: TU, admin, pengelola
+> (PRD §9.5).
+
+| Method | Path | Peran | Keterangan |
+|---|---|---|---|
+| `GET` | `/api/laporan/penjualan` | TU, admin, pengelola | Ringkasan: jumlah transaksi, bruto, HPP, **laba kotor**, void |
+| `GET` | `/api/laporan/penjualan/item` | TU, admin, pengelola | Penjualan per item (terlaris dulu): qty & nilai |
+| `GET` | `/api/laporan/penjualan/kategori` | TU, admin, pengelola | Penjualan per kategori |
+| `GET` | `/api/laporan/saldo-mengendap` | TU, admin, pengelola | Dana titipan: Σ saldo siswa + Kartu Tamu (kewajiban sekolah) |
+| `GET` | `/api/laporan/rekonsiliasi` | TU, admin, pengelola | Arus kas per jenis + cek invariant `seimbang`/`selisih` (PRD §5) |
+| `GET` | `/api/laporan/stok?hanyaMenipis=` | TU, admin, pengelola | Stok + nilai persediaan (stok × HPP); `menipis` dari `menu.stok_minimum` |
+| `GET` | `/api/laporan/kerugian-stok` | TU, admin, pengelola | Opname keluar & barang rusak: qty + nilai kerugian |
+| `GET` | `/api/laporan/ekspor?jenis=&tanggal=&dari=&sampai=` | TU, admin, pengelola | Unduh **Excel `.xlsx`** (bukan JSON); `jenis` ∈ `JenisLaporan` |
+
+> **Invariant rekonsiliasi (PRD §5).** `selisih = (Σ KREDIT − Σ DEBIT) − saldo
+> mengendap` **harus 0**; `seimbang=false` menandakan ledger & cache tidak
+> sinkron (perlu diselidiki). Laba kotor = penjualan bersih − Σ HPP snapshot
+> item terjual; transaksi **void dipisah** (tidak masuk bruto).
+
+---
+
 ## 7. Hal yang perlu diperhatikan tim
 
 1. **Tenant dari token, bukan query/body.** Sekolah lain → **404** (bukan 403) agar tidak membocorkan keberadaan data (PRD §11.4).
