@@ -40,6 +40,7 @@ FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                �
 | Stok opname | §7.3 | `service/stok` | `stok_opname`, `penyesuaian_stok` | alasan wajib |
 | HPP | §7.4 | `service/kasir` (HppService) | — | rata-rata tertimbang |
 | Top-up tunai | §9.2 | `service/saldo` | `topup`, `setoran_tu` | + bukti bernomor |
+| Top-up online (webhook) | §8.2 | `service/webhook`, `service/saldo` | `webhook_event` | HMAC + idempoten per `refId` PG |
 | Refund/pindah | §9.3 | `service/saldo` | `refund`, `pindah-saldo` | + audit; saldo→0 |
 | Koreksi | §9.2 | `service/saldo` | mutasi pembalik | + audit |
 | Kartu Tamu | §9.4 | `service/kartu` | `kartu_tamu` | saldo ikut nomor |
