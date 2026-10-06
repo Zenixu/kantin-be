@@ -56,7 +56,12 @@ public class LedgerStokService {
     /**
      * Barang masuk: tambah stok &amp; perbarui HPP rata-rata tertimbang (PRD §7.2).
      *
-     * @return hasil dengan HPP baru
+     * <p><b>Idempotent</b> lewat {@code referensiId} (nomor bukti penerimaan):
+     * retry dengan bukti yang sama mengembalikan hasil lama tanpa menggandakan
+     * stok. Ditegakkan dua lapis — jalur cepat (query) + UNIQUE parsial
+     * {@code uq_mutasi_stok_barang_masuk_referensi} yang menangkap balapan.
+     *
+     * @return hasil dengan HPP baru (atau hasil lama bila ini replay)
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public HasilMutasiStok masukBarang(Long sekolahId, Long menuId, int qty,
@@ -67,6 +72,20 @@ public class LedgerStokService {
         }
         if (hargaBeliPerUnit < 0) {
             throw new InvalidOperationException("Harga beli tidak boleh negatif");
+        }
+
+        // Idempotency jalur cepat: bukti + menu yang sama sudah pernah diproses.
+        if (referensiId != null && !referensiId.isBlank()) {
+            Optional<MutasiStok> lama = mutasiRepo
+                    .cariByReferensiDanMenu(sekolahId, JenisMutasiStok.BARANG_MASUK,
+                            referensiId, menuId, PageRequest.of(0, 1))
+                    .stream().findFirst();
+            if (lama.isPresent()) {
+                MutasiStok m = lama.get();
+                log.debug("Idempotency replay barang masuk referensi={} menu={} → mutasiId={}",
+                        referensiId, menuId, m.getId());
+                return HasilMutasiStok.baru(m, m.getStokSetelah(), nolBilaNull(m.getHppSnapshot()));
+            }
         }
 
         StokCache cache = kunciStok(sekolahId, menuId);

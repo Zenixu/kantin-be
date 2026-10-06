@@ -106,6 +106,20 @@ public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long> {
                                      @Param("referensiId") String referensiId,
                                      Pageable pageable);
 
+    @Query("""
+            SELECT m FROM MutasiStok m
+            WHERE m.sekolahId = :sekolahId
+              AND m.jenis = :jenis
+              AND m.referensiId = :referensiId
+              AND m.menuId = :menuId
+            ORDER BY m.id DESC
+            """)
+    List<MutasiStok> cariByReferensiDanMenu(@Param("sekolahId") Long sekolahId,
+                                            @Param("jenis") JenisMutasiStok jenis,
+                                            @Param("referensiId") String referensiId,
+                                            @Param("menuId") Long menuId,
+                                            Pageable pageable);
+
     /**
      * Total qty yang sudah dibalik untuk sebuah barang masuk asal — dasar
      * penentuan sisa yang masih dapat dibalik (partial reversal).

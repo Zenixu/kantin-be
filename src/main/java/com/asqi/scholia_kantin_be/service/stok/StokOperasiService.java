@@ -67,6 +67,7 @@ public class StokOperasiService {
     public HasilMutasiStok masukBarang(Long sekolahId, Long menuId, int qty,
                                        long hargaBeliPerUnit, String referensiId, Long aktorId) {
         validasiReferensi(referensiId, "Nomor bukti barang masuk");
+        pastikanMenuMilikSekolah(sekolahId, menuId);
         return ledgerStok.masukBarang(sekolahId, menuId, qty, hargaBeliPerUnit,
                 "BARANG_MASUK", referensiId, aktorId);
     }
@@ -95,6 +96,7 @@ public class StokOperasiService {
     public HasilMutasiStok sesuaikanOpname(Long sekolahId, Long menuId, int qtyFisik,
                                            String alasan, String referensiId, Long aktorId) {
         validasiReferensi(referensiId, "Nomor berita acara opname");
+        pastikanMenuMilikSekolah(sekolahId, menuId);
         return ledgerStok.sesuaikanOpname(sekolahId, menuId, qtyFisik, alasan, referensiId, aktorId);
     }
 
@@ -196,6 +198,17 @@ public class StokOperasiService {
     private void validasiReferensi(String referensiId, String label) {
         if (referensiId == null || referensiId.isBlank()) {
             throw new InvalidOperationException(label + " wajib diisi (idempotency)");
+        }
+    }
+
+    /**
+     * Pastikan menu ada <b>dan</b> milik sekolah pemanggil (PRD §11.4).
+     * Mencegah barang masuk/opname membuat "stok hantu" untuk menu tak dikenal
+     * atau menu sekolah lain — dijawab 404, bukan 403.
+     */
+    private void pastikanMenuMilikSekolah(Long sekolahId, Long menuId) {
+        if (menuId == null || !menuRepo.existsByIdAndSekolahId(menuId, sekolahId)) {
+            throw new NotFoundEntity("Menu tidak ditemukan");
         }
     }
 }

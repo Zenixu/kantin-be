@@ -26,6 +26,15 @@ public interface TransaksiRepository extends JpaRepository<Transaksi, Long> {
 
     boolean existsByIdempotencyKey(String idempotencyKey);
 
+    /**
+     * Idempotency <b>tenant-scoped</b> (PRD §11.4) — key yang sama di sekolah
+     * berbeda adalah transaksi berbeda. Wajib dipakai untuk replay tap agar
+     * klien sekolah lain tidak bisa menelan/membaca transaksi kita.
+     */
+    Optional<Transaksi> findBySekolahIdAndIdempotencyKey(Long sekolahId, String idempotencyKey);
+
+    boolean existsBySekolahIdAndIdempotencyKey(Long sekolahId, String idempotencyKey);
+
     /** Transaksi satu sesi, terfilter status (rekap tutup kasir). */
     Page<Transaksi> findBySesiKasirIdAndStatus(Long sesiKasirId, StatusTransaksi status, Pageable pageable);
 

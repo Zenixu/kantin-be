@@ -80,8 +80,11 @@ public class WebSecurityConfig {
         http.exceptionHandling(ex ->
                 ex.authenticationEntryPoint(jwtAuthenticationEntryPoint));
 
-        // Rate limit lebih dulu: tolak banjir request sebelum verifikasi JWT
-        // (verifikasi kripto mahal) — sekaligus melindungi endpoint publik.
+        // Urutan filter: JWT dulu agar identitas (sekolah:user) tersedia untuk
+        // rate limit, lalu rate limit sebelum pemrosesan request.
+        // (Catatan: RateLimitFilter punya @Order lebih rendah sehingga bila
+        //  di-auto-register servlet container ia juga jalan lebih dulu; lihat
+        //  BUGS-DITEMUKAN B33 tentang risiko urutan ganda.)
         http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(jwtAuthTokenFilter, RateLimitFilter.class);
 

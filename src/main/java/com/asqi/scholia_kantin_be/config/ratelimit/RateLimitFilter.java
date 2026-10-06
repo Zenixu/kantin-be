@@ -128,18 +128,36 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return "ip:" + alamatIp(request);
     }
 
+    /**
+     * Alamat IP klien untuk kunci rate limit.
+     *
+     * <p><b>Anti-spoof (audit keamanan):</b> {@code X-Forwarded-For} hanya
+     * dipercaya bila koneksi datang dari proxy tepercaya yang dikonfigurasi
+     * ({@code kantin.rate-limit.trusted-proxies}). Tanpa itu, header XFF
+     * dikendalikan klien dan bisa diputar untuk melewati limit — jadi kita pakai
+     * {@code remoteAddr} apa adanya.
+     */
     private String alamatIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            // Ambil klien pertama (kiri) — paling dekat dengan pengguna asli.
-            int koma = xff.indexOf(',');
-            return (koma > 0 ? xff.substring(0, koma) : xff).trim();
+        String remote = request.getRemoteAddr();
+        if (remote != null && !remote.isBlank()
+                && properties.getTrustedProxies() != null
+                && properties.getTrustedProxies().contains(remote)) {
+            String xff = request.getHeader("X-Forwarded-For");
+            if (xff != null && !xff.isBlank()) {
+                // Entri paling kanan = hop pertama yang ditambahkan proxy tepercaya
+                // (paling sulit dipalsukan klien, karena proxy menambah di kanan).
+                int koma = xff.lastIndexOf(',');
+                String kandidat = (koma >= 0 ? xff.substring(koma + 1) : xff).trim();
+                if (!kandidat.isBlank()) {
+                    return kandidat;
+                }
+            }
+            String real = request.getHeader("X-Real-IP");
+            if (real != null && !real.isBlank()) {
+                return real.trim();
+            }
         }
-        String real = request.getHeader("X-Real-IP");
-        if (real != null && !real.isBlank()) {
-            return real.trim();
-        }
-        return request.getRemoteAddr();
+        return remote;
     }
 
     private void tolak(HttpServletResponse response) throws IOException {
