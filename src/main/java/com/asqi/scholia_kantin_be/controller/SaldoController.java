@@ -1,7 +1,10 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.dto.KonfirmasiSetoranRequest;
 import com.asqi.scholia_kantin_be.dto.KoreksiSaldoRequest;
+import com.asqi.scholia_kantin_be.dto.RekapSetoranTuItem;
 import com.asqi.scholia_kantin_be.dto.SaldoResponse;
+import com.asqi.scholia_kantin_be.dto.SetoranTuResponse;
 import com.asqi.scholia_kantin_be.dto.TopUpRequest;
 import com.asqi.scholia_kantin_be.enums.AktorKantin;
 import com.asqi.scholia_kantin_be.enums.SubjekTipe;
@@ -13,6 +16,7 @@ import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.kasir.HasilMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.saldo.SaldoOperasiService;
 import com.asqi.scholia_kantin_be.service.saldo.SaldoTopUpService;
+import com.asqi.scholia_kantin_be.service.saldo.SetoranTuService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +27,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Endpoint saldo: <b>top-up tunai</b>, <b>koreksi</b> (bendahara), dan
@@ -39,6 +46,7 @@ public class SaldoController {
 
     private final SaldoTopUpService topUpService;
     private final SaldoOperasiService operasi;
+    private final SetoranTuService setoranService;
 
     /**
      * Top-up tunai di TU (PRD §9.1). Idempotent lewat {@code referensiId}
@@ -97,5 +105,38 @@ public class SaldoController {
         long dariLedger = operasi.hitungUlangDariLedger(
                 TenantContext.sekolahIdWajib(), subjekTipe, subjekId);
         return CommonResponse.data(dariLedger, "Saldo hasil hitung ulang ledger");
+    }
+
+    /**
+     * Rekap setoran kas TU harian per petugas (PRD §9.2) — dasar konfirmasi
+     * bendahara. Menampilkan Σ top-up tunai petugas, uang disetor, selisih.
+     * {@code tanggal} kosong = hari ini (zona kantin).
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("setoran-tu/rekap")
+    public ResponseEntity<Response<List<RekapSetoranTuItem>>> rekapSetoran(
+            @RequestParam(required = false)
+            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            LocalDate tanggal) {
+
+        return CommonResponse.data(
+                setoranService.rekap(TenantContext.sekolahIdWajib(), tanggal));
+    }
+
+    /**
+     * Konfirmasi setoran kas TU oleh bendahara (PRD §9.2). Selisih kas dicatat,
+     * tidak dihapus; idempoten lewat nomor berita acara.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PostMapping("setoran-tu")
+    public ResponseEntity<Response<SetoranTuResponse>> konfirmasiSetoran(
+            @Valid @RequestBody KonfirmasiSetoranRequest request,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        SetoranTuResponse hasil = setoranService.konfirmasi(
+                TenantContext.sekolahIdWajib(), request.getTanggal(), request.getPetugasId(),
+                request.getJumlahDisetor(), request.getReferensiId(), request.getCatatan(),
+                identitas.aktorIdWajib());
+        return CommonResponse.data(hasil, "Setoran TU berhasil dikonfirmasi");
     }
 }

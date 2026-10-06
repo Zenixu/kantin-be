@@ -37,6 +37,8 @@
 | `POST` | `/api/saldo/koreksi` | TU, admin, pengelola | Koreksi saldo (arah KREDIT/DEBIT, alasan + berita acara wajib) |
 | `GET` | `/api/saldo?subjekTipe=&subjekId=&batasMutasi=` | petugas, TU, pengelola, admin | Saldo berjalan + belanja hari ini + mutasi terbaru |
 | `GET` | `/api/saldo/rekonsiliasi?subjekTipe=&subjekId=` | TU, admin, pengelola | Hitung ulang saldo dari ledger |
+| `GET` | `/api/saldo/setoran-tu/rekap?tanggal=` | TU, admin, pengelola | Rekap top-up tunai per petugas per hari + selisih (kosong = hari ini) |
+| `POST` | `/api/saldo/setoran-tu` | TU, admin, pengelola | Konfirmasi setoran kas TU (selisih dicatat, tidak dihapus; `referensiId` = kunci idempotensi) |
 
 ## 4. Stok (StokController)
 

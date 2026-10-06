@@ -111,4 +111,63 @@ public interface SaldoLedgerRepository extends JpaRepository<SaldoLedger, Long> 
                                      @Param("subjekTipe") SubjekTipe subjekTipe,
                                      @Param("subjekId") Long subjekId,
                                      Pageable pageable);
+
+    /**
+     * Rekap top-up tunai satu petugas pada rentang waktu (PRD §9.2, issue #39).
+     *
+     * <p>Dasar "setoran kas TU harian": Σ nominal top-up tunai
+     * ({@code jenis = TOPUP_TUNAI}) oleh {@code aktor_id = petugasId} pada
+     * {@code [sejak, sampai)}. Hanya KREDIT (top-up selalu menambah saldo).
+     * Selalu tenant-scoped (PRD §11.4).
+     *
+     * @return total rupiah (0 bila tak ada top-up)
+     */
+    @Query("""
+            SELECT COALESCE(SUM(l.nominal), 0)
+            FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.jenis = :jenis
+              AND l.arah = :kredit
+              AND l.aktorId = :petugasId
+              AND l.waktu >= :sejak
+              AND l.waktu < :sampai
+            """)
+    Long hitungTopupTunaiPetugas(@Param("sekolahId") Long sekolahId,
+                                 @Param("jenis") JenisMutasiSaldo jenis,
+                                 @Param("kredit") ArahMutasi kredit,
+                                 @Param("petugasId") Long petugasId,
+                                 @Param("sejak") OffsetDateTime sejak,
+                                 @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Daftar petugas yang melakukan top-up tunai pada rentang waktu, beserta
+     * totalnya — dasar tampilan rekap setoran TU harian (PRD §9.2, issue #39).
+     *
+     * <p>Baris dengan {@code aktor_id} null (aksi sistem) dikecualikan: setoran
+     * adalah tanggung jawab petugas nyata. Urut petugas menaik.
+     */
+    @Query("""
+            SELECT l.aktorId AS petugasId, COALESCE(SUM(l.nominal), 0) AS total
+            FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.jenis = :jenis
+              AND l.arah = :kredit
+              AND l.aktorId IS NOT NULL
+              AND l.waktu >= :sejak
+              AND l.waktu < :sampai
+            GROUP BY l.aktorId
+            ORDER BY l.aktorId
+            """)
+    List<RekapTopupPetugas> rekapTopupTunaiPerPetugas(@Param("sekolahId") Long sekolahId,
+                                                      @Param("jenis") JenisMutasiSaldo jenis,
+                                                      @Param("kredit") ArahMutasi kredit,
+                                                      @Param("sejak") OffsetDateTime sejak,
+                                                      @Param("sampai") OffsetDateTime sampai);
+
+    /** Proyeksi rekap top-up tunai satu petugas (PRD §9.2). */
+    interface RekapTopupPetugas {
+        Long getPetugasId();
+
+        Long getTotal();
+    }
 }
