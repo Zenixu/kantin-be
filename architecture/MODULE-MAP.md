@@ -46,7 +46,7 @@ FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                �
 | Blokir kartu | §6.1, §11.11 | `service/kartu` | `blokir_kartu` | **tanpa cache** |
 | Limit & blokir item | §8.3 | `service/kartu` | `limit_harian`, `blokir_item` | diperiksa tiap tap |
 | Kontrol atas nama ortu | §8.6 | `service/kartu` | (pakai limit/blokir) | + audit |
-| Laporan | §9.5 | `service/laporan` | — (query) | ekspor POI |
+| Laporan | §9.5 | `service/laporan` | — (query) | ekspor POI ✅ (Excel; PDF menunggu Q3/Q5) |
 | Buku Kas integrasi | §5.1 | `service/integrasi` | — | idempoten |
 | Notifikasi | §8.4 | `service/integrasi` | — | ke mobile-be |
 | Aktivasi & fee | §10 | `service/aktivasi` | `aktivasi_modul`, `fee_platform` | internal-be |

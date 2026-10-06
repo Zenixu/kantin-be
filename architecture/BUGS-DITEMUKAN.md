@@ -325,6 +325,15 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Bukti:** `KlaimResolverPeranTest` — `PETUGAS_KANTIN → PETUGAS_KANTIN` (sebelumnya `PENGELOLA_KANTIN`) + 18 kasus pemetaan peran lain. Pemetaan peran **sebelumnya tak teruji**; uji ini jadi guard regresi.
 - **Catatan positif:** pemisahan peran lain sudah benar (`ADMIN`→`ADMIN_SEKOLAH`, `TU`/`BENDAHARA`→`TU_SEKOLAH`, `ORANG_TUA`/`ORTU`→`ORANG_TUA`, tak dikenal→`TIDAK_DIKENAL` fail-closed).
 
+## B38 — (bug laporan #41) `stok_cache.stok_minimum` tidak pernah disinkron dari katalog → penanda "stok menipis" selalu salah
+
+- **Konteks:** ditemukan saat menulis `LaporanServiceIT` untuk modul laporan (#41, PRD §9.5). Uji `laporanStok` mengharapkan menu dengan stok 1 (min 2) ditandai **menipis**, tetapi hasilnya `false`.
+- **Gejala:** `stok_cache.stok_minimum` **selalu 0** — tidak ada kode yang menyalin `menu.stok_minimum` ke `stok_cache` saat katalog dibuat/diubah. Akibatnya `stok <= stokMinimum` nyaris tak pernah benar (hanya saat stok 0).
+- **Dampak:** laporan stok "menipis" (PRD §9.5) dan **peringatan stok minimum** (PRD §7.1) tidak pernah menyala untuk stok > 0 → pengelola tak diberi tahu saat persediaan hampir habis. Bukan hanya laporan: fitur notifikasi stok menipis apa pun yang membaca `stok_cache.stok_minimum` ikut salah.
+- **Perbaikan (sisi laporan):** `LaporanService.laporanStok` mengambil `stok_minimum` dari **katalog `menu`** (sumber kebenaran PRD §7.1), bukan dari `stok_cache`. Sekaligus mengisi `kategoriId` dari menu.
+- **Perbaikan lanjutan yang disarankan (di luar #41):** sinkronkan `menu.stok_minimum` → `stok_cache.stok_minimum` saat menu dibuat/diubah (atau jadikan `stok_cache` tanpa kolom itu dan baca dari katalog di semua pemakaian), agar fitur peringatan stok lain konsisten. Perlu keputusan apakah `stok_minimum` memang milik katalog (ya, PRD §7.1) — bila ya, `stok_cache.stok_minimum` adalah kolom **redundan** yang layak dihapus.
+- **Bukti:** `LaporanServiceIT.laporanStok` — menu stok 1 (min 2) → `menipis=true`; `hanyaMenipis=true` hanya mengembalikan menu tersebut.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
