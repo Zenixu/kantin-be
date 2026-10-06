@@ -46,12 +46,20 @@ public class PostingBukuKas implements Persistable<Long> {
     @Column(name = "referensi_id", nullable = false, length = 120)
     private String referensiId;
 
-    /** Jenis mutasi sumber: {@code BARANG_MASUK} / {@code BARANG_MASUK_PEMBALIK}. */
+    /**
+     * Jenis sumber posting: {@code BARANG_MASUK} / {@code BARANG_MASUK_PEMBALIK}
+     * (dari {@code mutasi_stok}) atau {@code KOREKSI_SALDO} (dari
+     * {@code saldo_ledger}, PRD §5.1, §9.2).
+     */
     @Column(name = "entitas", nullable = false, length = 40)
     private String entitas;
 
-    /** Baris {@code mutasi_stok} yang diposting. */
-    @Column(name = "mutasi_id", nullable = false)
+    /**
+     * ID entitas sumber — baris {@code mutasi_stok} untuk posting stok, atau
+     * baris {@code saldo_ledger} untuk koreksi saldo. {@code null} bila sumber
+     * tidak ber-ID mutasi stok (V14 melonggarkan NOT NULL).
+     */
+    @Column(name = "mutasi_id")
     private Long mutasiId;
 
     /** Referensi entri dari Buku Kas (bila dikembalikan admin-be). */
