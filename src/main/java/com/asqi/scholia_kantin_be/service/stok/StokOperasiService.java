@@ -16,6 +16,7 @@ import com.asqi.scholia_kantin_be.repository.MenuRepository;
 import com.asqi.scholia_kantin_be.repository.MutasiStokRepository;
 import com.asqi.scholia_kantin_be.repository.StokCacheRepository;
 import com.asqi.scholia_kantin_be.security.SekolahGuard;
+import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -60,6 +61,7 @@ public class StokOperasiService {
     private final MutasiStokRepository mutasiRepo;
     private final MenuRepository menuRepo;
     private final SekolahGuard sekolahGuard;
+    private final BukuKasPostingService postingBukuKas;
 
     // ────────────────────────────────────────────────────────────────
     // TULIS
@@ -74,8 +76,22 @@ public class StokOperasiService {
                                        long hargaBeliPerUnit, String referensiId, Long aktorId) {
         validasiReferensi(referensiId, "Nomor bukti barang masuk");
         pastikanMenuMilikSekolah(sekolahId, menuId);
-        return ledgerStok.masukBarang(sekolahId, menuId, qty, hargaBeliPerUnit,
+        HasilMutasiStok hasil = ledgerStok.masukBarang(sekolahId, menuId, qty, hargaBeliPerUnit,
                 "BARANG_MASUK", referensiId, aktorId);
+
+        // PRD §5.1/§7.2: setiap barang masuk diposting sebagai pengeluaran Buku Kas
+        // pos "Belanja Stok Kantin". Idempoten (refId deterministik) & fail-open —
+        // kegagalan posting tidak membatalkan mutasi stok yang sudah tercatat.
+        MutasiStok mutasi = hasil.getMutasi();
+        if (mutasi != null) {
+            // Pakai harga & qty dari baris mutasi (bukan argumen) agar replay
+            // idempotency tetap memposting nilai yang benar-benar tercatat.
+            long harga = mutasi.getHargaBeliSatuan() != null
+                    ? mutasi.getHargaBeliSatuan() : hargaBeliPerUnit;
+            postingBukuKas.postingBarangMasuk(sekolahId, mutasi.getId(), menuId,
+                    mutasi.getQty(), harga, referensiId, aktorId);
+        }
+        return hasil;
     }
 
     /**
@@ -91,7 +107,20 @@ public class StokOperasiService {
     public HasilMutasiStok pembalikBarangMasuk(Long sekolahId, Long mutasiId, Integer qty,
                                                String alasan, String referensiId, Long aktorId) {
         validasiReferensi(referensiId, "Nomor bukti barang masuk pembalik");
-        return ledgerStok.pembalikBarangMasuk(sekolahId, mutasiId, qty, alasan, referensiId, aktorId);
+        HasilMutasiStok hasil = ledgerStok.pembalikBarangMasuk(sekolahId, mutasiId, qty, alasan,
+                referensiId, aktorId);
+
+        // PRD §7.2: koreksi barang masuk diposting sebagai entri pembalik Buku Kas
+        // (entri belanja lama tidak dihapus). Idempoten + fail-open seperti barang masuk.
+        MutasiStok pembalik = hasil.getMutasi();
+        if (pembalik != null) {
+            long hargaBeliAsal = pembalik.getHargaBeliSatuan() != null
+                    ? pembalik.getHargaBeliSatuan()
+                    : (pembalik.getHppSnapshot() != null ? pembalik.getHppSnapshot() : 0L);
+            postingBukuKas.postingPembalikBarangMasuk(sekolahId, pembalik.getId(),
+                    pembalik.getQty(), hargaBeliAsal, referensiId, aktorId);
+        }
+        return hasil;
     }
 
     /**

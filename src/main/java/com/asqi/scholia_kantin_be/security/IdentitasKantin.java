@@ -19,11 +19,12 @@ import java.security.Principal;
  * {@code userId} sebagai string, supaya Spring Security bisa mengaitkan
  * autentikasi dengan benar (audit, logging, {@code sessionManagement}).
  *
- * <p>⚠️ <b>Temuan (docs/spesifikasi-fase4-ledger.md §5.3):</b> token dari
- * admin-be <b>tidak</b> membawa {@code sekolah_id} maupun {@code role}. Karena
- * itu {@code sekolahId} &amp; {@code peran} di sini <i>nullable</i> dan diisi
- * oleh {@code TenantResolver} bila berhasil; bila tidak, akses modul terblokir
- * (fail-closed) sampai Q1/Q2 terjawab.
+ * <p>⚠️ <b>Status Q1 (diperbarui):</b> admin-be kini <i>sudah</i> menyetel klaim
+ * {@code sekolah_id} &amp; {@code role} (lihat {@code admin-be/JwtUtils.buildToken()}),
+ * tetapi <b>belum</b> menyetel {@code iss}. Karena itu {@code sekolahId} &amp;
+ * {@code peran} tetap <i>nullable</i> (fail-closed bila absen) dan decoder
+ * menerima {@code iss} yang absen — lihat
+ * {@code KantinJwtDecoder.verifikasi()} &amp; {@code KompatibilitasTokenStafAdminTest}.
  */
 @Getter
 @Builder
