@@ -52,6 +52,29 @@ public interface SesiKasirRepository extends JpaRepository<SesiKasir, Long> {
                                                              LocalDate tanggal);
 
     /**
+     * Sesi yang sudah DITUTUP namun belum terposting ke Buku Kas, dan memang
+     * punya pendapatan untuk diposting (PRD §5.1, §6.4; issue #33).
+     *
+     * <p>Posting saat tutup kasir bersifat <b>fail-open</b>: bila integrasi
+     * admin-be gagal, sesi tetap DITUTUP dengan {@code posting_buku_kas=false}.
+     * Penjadwal retry memakai daftar ini untuk mencoba ulang. Sesi dengan
+     * {@code total_bersih = 0} dikecualikan — memang tidak ada yang perlu
+     * diposting, jadi tak boleh dianggap "tertunggak".
+     *
+     * <p><b>Tidak tenant-scoped</b> — tugas terjadwal ini bekerja untuk SEMUA
+     * tenant (pola sama seperti {@link #daftarSekolahIdDenganStatus}); tiap baris
+     * membawa {@code sekolah_id}-nya sendiri agar retry tetap tenant-safe.
+     */
+    @Query("""
+            SELECT s FROM SesiKasir s
+            WHERE s.status = :status
+              AND s.postingBukuKas = false
+              AND s.totalBersih > 0
+            ORDER BY s.sekolahId, s.id
+            """)
+    List<SesiKasir> cariBelumTerposting(@Param("status") StatusSesiKasir status);
+
+    /**
      * Ambil &amp; kunci sesi ({@code FOR UPDATE}) agar buka/tutup kasir tidak
      * balapan pada titik kasir yang sama.
      *

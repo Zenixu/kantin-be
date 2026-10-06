@@ -422,6 +422,29 @@ public class BukuKasPostingService {
         return postingSesi(sesi, aktorId);
     }
 
+    /**
+     * Posting ulang satu sesi atas nama <b>sistem</b> (penjadwal retry, issue #33).
+     *
+     * <p>Berbeda dari {@link #postingUlang(Long, Long, Long)}, method ini
+     * <b>tidak</b> memerlukan {@code TenantContext} — dipakai tugas terjadwal
+     * lintas-tenant yang tidak punya konteks pemanggil. Keamanan tenant tetap
+     * terjaga karena {@code sekolahId} berasal dari baris sesi itu sendiri dan
+     * {@link SesiKasirRepository#kunciUntukUpdate} sudah tenant-scoped.
+     *
+     * <p>Idempoten: sesi yang sudah terposting langsung dilewati
+     * ({@link #postingSesi}). Baris dikunci ({@code FOR UPDATE}) agar tidak
+     * balapan dengan retry manual.
+     */
+    @Transactional
+    public HasilPostingBukuKas postingUlangSistem(Long sekolahId, Long sesiId) {
+        SesiKasir sesi = sesiRepo.kunciUntukUpdate(sekolahId, sesiId)
+                .orElseThrow(() -> new NotFoundEntity("Sesi kasir tidak ditemukan"));
+        if (sesi.terbuka()) {
+            throw new InvalidOperationException("Sesi kasir masih terbuka — tutup dulu sebelum posting");
+        }
+        return postingSesi(sesi, null);
+    }
+
     /** {@code null} bila belum dikonfigurasi (mitigasi Q3), bukan string kosong. */
     private String refModulAktif() {
         return (refModul == null || refModul.isBlank()) ? null : refModul;
