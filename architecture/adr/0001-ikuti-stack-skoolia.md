@@ -25,7 +25,7 @@
 | Alternatif | Kenapa tidak dipilih |
 |---|---|
 | NestJS/Node + React | Duplikasi logic integrasi, risiko salah saat UAT, tim backend SKOOLIA tak bisa bantu |
-| Hybrid (Java + service Go/Python) untuk endpoint tap | Menambah kompleksitas deploy & duplikasi auth; **ditunda** — hanya bila Java gagal SLO p95<1dtk (lihat Q13) |
+| Hybrid (Java + service Go/Python) untuk endpoint tap | Menambah kompleksitas deploy & duplikasi auth; **ditunda** — hanya bila Java gagal SLO p95<1dtk (lihat Q13, kini diputuskan di **ADR-0007**) |
 | Monolith di dalam admin-be | Melanggar keputusan PRD "repo terpisah" |
 
 ## Konsekuensi
