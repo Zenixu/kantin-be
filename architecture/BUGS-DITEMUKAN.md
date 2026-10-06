@@ -316,6 +316,15 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Perbaikan:** `WebSecurityConfig` menambah dua `FilterRegistrationBean` dengan `setEnabled(false)` untuk `RateLimitFilter` & `JwtAuthTokenFilter` → auto-registrasi servlet container dimatikan; keduanya hanya hidup di `SecurityFilterChain`. (Bukti: `FilterGandaIT.filterTidakTerdaftarDiServletContainer` — `jwtAuthTokenFilter` & `rateLimitFilter` **hilang** dari `ServletContext.getFilterRegistrations()` sesudah perbaikan; `satuRequestSatuKuota` → `periksa` dipanggil **tepat 1×**; `filterMasihAktif` → `/api/auth/me` tanpa token tetap **401**, memastikan perbaikan tidak melumpuhkan filter.)
 - **Uji baru:** `FilterGandaIT` (3 — IT, butuh Docker). Total **99 unit + 85 IT hijau**.
 
+## B37 — (audit RBAC) Peran `PETUGAS_KANTIN` dipetakan ke `PENGELOLA_KANTIN` (eskalasi hak)
+
+- **Konteks:** ditemukan saat membangun **harness JWT dummy** (#14/#15). Saat menguji token dummy berperan `PETUGAS_KANTIN`, `KlaimResolver.petakanPeran` mengembalikan `PENGELOLA_KANTIN` — bukan `PETUGAS_KANTIN`.
+- **Gejala:** `KlaimResolver.petakanPeran` memeriksa cabang generik `r.contains("KANTIN")` **sebelum** cabang spesifik `r.contains("PETUGAS")`. Karena `"PETUGAS_KANTIN"` mengandung `"KANTIN"`, ia tertangkap lebih dulu → dipetakan ke `PENGELOLA_KANTIN`.
+- **Dampak:** `PENGELOLA_KANTIN` punya hak lebih tinggi daripada `PETUGAS_KANTIN` (katalog, stok, HPP, laporan). Kasir ber-token `PETUGAS_KANTIN` akan **mendapat hak pengelola** — **eskalasi hak istimewa** (melanggar PRD §11.5). Bug **laten**: admin-be saat ini belum punya role bernama mengandung "KANTIN" (role-nya `ADMIN`/`TU`/`BENDAHARA`/`KEPSEK`/`GURU`/dll.), jadi baru aktif begitu role kantin ditambahkan.
+- **Perbaikan:** pindahkan cek `contains("PETUGAS")`/`contains("KASIR")` ke **atas** cek generik `contains("KANTIN")`; sisa urutan dipertahankan agar perilaku peran lain tak berubah.
+- **Bukti:** `KlaimResolverPeranTest` — `PETUGAS_KANTIN → PETUGAS_KANTIN` (sebelumnya `PENGELOLA_KANTIN`) + 18 kasus pemetaan peran lain. Pemetaan peran **sebelumnya tak teruji**; uji ini jadi guard regresi.
+- **Catatan positif:** pemisahan peran lain sudah benar (`ADMIN`→`ADMIN_SEKOLAH`, `TU`/`BENDAHARA`→`TU_SEKOLAH`, `ORANG_TUA`/`ORTU`→`ORANG_TUA`, tak dikenal→`TIDAK_DIKENAL` fail-closed).
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:

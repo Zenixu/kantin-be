@@ -8,6 +8,7 @@ import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.service.kasir.HasilMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.kasir.LedgerSaldoService;
 import com.asqi.scholia_kantin_be.service.kasir.PerintahMutasiSaldo;
+import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class SaldoTopUpService {
 
     private final LedgerSaldoService ledgerSaldo;
     private final AuditLogger auditLogger;
+    private final BukuKasPostingService bukuKasPosting;
 
     /**
      * Top-up tunai di TU/bendahara.
@@ -127,6 +129,14 @@ public class SaldoTopUpService {
             auditLogger.catat(aktorId, sekolahId, "KOREKSI_SALDO", "Saldo",
                     subjekTipe + ":" + subjekId, alasan,
                     String.valueOf(saldoSebelum), String.valueOf(hasil.getSaldoSetelah()));
+
+            // PRD §5.1/§9.2: koreksi bendahara diposting sebagai entri penyesuaian
+            // pos "Penyesuaian Kantin" (bukan mengubah entri lama). Idempoten
+            // (refId dari berita acara) & fail-open — kegagalan posting tidak
+            // membatalkan koreksi saldo yang sudah tercatat.
+            bukuKasPosting.postingKoreksiSaldo(sekolahId, arah == ArahMutasi.KREDIT, nominal,
+                    referensiId, alasan,
+                    hasil.getMutasi() == null ? null : hasil.getMutasi().getId(), aktorId);
         }
 
         return hasil;
