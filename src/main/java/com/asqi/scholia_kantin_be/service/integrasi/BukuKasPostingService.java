@@ -5,8 +5,13 @@ import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
 import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
 import com.asqi.scholia_kantin_be.enums.MetodeBukuKas;
 import com.asqi.scholia_kantin_be.enums.TipeBukuKas;
+import com.asqi.scholia_kantin_be.helper.Constants;
+import com.asqi.scholia_kantin_be.helper.IdGenerator;
 import com.asqi.scholia_kantin_be.helper.JamKantin;
+import com.asqi.scholia_kantin_be.model.MutasiStok;
+import com.asqi.scholia_kantin_be.model.PostingBukuKas;
 import com.asqi.scholia_kantin_be.model.SesiKasir;
+import com.asqi.scholia_kantin_be.repository.PostingBukuKasRepository;
 import com.asqi.scholia_kantin_be.repository.SesiKasirRepository;
 import com.asqi.scholia_kantin_be.security.SekolahGuard;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +22,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 
 /**
  * Posting rekap sesi kasir ke Buku Kas admin-be — INTEGRATIONS.md §3.
@@ -51,10 +57,18 @@ public class BukuKasPostingService {
     /** Prefix referensi entri Buku Kas untuk sesi kasir (deterministik). */
     public static final String PREFIX_REF_SESI = "KANTIN-SESI-";
 
+    /** Prefix referensi entri Buku Kas untuk barang masuk (belanja stok). */
+    public static final String PREFIX_REF_BARANG_MASUK = "KANTIN-BM-";
+
+    /** Prefix referensi entri Buku Kas untuk koreksi barang masuk (pembalik). */
+    public static final String PREFIX_REF_PEMBALIK = "KANTIN-BMP-";
+
     private final BukuKasPort bukuKasPort;
     private final SesiKasirRepository sesiRepo;
+    private final PostingBukuKasRepository postingRepo;
     private final SekolahGuard sekolahGuard;
     private final AuditLogger auditLogger;
+    private final IdGenerator idGenerator;
     private final JamKantin jam;
 
     /** Modul referensi yang dikirim ke Buku Kas. Default kosong → {@code null} (mitigasi Q3). */
@@ -62,12 +76,36 @@ public class BukuKasPostingService {
     private String refModul;
 
     /** Kategori pos Buku Kas untuk pendapatan kantin (INTEGRATIONS.md §3.3). */
-    @Value("${kantin.bukukas.kategori-pendapatan:Pendapatan Kantin}")
+    @Value("${kantin.bukukas.kategori-pendapatan:" + Constants.KATEGORI_PENDAPATAN_KANTIN + "}")
     private String kategoriPendapatan;
+
+    /** Kategori pos Buku Kas untuk belanja stok / barang masuk (INTEGRATIONS.md §3.3). */
+    @Value("${kantin.bukukas.kategori-belanja-stok:" + Constants.KATEGORI_BELANJA_STOK_KANTIN + "}")
+    private String kategoriBelanjaStok;
+
+    /** Kategori pos Buku Kas untuk koreksi/penyesuaian (INTEGRATIONS.md §3.3). */
+    @Value("${kantin.bukukas.kategori-penyesuaian:" + Constants.KATEGORI_PENYESUAIAN_KANTIN + "}")
+    private String kategoriPenyesuaian;
 
     /** Referensi entri Buku Kas untuk sebuah sesi — deterministik &amp; unik. */
     public static String refIdSesi(Long sesiId) {
         return PREFIX_REF_SESI + sesiId;
+    }
+
+    /**
+     * Referensi entri Buku Kas untuk satu baris barang masuk — deterministik.
+     *
+     * <p>Nomor bukti boleh memuat beberapa item (kiriman multi-menu), jadi
+     * {@code menuId} ikut ke dalam refId agar tiap baris punya entri sendiri
+     * tanpa saling menimpa pada kunci idempotency.
+     */
+    public static String refIdBarangMasuk(String referensiId, Long menuId) {
+        return PREFIX_REF_BARANG_MASUK + referensiId + "-" + menuId;
+    }
+
+    /** Referensi entri Buku Kas untuk pembalik barang masuk — deterministik. */
+    public static String refIdPembalik(String referensiId) {
+        return PREFIX_REF_PEMBALIK + referensiId;
     }
 
     /**
@@ -140,6 +178,152 @@ public class BukuKasPostingService {
             log.error("Posting Buku Kas sesi {} GAGAL: {}", sesi.getId(), hasil.pesan());
         }
         return hasil;
+    }
+
+    /**
+     * Posting <b>belanja stok</b> ke Buku Kas saat barang masuk (PRD §5.1, §7.2).
+     *
+     * <p>Setiap barang masuk diposting sebagai <b>pengeluaran</b> pos
+     * {@code "Belanja Stok Kantin"} — {@link TipeBukuKas#KELUAR} /
+     * {@link MetodeBukuKas#TUNAI} (pembelian tunai ke pemasok, INTEGRATIONS.md
+     * §3.3). Total = {@code qty × hargaBeliPerUnit} (rupiah integer).
+     *
+     * <p><b>Idempoten</b> lewat tabel penanda {@code posting_buku_kas} (V12):
+     * refId deterministik {@code KANTIN-BM-<bukti>-<menuId>} dicek lebih dulu;
+     * baris penanda hanya ditulis saat SUKSES sehingga retry jaringan tidak
+     * menggandakan entri (Buku Kas admin-be tidak idempoten, §3.4).
+     *
+     * <p><b>Fail-open:</b> kegagalan/dilewati <b>tidak</b> membatalkan mutasi
+     * stok yang sudah tercatat (pola sama seperti {@link #postingSesi}); tanpa
+     * penanda, posting bisa diulang lewat retry.
+     *
+     * @return hasil posting ({@code SUKSES}/{@code DILEWATI}/{@code GAGAL})
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public HasilPostingBukuKas postingBarangMasuk(Long sekolahId, Long mutasiId, Long menuId,
+                                                  int qty, long hargaBeliPerUnit,
+                                                  String referensiId, Long aktorId) {
+        String refId = refIdBarangMasuk(referensiId, menuId);
+        if (postingRepo.existsBySekolahIdAndReferensiId(sekolahId, refId)) {
+            log.debug("Barang masuk {} sudah diposting (ref={}) — dilewati (idempoten).",
+                    mutasiId, refId);
+            return HasilPostingBukuKas.sukses(refId, "Sudah diposting sebelumnya");
+        }
+
+        long total = (long) qty * hargaBeliPerUnit;
+        if (total <= 0) {
+            // Barang masuk gratis (harga beli 0) tidak menghasilkan pengeluaran.
+            log.info("Barang masuk {} total belanja={} — tidak ada yang diposting.",
+                    mutasiId, total);
+            return HasilPostingBukuKas.dilewati("Total belanja 0 — tidak ada yang diposting");
+        }
+
+        PerintahBukuKas perintah = PerintahBukuKas.builder()
+                .sekolahId(sekolahId)
+                .tanggal(jam.sekarang())
+                .tipe(TipeBukuKas.KELUAR)
+                .kategori(kategoriBelanjaStok)
+                .jumlah(BigDecimal.valueOf(total))
+                .metode(MetodeBukuKas.TUNAI)
+                .keterangan("Belanja stok kantin (bukti " + referensiId + ")")
+                .refId(refId)
+                .refModul(refModulAktif())
+                .build();
+
+        HasilPostingBukuKas hasil = kirim(perintah, refId);
+        if (hasil.sukses()) {
+            simpanPenanda(sekolahId, refId, "BARANG_MASUK", mutasiId, total,
+                    hasil.referensi() != null ? hasil.referensi() : refId);
+            auditLogger.catat(aktorId, sekolahId, "POSTING_BUKU_KAS", "MutasiStok",
+                    String.valueOf(mutasiId), null, null, refId);
+            log.info("Barang masuk {} diposting ke Buku Kas (ref={}, total={}).",
+                    mutasiId, refId, total);
+        }
+        return hasil;
+    }
+
+    /**
+     * Posting <b>entri koreksi</b> saat barang masuk dibalik (PRD §7.2).
+     *
+     * <p>Koreksi dicatat sebagai entri <b>pembalik</b> ({@link TipeBukuKas#MASUK},
+     * pos {@code "Penyesuaian Kantin"}) — entri belanja lama <b>tidak</b> dihapus
+     * (konsisten dengan aturan ledger append-only). Total = {@code qty × harga beli}.
+     *
+     * <p>Idempoten lewat refId deterministik {@code KANTIN-BMP-<bukti pembalik>}.
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public HasilPostingBukuKas postingPembalikBarangMasuk(Long sekolahId, Long mutasiId, int qty,
+                                                          long hargaBeliAsal, String referensiId,
+                                                          Long aktorId) {
+        String refId = refIdPembalik(referensiId);
+        if (postingRepo.existsBySekolahIdAndReferensiId(sekolahId, refId)) {
+            log.debug("Pembalik {} sudah diposting (ref={}) — dilewati (idempoten).",
+                    mutasiId, refId);
+            return HasilPostingBukuKas.sukses(refId, "Sudah diposting sebelumnya");
+        }
+
+        long total = (long) qty * hargaBeliAsal;
+        if (total <= 0) {
+            log.info("Pembalik {} total koreksi={} — tidak ada yang diposting.", mutasiId, total);
+            return HasilPostingBukuKas.dilewati("Total koreksi 0 — tidak ada yang diposting");
+        }
+
+        PerintahBukuKas perintah = PerintahBukuKas.builder()
+                .sekolahId(sekolahId)
+                .tanggal(jam.sekarang())
+                .tipe(TipeBukuKas.MASUK)
+                .kategori(kategoriPenyesuaian)
+                .jumlah(BigDecimal.valueOf(total))
+                .metode(MetodeBukuKas.TUNAI)
+                .keterangan("Koreksi belanja stok kantin (bukti pembalik " + referensiId + ")")
+                .refId(refId)
+                .refModul(refModulAktif())
+                .build();
+
+        HasilPostingBukuKas hasil = kirim(perintah, refId);
+        if (hasil.sukses()) {
+            simpanPenanda(sekolahId, refId, "BARANG_MASUK_PEMBALIK", mutasiId, total,
+                    hasil.referensi() != null ? hasil.referensi() : refId);
+            auditLogger.catat(aktorId, sekolahId, "POSTING_BUKU_KAS", "MutasiStok",
+                    String.valueOf(mutasiId), null, null, refId);
+            log.info("Pembalik barang masuk {} diposting ke Buku Kas (ref={}, total={}).",
+                    mutasiId, refId, total);
+        }
+        return hasil;
+    }
+
+    /** Kirim ke port dengan fail-open: exception jaringan → {@code GAGAL}, tak melempar. */
+    private HasilPostingBukuKas kirim(PerintahBukuKas perintah, String refId) {
+        try {
+            HasilPostingBukuKas hasil = bukuKasPort.catat(perintah);
+            if (hasil.dilewati()) {
+                log.warn("Posting Buku Kas ref={} DILEWATI: {}", refId, hasil.pesan());
+            } else if (!hasil.sukses()) {
+                log.error("Posting Buku Kas ref={} GAGAL: {}", refId, hasil.pesan());
+            }
+            return hasil;
+        } catch (RuntimeException e) {
+            log.error("Posting Buku Kas gagal (ref={}): {}", refId, e.getMessage(), e);
+            return HasilPostingBukuKas.gagal("Gagal posting ke Buku Kas: " + e.getMessage());
+        }
+    }
+
+    /** Tulis baris penanda posting sukses (idempotency jalur cepat). */
+    private void simpanPenanda(Long sekolahId, String refId, String entitas, Long mutasiId,
+                               long jumlah, String refBukuKas) {
+        OffsetDateTime now = jam.sekarang();
+        postingRepo.save(PostingBukuKas.builder()
+                .id(idGenerator.berikutnyaLong())
+                .sekolahId(sekolahId)
+                .referensiId(refId)
+                .entitas(entitas)
+                .mutasiId(mutasiId)
+                .refBukuKas(refBukuKas)
+                .jumlah(jumlah)
+                .status("SUKSES")
+                .waktu(now)
+                .createdAt(now)
+                .build());
     }
 
     /**
