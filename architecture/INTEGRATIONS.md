@@ -106,6 +106,7 @@ Optional<Siswa> findByRfidUid(String rfidUid);
 
 ### 4.3 Sinkronisasi kartu (PRD §4.3)
 - Perubahan di admin-be (lepas/ganti kartu, siswa nonaktif) **harus dikirim ke kantin-be saat itu juga** (webhook + retry).
+- Webhook masuk kini **diamankan HMAC-SHA256 + anti-replay + idempotency per event id** (SECURITY.md §5.1, BUGS-DITEMUKAN B34). Pengirim wajib menandatangani `timestamp + "." + body` dengan `KANTIN_WEBHOOK_SECRET` dan menyertakan `X-Webhook-Id`.
 - Bila kantin-be meng-cache data kartu/siswa, cache **WAJIB di-invalidate** oleh notifikasi — **dilarang** mengandalkan TTL.
 - Status **blokir** kartu **tidak boleh** di-cache sama sekali (§11.11).
 

@@ -63,6 +63,7 @@ Controller (tipis) ──► Service (aturan bisnis) ──► DB
 | `security/TenantContext` | `ThreadLocal` sekolah pemanggil; **wajib** di-clear |
 | `security/SekolahGuard` | Pastikan data milik tenant (404 bila bukan) |
 | `security/PerluPeran` + `PeranAspect` | RBAC deklaratif per method |
+| `config/webhook/WebhookSignatureFilter` + `WebhookSignatureVerifier` | Verifikasi HMAC webhook + anti-replay + allowlist IP (B34) |
 | `config/security/WebSecurityConfig` | Rantai filter, endpoint publik, CORS |
 
 ---
@@ -88,9 +89,38 @@ Controller (tipis) ──► Service (aturan bisnis) ──► DB
 | Endpoint | Auth | Peran |
 |---|---|---|
 | `GET /actuator/health` | publik | — |
-| `POST /api/webhook/**` | signature (bukan token) | — |
+| `POST /api/webhook/{sumber}` | **HMAC-SHA256 + anti-replay** (bukan token) | — |
 | `GET /api/auth/me` | token | apa pun yang valid |
 | `POST /api/kasir/tap` | token | PETUGAS/PENGELOLA/ADMIN |
+
+### 5.1 Webhook masuk — verifikasi signature (B34)
+
+`permitAll` di `/api/webhook/**` **bukan** berarti tanpa autentikasi: token user
+memang tidak dipakai (SKOOLIA tidak login), tetapi setiap request **wajib**
+membawa HMAC sah. `WebhookSignatureFilter` menegakkan, **fail-closed**:
+
+```
+POST /api/webhook/{sumber}
+  X-Webhook-Timestamp: <epoch detik>
+  X-Webhook-Signature: sha256=<hex HMAC-SHA256(rahasia, timestamp + "." + body_mentah)>
+  X-Webhook-Id:        <id event unik>            (atau field body "eventId")
+```
+
+| Kondisi | HTTP |
+|---|---|
+| Signature sah & timestamp dalam jendela `±tolerance-seconds` | diteruskan |
+| Signature salah / header kurang / timestamp kedaluwarsa (replay) | **401** |
+| IP di luar `kantin.webhook.allowed-ips` (bila diisi) | **403** |
+| Badan melebihi `kantin.webhook.max-body-bytes` | **413** |
+| `kantin.webhook.secret` kosong (belum dikonfigurasi) | **503** |
+
+- **Rahasia dari environment** (`KANTIN_WEBHOOK_SECRET`), bukan hardcode.
+- **Idempotency** per `(sumber, eventId)` (tabel `webhook_event`, migrasi V12):
+  retry event sama ⇒ tidak diproses ulang (respons `replay=true`); event id sama
+  dengan payload berbeda ⇒ **409**.
+- Perbandingan signature **konstan-waktu**; timestamp ikut ditandatangani.
+- Handler per jenis event lewat `WebhookHandlerPort` (kontrak payload menunggu
+  Q4/Q7) — event yang belum ditangani dicatat `DIABAIKAN`.
 
 ---
 
@@ -126,6 +156,11 @@ Lihat `BUGS-DITEMUKAN.md` B6–B8 tentang perbaikan status 403 dari `admin-be`.
   Token disimpan sebagai SHA-256 (bukan mentah) dengan TTL = sisa umur token.
   Filter menolak token tercabut **setelah** signature valid. **Fail-open**: Redis
   mati ⇒ token dianggap belum dicabut (gangguan infra tidak melumpuhkan kantin).
+- ✅ **Webhook masuk diamankan (B34)** — `/api/webhook/{sumber}` wajib HMAC-SHA256
+  sah + anti-replay (timestamp) + allowlist IP opsional; rahasia dari
+  `KANTIN_WEBHOOK_SECRET` (kosong ⇒ 503, fail-closed). Idempotency per event id
+  (tabel `webhook_event`, V12). **Isi `KANTIN_WEBHOOK_SECRET` sebelum endpoint
+  webhook dipakai di produksi.**
 - ⚠️ **Audit top-up/void/barang-masuk/opname** sudah menulis `audit_log` (B18).
   Aksi lain (ubah harga jual, blokir item, ubah limit) menunggu service terkait
   dibuat — pastikan tiap service baru memanggil `AuditLogger.catat`.
