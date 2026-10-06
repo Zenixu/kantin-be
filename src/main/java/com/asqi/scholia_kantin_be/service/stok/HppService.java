@@ -61,6 +61,51 @@ public class HppService {
         return hppBaru.longValueExact();
     }
 
+    /**
+     * Hitung HPP rata-rata tertimbang <b>setelah barang masuk dibalik</b>
+     * (PRD §7.2) — kebalikan dari {@link #hitungRataRataTertimbang}.
+     *
+     * <pre>
+     *   HPP baru = (stok sekarang × HPP sekarang − qty dibalik × harga beli asal)
+     *              ÷ (stok sekarang − qty dibalik)
+     * </pre>
+     *
+     * <p>Nilai persediaan dikurangi sebesar nilai barang yang dibalik; bila stok
+     * menjadi 0 → HPP 0. Nilai tidak pernah negatif (dijaga {@code ≤ 0 → 0}).
+     *
+     * @param stokSekarang  stok sistem sebelum pembalik (≥ {@code qtyBalik})
+     * @param hppSekarang   HPP rata-rata berjalan sebelum pembalik (≥ 0)
+     * @param qtyBalik      jumlah yang dibalik (&gt; 0, ≤ {@code stokSekarang})
+     * @param hargaBeliAsal harga beli/unit barang masuk asal (≥ 0)
+     * @return HPP baru per unit (rupiah integer, dibulatkan HALF_UP)
+     */
+    public long hitungRataRataSetelahPembalik(long stokSekarang, long hppSekarang,
+                                              int qtyBalik, long hargaBeliAsal) {
+        if (qtyBalik <= 0) {
+            throw new IllegalArgumentException("qtyBalik harus > 0");
+        }
+        if (stokSekarang < 0 || hppSekarang < 0 || hargaBeliAsal < 0) {
+            throw new IllegalArgumentException("stok/HPP/harga beli tidak boleh negatif");
+        }
+        if (qtyBalik > stokSekarang) {
+            throw new IllegalArgumentException("qtyBalik melebihi stok sekarang");
+        }
+
+        long stokBaru = stokSekarang - qtyBalik;
+        if (stokBaru <= 0) {
+            return 0L;
+        }
+
+        BigDecimal nilaiLama = BigDecimal.valueOf(stokSekarang).multiply(BigDecimal.valueOf(hppSekarang));
+        BigDecimal nilaiBalik = BigDecimal.valueOf(qtyBalik).multiply(BigDecimal.valueOf(hargaBeliAsal));
+        BigDecimal nilaiBaru = nilaiLama.subtract(nilaiBalik);
+        if (nilaiBaru.signum() <= 0) {
+            return 0L;
+        }
+
+        return nilaiBaru.divide(BigDecimal.valueOf(stokBaru), 0, RoundingMode.HALF_UP).longValueExact();
+    }
+
     /** Nilai persediaan satu item = stok × HPP (untuk laporan stok, PRD §9.5). */
     public long nilaiPersediaan(int stok, long hpp) {
         return (long) stok * hpp;

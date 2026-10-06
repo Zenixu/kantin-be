@@ -52,4 +52,45 @@ class HppServiceTest {
     void nilaiPersediaan() {
         assertThat(hpp.nilaiPersediaan(12, 3500)).isEqualTo(42_000L);
     }
+
+    // ────────────────────────────────────────────────────────────────
+    // PEMBALIK BARANG MASUK (PRD §7.2)
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("pembalik membalik tepat rata-rata tertimbang sebelumnya")
+    void pembalikMengembalikanHppSemula() {
+        // Masuk 10@5000 → 10@6000 → HPP 5500 (stok 20). Balik 10@6000:
+        // (20×5500 − 10×6000) / 10 = (110000 − 60000)/10 = 5000
+        assertThat(hpp.hitungRataRataSetelahPembalik(20, 5500, 10, 6000)).isEqualTo(5000);
+    }
+
+    @Test
+    @DisplayName("pembalik dengan stok bersisa satu batch → HPP = harga beli batch itu")
+    void pembalikMenyisakanSatuBatch() {
+        // stok 5 @ HPP 5000, balik 2 @ harga 5000 → sisa 3, HPP tetap 5000
+        assertThat(hpp.hitungRataRataSetelahPembalik(5, 5000, 2, 5000)).isEqualTo(5000);
+    }
+
+    @Test
+    @DisplayName("pembalik menghabiskan stok → HPP 0")
+    void pembalikHabiskanStok() {
+        assertThat(hpp.hitungRataRataSetelahPembalik(10, 5500, 10, 6000)).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("pembalik menjaga nilai persediaan tak negatif")
+    void pembalikNilaiTidakNegatif() {
+        // harga beli asal lebih besar dari nilai tersisa → dijepit ke 0
+        assertThat(hpp.hitungRataRataSetelahPembalik(3, 1000, 2, 5000)).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("pembalik qty tidak valid ditolak")
+    void pembalikQtyTidakValid() {
+        assertThatThrownBy(() -> hpp.hitungRataRataSetelahPembalik(5, 1000, 0, 2000))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> hpp.hitungRataRataSetelahPembalik(5, 1000, 6, 2000))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

@@ -2,15 +2,30 @@ package com.asqi.scholia_kantin_be.service.stok;
 
 import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
-import com.asqi.scholia_kantin_be.security.SekolahGuard;
+import com.asqi.scholia_kantin_be.dto.HalamanResponse;
+import com.asqi.scholia_kantin_be.dto.RiwayatStokItem;
+import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
+import com.asqi.scholia_kantin_be.model.Menu;
+import com.asqi.scholia_kantin_be.model.MutasiStok;
 import com.asqi.scholia_kantin_be.model.StokCache;
+import com.asqi.scholia_kantin_be.repository.MenuRepository;
+import com.asqi.scholia_kantin_be.repository.MutasiStokRepository;
 import com.asqi.scholia_kantin_be.repository.StokCacheRepository;
+import com.asqi.scholia_kantin_be.security.SekolahGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Facade <b>transaksi-owning</b> untuk operasi tulis stok.
@@ -25,15 +40,19 @@ import java.util.List;
  *
  * <p>Tanggung jawab lain: validasi &amp; normalisasi input HTTP, penentuan
  * {@code referensiTipe}/{@code referensiId} (idempotency di level ledger), dan
- * konversi entitas → DTO respons.
+ * konversi entitas → DTO respons (termasuk riwayat).
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class StokOperasiService {
 
+    private static final int UKURAN_MAKS = 200;
+
     private final LedgerStokService ledgerStok;
     private final StokCacheRepository cacheRepo;
+    private final MutasiStokRepository mutasiRepo;
+    private final MenuRepository menuRepo;
     private final SekolahGuard sekolahGuard;
 
     // ────────────────────────────────────────────────────────────────
@@ -50,6 +69,22 @@ public class StokOperasiService {
         validasiReferensi(referensiId, "Nomor bukti barang masuk");
         return ledgerStok.masukBarang(sekolahId, menuId, qty, hargaBeliPerUnit,
                 "BARANG_MASUK", referensiId, aktorId);
+    }
+
+    /**
+     * Koreksi barang masuk salah input dengan <b>barang masuk pembalik</b>
+     * (PRD §7.2). Data asal tak diubah; dicatat mutasi pembalik baru.
+     *
+     * @param mutasiId   id baris barang masuk yang dibatalkan
+     * @param qty        jumlah dibalik; {@code null} = balik seluruh sisa
+     * @param alasan     alasan koreksi (wajib, audit)
+     * @param referensiId nomor bukti pembalik (idempotency, wajib)
+     */
+    @Transactional
+    public HasilMutasiStok pembalikBarangMasuk(Long sekolahId, Long mutasiId, Integer qty,
+                                               String alasan, String referensiId, Long aktorId) {
+        validasiReferensi(referensiId, "Nomor bukti barang masuk pembalik");
+        return ledgerStok.pembalikBarangMasuk(sekolahId, mutasiId, qty, alasan, referensiId, aktorId);
     }
 
     /**
@@ -90,6 +125,72 @@ public class StokOperasiService {
     @Transactional(readOnly = true)
     public long hitungUlangDariLedger(Long sekolahId, Long menuId) {
         return ledgerStok.hitungUlangDariLedger(sekolahId, menuId);
+    }
+
+    /**
+     * Riwayat mutasi stok (PRD §9.5) dengan filter opsional — dasar UI memilih
+     * baris barang masuk yang akan dibalik. Terbaru dulu, berhalaman.
+     *
+     * <p>Untuk baris {@code BARANG_MASUK} disertakan {@code sudahDibalik} &amp;
+     * {@code sisaDapatDibalik} (dihitung batch, hindari N+1) agar FE tahu mana
+     * yang masih dapat dibatalkan.
+     */
+    @Transactional(readOnly = true)
+    public HalamanResponse<RiwayatStokItem> riwayat(Long sekolahId, Long menuId, JenisMutasiStok jenis,
+                                                    OffsetDateTime dari, OffsetDateTime sampai,
+                                                    int halaman, int ukuran) {
+        int ukuranAman = (ukuran <= 0 || ukuran > UKURAN_MAKS) ? 20 : ukuran;
+        int halamanAman = Math.max(0, halaman);
+        Pageable pageable = PageRequest.of(halamanAman, ukuranAman);
+
+        Page<MutasiStok> page = mutasiRepo.riwayat(sekolahId, menuId, jenis, dari, sampai, pageable);
+
+        // Hitung sisa yang dapat dibalik untuk semua BARANG_MASUK di halaman ini
+        // dalam SATU query (bukan per baris).
+        List<Long> asalIds = page.getContent().stream()
+                .filter(m -> m.getJenis() == JenisMutasiStok.BARANG_MASUK)
+                .map(MutasiStok::getId)
+                .toList();
+        Map<Long, Long> sudahDibalik = totalDibalikPerAsal(sekolahId, asalIds);
+
+        // Nama menu untuk tampilan (batch).
+        Set<Long> menuIds = page.getContent().stream()
+                .map(MutasiStok::getMenuId)
+                .collect(Collectors.toSet());
+        Map<Long, String> namaMenu = menuRepo.findAllById(menuIds).stream()
+                .filter(m -> m.getSekolahId().equals(sekolahId))
+                .collect(Collectors.toMap(Menu::getId, Menu::getNama, (a, b) -> a));
+
+        return HalamanResponse.<MutasiStok, RiwayatStokItem>dari(page, m -> {
+            RiwayatStokItem item = RiwayatStokItem.dari(m);
+            item.setMenuNama(namaMenu.get(m.getMenuId()));
+            if (m.getJenis() == JenisMutasiStok.BARANG_MASUK) {
+                long dibalik = sudahDibalik.getOrDefault(m.getId(), 0L);
+                int sisa = (int) Math.max(0, m.getQty() - dibalik);
+                item.setSudahDibalik((int) dibalik);
+                item.setSisaDapatDibalik(sisa);
+                item.setDapatDibalik(sisa > 0);
+            } else {
+                item.setDapatDibalik(false);
+            }
+            return item;
+        });
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // HELPER
+    // ────────────────────────────────────────────────────────────────
+
+    /** Peta {@code asalMutasiId → total qty dibalik} (satu query, hindari N+1). */
+    private Map<Long, Long> totalDibalikPerAsal(Long sekolahId, List<Long> asalIds) {
+        if (asalIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> hasil = new HashMap<>();
+        for (Object[] baris : mutasiRepo.totalDibalikPerAsal(sekolahId, asalIds)) {
+            hasil.put((Long) baris[0], ((Number) baris[1]).longValue());
+        }
+        return hasil;
     }
 
     private void validasiReferensi(String referensiId, String label) {

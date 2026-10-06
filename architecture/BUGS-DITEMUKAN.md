@@ -260,6 +260,20 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Tes:** `StorageServiceTest` (9), `StorageControllerTest` (1), `KatalogControllerTest` (+3), `KatalogServiceIT` (+2).
 - **Catatan:** tak ada migrasi Flyway baru — `stok_cache` sudah ada (V3) dan `menu.foto_url` sudah ada (V6).
 
+## B32 — (fitur) Barang masuk pembalik + riwayat stok
+
+- **Gejala (dilaporkan tim/FE):** barang masuk yang **salah input** tak bisa dikoreksi. Belum ada endpoint pembalik (PRD §7.2) padahal enum `JenisMutasiStok.BARANG_MASUK_PEMBALIK` sudah ada sejak awal. FE juga tak punya cara melihat daftar restock sebelum memilih baris yang dibatalkan (hanya ada `GET /api/stok/{menuId}` & `menipis`).
+- **Perbaikan:** ✅
+  - **Migrasi `V8__MutasiStokPembalik.sql`** — tambah `mutasi_stok.harga_beli_satuan` (harga beli/unit saat `BARANG_MASUK`, dasar hitung HPP saat dibalik) & `mutasi_stok.mutasi_asal_id` (menunjuk baris asal untuk `BARANG_MASUK_PEMBALIK`), plus indeks `idx_mutasi_stok_asal` & UNIQUE parsial `uq_mutasi_stok_pembalik_referensi` (idempotency bukti pembalik). **Tak ada UPDATE/DELETE** — tetap append-only.
+  - `HppService.hitungRataRataSetelahPembalik(...)` — kebalikan rata-rata tertimbang: `(stok×HPP − qty×hargaBeliAsal) ÷ (stok−qty)`, dijepit ke 0.
+  - `LedgerStokService.pembalikBarangMasuk(...)` — validasi (wajib alasan & bukti; baris harus `BARANG_MASUK`; qty ≤ sisa belum dibalik; stok cukup), catat mutasi `KELUAR/BARANG_MASUK_PEMBALIK` + audit `BARANG_MASUK_PEMBALIK`. Idempoten lewat `referensiId`.
+  - `POST /api/stok/barang-masuk-pembalik` (`BarangMasukPembalikRequest`: `mutasiId`, `qty?`, `alasan`, `referensiId`).
+  - `GET /api/stok/riwayat` — riwayat mutasi berhalaman (filter `menuId`/`jenis`/`dari`/`sampai`); tiap `BARANG_MASUK` menyertakan `sudahDibalik`/`sisaDapatDibalik`/`dapatDibalik` (dihitung **batch**, hindari N+1) agar FE tahu mana yang masih bisa dibatalkan.
+  - DTO `BarangMasukPembalikRequest`, `RiwayatStokItem`, `HalamanResponse<T>`.
+  - Tes: `HppServiceTest` (+5), `LedgerStokServiceIT` (+6, Testcontainers), `StokControllerTest` (+3).
+- **Keputusan desain — koreksi = mutasi pembalik, bukan edit/hapus (PRD §7.2, §11.1).** Baris asal tetap utuh; jejak koreksi ada di baris baru (`mutasi_asal_id`). Bila stok saat ini < qty yang dibalik (sebagian sudah terjual) ⇒ **409** arahkan ke opname — bukan memaksa stok minus.
+- **Catatan:** harga beli asal kini disimpan pada `BARANG_MASUK`; untuk baris lama (pra-V8) yang `harga_beli_satuan` null, HPP pembalik memakai `hpp_snapshot` sebagai fallback (aproksimasi).
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
