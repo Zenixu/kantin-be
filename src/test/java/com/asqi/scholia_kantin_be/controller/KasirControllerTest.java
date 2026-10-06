@@ -5,6 +5,7 @@ import com.asqi.scholia_kantin_be.dto.TapResponse;
 import com.asqi.scholia_kantin_be.dto.VoidRequest;
 import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.TenantContext;
+import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import com.asqi.scholia_kantin_be.service.kasir.SesiKasirService;
 import com.asqi.scholia_kantin_be.service.kasir.TapService;
 import com.asqi.scholia_kantin_be.service.kasir.VoidService;
@@ -48,6 +49,7 @@ class KasirControllerTest {
     private TapService tapService;
     private VoidService voidService;
     private SesiKasirService sesiKasirService;
+    private BukuKasPostingService bukuKasPosting;
     private MockMvc mockMvc;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -70,8 +72,9 @@ class KasirControllerTest {
         tapService = mock(TapService.class);
         voidService = mock(VoidService.class);
         sesiKasirService = mock(SesiKasirService.class);
+        bukuKasPosting = mock(BukuKasPostingService.class);
 
-        KasirController controller = new KasirController(tapService, voidService, sesiKasirService);
+        KasirController controller = new KasirController(tapService, voidService, sesiKasirService, bukuKasPosting);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setCustomArgumentResolvers(new PrincipalResolver())
                 .build();
