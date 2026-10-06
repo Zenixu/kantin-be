@@ -50,20 +50,37 @@ public class KantinJwtDecoder {
             throw new JwtException("Public key untuk issuer " + sumber + " belum dikonfigurasi");
         }
 
-        var parserBuilder = Jwts.parser().verifyWith(key);
-        // Verifikasi issuer: token dari issuer lain (walau signature sah) DITOLAK.
-        // Mencegah token mobile-be dipakai sebagai staf, atau sebaliknya.
-        if (jwtProperties.isVerifyIssuer()) {
-            parserBuilder.requireIssuer(issuerUntuk(sumber));
-        }
-
-        var parsed = parserBuilder.build().parseSignedClaims(token);
+        // Verifikasi tanda tangan (RS256) + parse klaim.
+        var parsed = Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
 
         // Cek algoritma di HEADER (bukan claims — 'alg' bukan klaim standar).
         // RS256 sudah ditegakkan verifyWith(key); ini sabuk pengaman eksplisit.
         String alg = parsed.getHeader().getAlgorithm();
         if (alg == null || !"RS256".equalsIgnoreCase(alg)) {
             throw new JwtException("Algoritma token tidak didukung: " + alg);
+        }
+
+        // Verifikasi issuer (defense-in-depth). Pemisahan issuer SEBENARNYA sudah
+        // ditegakkan oleh public key berbeda per sumber: token mobile-be tak akan
+        // lolos verifikasi tanda tangan dengan kunci admin-be. Karena itu:
+        //   • 'iss' ADA tapi SALAH  → DITOLAK (mis. token issuer lain yang kebetulan
+        //     satu kunci).
+        //   • 'iss' TIDAK ADA       → DITERIMA + peringatan. admin-be saat ini
+        //     TIDAK menyetel 'iss' (temuan Q1), sehingga requireIssuer akan menolak
+        //     semua token staf yang sah. Minta admin-be/mobile-be menambahkan 'iss'
+        //     agar bisa kembali ke mode ketat.
+        if (jwtProperties.isVerifyIssuer()) {
+            String iss = parsed.getPayload().getIssuer();
+            String diharapkan = issuerUntuk(sumber);
+            if (iss != null && !iss.isBlank()) {
+                if (!iss.equals(diharapkan)) {
+                    throw new JwtException(
+                            "Issuer token tidak sesuai: " + iss + " (diharapkan " + diharapkan + ")");
+                }
+            } else {
+                log.warn("Token {} tidak memuat klaim 'iss'. Diterima berdasarkan public key; "
+                        + "minta penerbit menambahkan 'iss' agar verifikasi issuer ketat.", sumber);
+            }
         }
         return parsed.getPayload();
     }
