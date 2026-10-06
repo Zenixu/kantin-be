@@ -111,4 +111,43 @@ public interface SaldoLedgerRepository extends JpaRepository<SaldoLedger, Long> 
                                      @Param("subjekTipe") SubjekTipe subjekTipe,
                                      @Param("subjekId") Long subjekId,
                                      Pageable pageable);
+
+    /**
+     * Arus saldo per (arah, jenis) pada rentang waktu — laporan rekonsiliasi
+     * harian (PRD §9.5). Mengembalikan baris {@code [arah, jenis, Σ nominal]}.
+     */
+    @Query("""
+            SELECT l.arah, l.jenis, COALESCE(SUM(l.nominal), 0)
+            FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.waktu >= :dari AND l.waktu < :sampai
+            GROUP BY l.arah, l.jenis
+            """)
+    List<Object[]> rekapArusRentang(@Param("sekolahId") Long sekolahId,
+                                    @Param("dari") OffsetDateTime dari,
+                                    @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Σ nominal per arah untuk <b>seluruh waktu</b> (tanpa batas periode) —
+     * dasar pemeriksaan invariant rekonsiliasi (PRD §5). Mengembalikan baris
+     * {@code [arah, Σ nominal]}.
+     */
+    @Query("""
+            SELECT l.arah, COALESCE(SUM(l.nominal), 0)
+            FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+            GROUP BY l.arah
+            """)
+    List<Object[]> totalPerArah(@Param("sekolahId") Long sekolahId);
+
+    /** Mutasi saldo pada rentang waktu (laporan per siswa / ekspor, PRD §9.5). */
+    @Query("""
+            SELECT l FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.waktu >= :dari AND l.waktu < :sampai
+            ORDER BY l.id ASC
+            """)
+    List<SaldoLedger> padaRentang(@Param("sekolahId") Long sekolahId,
+                                  @Param("dari") OffsetDateTime dari,
+                                  @Param("sampai") OffsetDateTime sampai);
 }
