@@ -107,6 +107,41 @@ public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long> {
                                      Pageable pageable);
 
     /**
+     * Barang masuk berdasarkan nomor bukti <b>+ menu</b> (idempotency) —
+     * terbaru dulu. Satu bukti penerimaan boleh memuat beberapa baris item,
+     * jadi kunci idempotency adalah {@code (sekolah, referensi, menu)}.
+     */
+    @Query("""
+            SELECT m FROM MutasiStok m
+            WHERE m.sekolahId = :sekolahId
+              AND m.jenis = :jenis
+              AND m.referensiId = :referensiId
+              AND m.menuId = :menuId
+            ORDER BY m.id DESC
+            """)
+    List<MutasiStok> cariByReferensiDanMenu(@Param("sekolahId") Long sekolahId,
+                                            @Param("jenis") JenisMutasiStok jenis,
+                                            @Param("referensiId") String referensiId,
+                                            @Param("menuId") Long menuId,
+                                            Pageable pageable);
+
+    /**
+     * Mutasi berdasarkan <b>referensi_tipe + nomor bukti</b> (idempotency batch
+     * opname). Satu berita acara batch mencatat beberapa baris (per menu), jadi
+     * dipakai untuk memeriksa replay batch secara utuh.
+     */
+    @Query("""
+            SELECT m FROM MutasiStok m
+            WHERE m.sekolahId = :sekolahId
+              AND m.referensiTipe = :referensiTipe
+              AND m.referensiId = :referensiId
+            ORDER BY m.id ASC
+            """)
+    List<MutasiStok> cariByReferensiTipeDanId(@Param("sekolahId") Long sekolahId,
+                                              @Param("referensiTipe") String referensiTipe,
+                                              @Param("referensiId") String referensiId);
+
+    /**
      * Total qty yang sudah dibalik untuk sebuah barang masuk asal — dasar
      * penentuan sisa yang masih dapat dibalik (partial reversal).
      */

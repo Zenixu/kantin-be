@@ -56,7 +56,12 @@ public class LedgerStokService {
     /**
      * Barang masuk: tambah stok &amp; perbarui HPP rata-rata tertimbang (PRD §7.2).
      *
-     * @return hasil dengan HPP baru
+     * <p><b>Idempotent</b> lewat {@code referensiId} (nomor bukti penerimaan):
+     * retry dengan bukti yang sama mengembalikan hasil lama tanpa menggandakan
+     * stok. Ditegakkan dua lapis — jalur cepat (query) + UNIQUE parsial
+     * {@code uq_mutasi_stok_barang_masuk_referensi} yang menangkap balapan.
+     *
+     * @return hasil dengan HPP baru (atau hasil lama bila ini replay)
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public HasilMutasiStok masukBarang(Long sekolahId, Long menuId, int qty,
@@ -67,6 +72,20 @@ public class LedgerStokService {
         }
         if (hargaBeliPerUnit < 0) {
             throw new InvalidOperationException("Harga beli tidak boleh negatif");
+        }
+
+        // Idempotency jalur cepat: bukti + menu yang sama sudah pernah diproses.
+        if (referensiId != null && !referensiId.isBlank()) {
+            Optional<MutasiStok> lama = mutasiRepo
+                    .cariByReferensiDanMenu(sekolahId, JenisMutasiStok.BARANG_MASUK,
+                            referensiId, menuId, PageRequest.of(0, 1))
+                    .stream().findFirst();
+            if (lama.isPresent()) {
+                MutasiStok m = lama.get();
+                log.debug("Idempotency replay barang masuk referensi={} menu={} → mutasiId={}",
+                        referensiId, menuId, m.getId());
+                return HasilMutasiStok.baru(m, m.getStokSetelah(), nolBilaNull(m.getHppSnapshot()));
+            }
         }
 
         StokCache cache = kunciStok(sekolahId, menuId);
@@ -249,11 +268,34 @@ public class LedgerStokService {
      * selisih dicatat sebagai mutasi MASUK/KELUAR dengan <b>alasan wajib</b>.
      * HPP rata-rata <b>tidak</b> berubah.
      *
+     * <p>Varian tunggal — selisih kurang selalu {@code OPNAME_KELUAR}. Untuk
+     * menandai kerugian barang rusak/basi, pakai
+     * {@link #sesuaikanOpname(Long, Long, int, String, String, boolean, String, Long)}.
+     *
      * @param qtyFisik stok hasil hitung fisik
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public HasilMutasiStok sesuaikanOpname(Long sekolahId, Long menuId, int qtyFisik,
                                            String alasan, String referensiId, Long aktorId) {
+        return sesuaikanOpname(sekolahId, menuId, qtyFisik, alasan, referensiId, false,
+                "OPNAME", aktorId);
+    }
+
+    /**
+     * Penyesuaian stok opname dengan kendali jenis mutasi &amp; tipe referensi
+     * (PRD §7.3) — dipakai baik opname tunggal maupun <b>batch</b>.
+     *
+     * @param qtyFisik      stok hasil hitung fisik
+     * @param rusak         bila {@code true} dan stok berkurang → jenis
+     *                      {@code BARANG_RUSAK} (rusak/basi), bukan
+     *                      {@code OPNAME_KELUAR} (selisih audit)
+     * @param referensiTipe tipe referensi: {@code "OPNAME"} (tunggal) atau
+     *                      {@code "OPNAME_BATCH"} (idempotency batch)
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public HasilMutasiStok sesuaikanOpname(Long sekolahId, Long menuId, int qtyFisik,
+                                           String alasan, String referensiId, boolean rusak,
+                                           String referensiTipe, Long aktorId) {
         if (qtyFisik < 0) {
             throw new InvalidOperationException("Stok fisik tidak boleh negatif");
         }
@@ -271,17 +313,24 @@ public class LedgerStokService {
         }
 
         ArahStok arah = selisih > 0 ? ArahStok.MASUK : ArahStok.KELUAR;
-        JenisMutasiStok jenis = selisih > 0 ? JenisMutasiStok.OPNAME_MASUK : JenisMutasiStok.OPNAME_KELUAR;
+        JenisMutasiStok jenis;
+        if (selisih > 0) {
+            jenis = JenisMutasiStok.OPNAME_MASUK;
+        } else {
+            // Selisih kurang: rusak/basi → BARANG_RUSAK; selebihnya → OPNAME_KELUAR.
+            jenis = rusak ? JenisMutasiStok.BARANG_RUSAK : JenisMutasiStok.OPNAME_KELUAR;
+        }
 
         MutasiStok mutasi = catat(arah, jenis, sekolahId, menuId, Math.abs(selisih), qtyFisik,
-                cache.getHpp(), null, "OPNAME", referensiId, alasan, aktorId, null, null);
+                cache.getHpp(), null, referensiTipe, referensiId, alasan, aktorId, null, null);
 
         cache.setStok(qtyFisik);
         cache.setUpdatedAt(jam.sekarang());
         cacheRepo.save(cache);
 
-        // Audit (PRD §11.7): penyesuaian stok (opname) wajib tercatat + alasan.
-        auditLogger.catat(aktorId, sekolahId, "OPNAME_STOK", "Stok",
+        // Audit (PRD §11.7): penyesuaian stok wajib tercatat + alasan.
+        String aksiAudit = jenis == JenisMutasiStok.BARANG_RUSAK ? "BARANG_RUSAK" : "OPNAME_STOK";
+        auditLogger.catat(aktorId, sekolahId, aksiAudit, "Stok",
                 "MENU:" + menuId, alasan,
                 "stok=" + stokSekarang, "stok=" + qtyFisik);
 
