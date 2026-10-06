@@ -91,6 +91,25 @@ BukuKasService.catatTransaksi(
 - `GET api/buku-kas/laporan-grafik`
 - `GET api/buku-kas/metode-pembayaran`, `GET api/buku-kas/sumber-dana`
 
+### 3.6 Retry posting tertunggak (issue #33)
+
+Karena posting bersifat **fail-open** (poin §3.4-2): bila admin-be sempat
+gangguan, sesi tetap `DITUTUP` dengan `posting_buku_kas=false` sehingga entri
+Buku Kas tertunggak. `RetryPostingBukuKasScheduler` (cron `0 */15 * * * *`,
+dapat dimatikan lewat `kantin.scheduler.retry-posting.enabled=false`) menyapu
+semua sesi `DITUTUP` dengan `posting_buku_kas=false` dan `total_bersih > 0`,
+lalu memposting ulang lewat `RetryPostingBukuKasService` →
+`BukuKasPostingService.postingUlangSistem()`:
+
+- **Idempoten** — sesi yang sudah terposting dilewati; refId tetap
+  `KANTIN-SESI-<id>` sehingga admin-be dapat mengenali entri ganda.
+- **Tenant-safe** — tiap sesi diposting memakai `sekolah_id` dari baris sesi
+  (bukan konteks global); `kunciUntukUpdate` tetap tenant-scoped.
+- **Tahan sebagian** — tiap sesi diposting pada transaksinya sendiri
+  (panggilan lintas-bean), sehingga kegagalan satu sesi tidak me-rollback
+  sesi lain; dicoba lagi pada sweep berikutnya.
+- Sesi `total_bersih = 0` **bukan** tertunggak (memang tak ada yang diposting).
+
 ---
 
 ## 4. Lookup Kartu RFID & Siswa (`admin-be`)
