@@ -285,7 +285,21 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Catatan positif (bukan bug):** pembalik sudah aman karena UNIQUE `uq_mutasi_stok_pembalik_referensi` mencegah dobel saat balapan (loser dapat 409, bukan stok dobel). `saldo_cache`/`stok_cache` berkunci `(subjek_tipe, subjek_id)`/`menu_id` **memang benar** — `subjekId`/`menuId` global unik (lihat `IsolasiTenantLockIT` B17).
 - **Uji baru:** `AuditKeamananStokIT` (3), `AuditKeamananSaldoIT` (1), `AuditRateLimitSpoofTest` (1), `PeranAspectTest` (4 — RBAC sebelumnya **tak teruji**). Total **92 unit + 71 IT hijau**.
 
-## B34 — (audit integrasi Q1) Token staf admin-be ditolak & `user_id` terbaca `"42.0"`
+## B34 — (audit keamanan) Endpoint webhook `permitAll` tanpa verifikasi signature
+
+- **Konteks:** `WebSecurityConfig` membuka `/api/webhook/**` dengan `permitAll` (agar SKOOLIA bisa memanggil tanpa token user), tetapi **belum ada** controller yang menanganinya. Celah ini menjadi **nyata** begitu webhook diimplementasikan: `permitAll` berarti tanpa autentikasi apa pun, sehingga siapa pun bisa memalsukan event (mis. memalsukan pembayaran/saldo). PR #6 (B33) menyisakan temuan ini sebagai pekerjaan lanjutan.
+- **Perbaikan (fail-closed, berlapis):**
+  1. **Verifikasi HMAC-SHA256 wajib.** `WebhookSignatureFilter` menolak setiap request `/api/webhook/**` tanpa tanda tangan sah. Skema: `signature = hex(HMAC-SHA256(rahasia, timestamp + "." + badan_mentah))` — timestamp ikut ditandatangani agar tak bisa digeser. Perbandingan **konstan-waktu** (`MessageDigest.isEqual`) untuk mencegah timing attack.
+  2. **Rahasia dari environment, bukan hardcode.** `kantin.webhook.secret` ← `KANTIN_WEBHOOK_SECRET`. Bila **kosong**, endpoint menjawab **503** (bukan terbuka) — lupa konfigurasi tidak pernah membuka celah.
+  3. **Anti-replay.** Header `X-Webhook-Timestamp` (epoch detik) wajib dalam jendela `±kantin.webhook.tolerance-seconds` (default 300 dtk) → di luar itu **401** walau signature sah.
+  4. **Allowlist IP opsional.** `kantin.webhook.allowed-ips` (IP/CIDR) → di luar daftar **403**. XFF hanya dipercaya dari proxy tepercaya (`kantin.webhook.trusted-proxies`) — pola anti-spoof sama dengan B33.
+  5. **Idempotency per event id.** Migrasi **`V12`** tabel `webhook_event` + UNIQUE `(sumber, event_id)`. Retry event yang sama → **tidak diproses ulang** (dijawab sebagai `replay=true`); event id sama dengan payload berbeda → **409**. Tabel append-only (trigger `tolak_perubahan_ledger`).
+  6. **Batas ukuran badan** (`kantin.webhook.max-body-bytes`, default 1 MiB) → lewat batas **413** (mencegah HMAC atas badan raksasa).
+- **Perluasan kontrak:** handler event (top-up online Q4, sinkronisasi kartu Q7) masuk lewat port `WebhookHandlerPort`; belum ada implementasi → event dicatat `DIABAIKAN` (pipa keamanan tak terblokir menunggu kontrak).
+- **Uji:** `WebhookSignatureVerifierTest` (8), `WebhookSignatureFilterTest` (9 — signature salah ⇒ 401, replay ⇒ 401, rahasia kosong ⇒ 503, IP luar allowlist ⇒ 403), `TandaTanganWebhookTest` (4), `IpAllowlistTest` (6), `WebhookControllerTest` (3), `WebhookServiceIT` (5 — Testcontainers: retry ⇒ handler dipanggil **sekali**, payload beda ⇒ 409, jurnal append-only). Semua GAGAL dulu (repro) / kini hijau.
+- **Catatan:** `FilterRegistrationBean.setEnabled(false)` mencegah filter ber-`@Component` didaftarkan **dua kali** (rantai servlet + rantai Security) — kelas masalah urutan ganda yang sama dengan B33.
+
+## B35 — (audit integrasi Q1) Token staf admin-be ditolak & `user_id` terbaca `"42.0"`
 
 - **Konteks:** menindaklanjuti Q1 (#14) — kompatibilitas token staf dari admin-be. Repo `admin-be` ada di lokal (`skoolia/admin-be`, GitLab), jadi format klaim dibaca **langsung dari sumber** (`JwtUtils.buildToken()`), bukan ditebak. Dua bug integrasi ditemukan dan **direproduksi dengan uji gagal lebih dulu** (`KompatibilitasTokenStafAdminTest`).
 - **Cacat & perbaikan:**

@@ -188,7 +188,7 @@ public class BukuKasPostingService {
      * {@link MetodeBukuKas#TUNAI} (pembelian tunai ke pemasok, INTEGRATIONS.md
      * §3.3). Total = {@code qty × hargaBeliPerUnit} (rupiah integer).
      *
-     * <p><b>Idempoten</b> lewat tabel penanda {@code posting_buku_kas} (V12):
+     * <p><b>Idempoten</b> lewat tabel penanda {@code posting_buku_kas} (V13):
      * refId deterministik {@code KANTIN-BM-<bukti>-<menuId>} dicek lebih dulu;
      * baris penanda hanya ditulis saat SUKSES sehingga retry jaringan tidak
      * menggandakan entri (Buku Kas admin-be tidak idempoten, §3.4).

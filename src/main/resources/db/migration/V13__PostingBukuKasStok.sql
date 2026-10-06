@@ -1,5 +1,5 @@
 -- ============================================================
--- V12 — Penanda posting Buku Kas untuk mutasi stok (PRD §5.1, §7.2, §11.3)
+-- V13 — Penanda posting Buku Kas untuk mutasi stok (PRD §5.1, §7.2, §11.3)
 --
 -- MASALAH: setiap barang masuk wajib diposting sebagai pengeluaran Buku Kas
 -- pos "Belanja Stok Kantin" (PRD §5.1, §7.2), dan koreksinya (barang masuk
