@@ -15,6 +15,8 @@ import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.kasir.SesiKasirService;
 import com.asqi.scholia_kantin_be.service.kasir.TapService;
 import com.asqi.scholia_kantin_be.service.kasir.VoidService;
+import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
+import com.asqi.scholia_kantin_be.service.integrasi.HasilPostingBukuKas;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -45,6 +47,7 @@ public class KasirController {
     private final TapService tapService;
     private final VoidService voidService;
     private final SesiKasirService sesiKasirService;
+    private final BukuKasPostingService bukuKasPosting;
 
     /**
      * Proses satu tap: validasi 6 tahap → potong saldo → kurangi stok → catat
@@ -123,5 +126,24 @@ public class KasirController {
     @GetMapping("sesi/{sesiId}")
     public ResponseEntity<Response<SesiKasir>> ambilSesi(@PathVariable Long sesiId) {
         return CommonResponse.data(sesiKasirService.ambil(TenantContext.sekolahIdWajib(), sesiId));
+    }
+
+    /**
+     * Posting ulang rekap sesi yang sudah DITUTUP namun belum terposting ke
+     * Buku Kas (idempoten — aman dipanggil berkali-kali).
+     *
+     * <p>Dipakai saat integrasi Buku Kas sempat gagal/tertunda (mis. admin-be
+     * gangguan, atau Q3 baru terjawab). Bila sesi sudah terposting, respons
+     * tetap sukses tanpa membuat entri ganda (INTEGRATIONS.md §3.4).
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.PENGELOLA_KANTIN, AktorKantin.ADMIN_SEKOLAH})
+    @PostMapping("sesi/{sesiId}/posting-buku-kas")
+    public ResponseEntity<Response<HasilPostingBukuKas>> postingBukuKas(
+            @PathVariable Long sesiId,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        HasilPostingBukuKas hasil = bukuKasPosting.postingUlang(
+                TenantContext.sekolahIdWajib(), sesiId, identitas.aktorIdWajib());
+        return CommonResponse.data(hasil, "Posting Buku Kas: " + hasil.status());
     }
 }

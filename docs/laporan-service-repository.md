@@ -1,7 +1,7 @@
 # Laporan — Layer Service & Repository (Fase 4 Ledger + Fase 5 Stok/HPP)
 
 **Ruang lingkup:** *Business Logic · Service Layer · Repository · JPA/Hibernate · Query (JPQL/Native)*
-**Status:** ✅ Selesai & teruji — `mvn verify` hijau (17 unit + 23 integrasi Testcontainers).
+**Status:** ✅ Selesai & teruji — `mvn verify` hijau (72 tes, 0 gagal; unit + integrasi Testcontainers).
 
 > Dokumen ini merangkum **apa yang dibangun, di mana, dan kenapa**. Aturan main
 > tetap mengacu ke `architecture/` (AGENTS.md, CONVENTIONS.md, ADR-0003/0004, PRD §11).
@@ -15,9 +15,9 @@
 | **Entity (JPA/Hibernate)** | 8 entitas untuk tabel V2–V4 (`saldo_ledger`, `saldo_cache`, `mutasi_stok`, `stok_cache`, `titik_kasir`, `sesi_kasir`, `transaksi`, `transaksi_item`) |
 | **Repository** | 8 repository Spring Data JPA + JPQL agregat + native query `INSERT … ON CONFLICT` + `SELECT … FOR UPDATE` |
 | **Service (bisnis)** | `LedgerSaldoService`, `LedgerStokService`, `HppService`, `SesiKasirService`, `TapService`, `TapValidator`, `VoidService`, `SaldoTopUpService` |
-| **Integrasi (port)** | `KartuLookupPort`, `MenuLookupPort` + fallback (menyembunyikan Q7 & Fase 5) |
+| **Integrasi (port)** | `KartuLookupPort`, `MenuLookupPort`, `BukuKasPort` + fallback (menyembunyikan Q7, Fase 5, & Q3) |
 | **Helper** | `JamKantin` (zona sekolah), `IdGenerator` (ID monoton unik) |
-| **Test** | 3 unit test + 5 kelas integrasi Testcontainers (race, idempotency, saldo/stok tak minus, append-only) |
+| **Test** | 3 unit test + 6 kelas integrasi Testcontainers (race, idempotency, saldo/stok tak minus, append-only, posting Buku Kas) |
 
 Semua **satu transaksi DB atomik** untuk tap, dan **append-only** untuk kedua ledger.
 
@@ -62,7 +62,9 @@ com.asqi.scholia_kantin_be
 │   ├── saldo/SaldoTopUpService
 │   └── integrasi/
 │       ├── KartuLookupPort + KartuLookupFallback
-│       └── MenuLookupPort + MenuLookupFallback
+│       ├── MenuLookupPort + MenuLookupFallback
+│       └── BukuKasPort + BukuKasFallback   posting Buku Kas sesi (Q3, mitigasi refModul=null)
+│           └── BukuKasPostingService       orkestrasi posting + idempotency (flag + ref unik)
 │
 ├── helper/
 │   ├── JamKantin.java     sumber waktu tunggal (zona sekolah)
@@ -128,6 +130,11 @@ Satu panggilan = **satu transaksi DB** (dibungkus `TransactionTemplate`):
   `totalVoid = Σ transaksi VOID`, `totalBruto = bersih + void`.
 - **Tutup sesi** mengunci transaksi sesi itu → void setelah tutup ditolak
   (koreksi hanya oleh bendahara).
+- **Posting Buku Kas** (`BukuKasPostingService`, PRD §13 poin 7 / INTEGRATIONS §3):
+  saat sesi ditutup (manual, auto-tutup per-sekolah, atau auto-tutup lintas-tenant)
+  total bersih diposting sebagai pendapatan lewat `BukuKasPort`. Idempoten dua lapis:
+  flag `posting_buku_kas` + `referensi_buku_kas` UNIQUE. Kegagalan posting **tidak**
+  menggagalkan penutupan sesi (dicatat untuk retry via `POST /kasir/sesi/{id}/posting-buku-kas`).
 
 ### 3.5 Void — `VoidService` (PRD §6.3)
 
@@ -167,9 +174,10 @@ Satu panggilan = **satu transaksi DB** (dibungkus `TransactionTemplate`):
 | `LedgerStokServiceIT` (6) | HPP rata-rata tertimbang, snapshot penjualan, stok tak minus saat race, opname tanpa selisih, append-only |
 | `TapServiceIT` (4) | tap sukses (saldo+stok+snapshot HPP), idempotency tap ganda, saldo kurang & stok kurang **tidak mengubah apa pun** |
 | `VoidServiceIT` (5) | saldo+stok kembali via mutasi pembalik, alasan wajib, void ganda ditolak, sesi tertutup ditolak, tenant lain → 404 |
-| `SesiKasirServiceIT` (3) | rekap bruto/void/bersih, tutup sesi mengunci & menyimpan rekap, auto-tutup |
+| `SesiKasirServiceIT` (4) | rekap bruto/void/bersih, tutup sesi mengunci & menyimpan rekap, auto-tutup, auto-tutup lintas-tenant (hanya sesi tertinggal) |
+| `BukuKasPostingServiceIT` (5) | posting pendapatan saat tutup sesi, idempotency (flag + ref unik) dobel-tutup & retry, nominal 0 dilewati, gagal-posting tak menggagalkan tutup, fallback fail-safe `DILEWATI` |
 
-**Hasil:** `Tests run: 17 (unit) + 23 (IT), Failures: 0, Errors: 0` → **BUILD SUCCESS**.
+**Hasil:** `Tests run: 72, Failures: 0, Errors: 0` → **BUILD SUCCESS**.
 
 ### 5.1 Catatan menjalankan test
 
@@ -191,7 +199,8 @@ Satu panggilan = **satu transaksi DB** (dibungkus `TransactionTemplate`):
 |---|---|
 | `KartuLookupPort` nyata (REST ke admin-be) | **Q7** (kontrak lookup kartu) — fallback mengembalikan "tidak dikenal" |
 | `MenuLookupPort` nyata (katalog) | **Fase 5** (modul katalog) — fallback mengembalikan `null` |
-| Posting Buku Kas saat tutup sesi | **Q3** — `SesiKasirService` hanya menyiapkan angka rekap & `posting_buku_kas=false` |
+| Posting Buku Kas saat tutup sesi | **Q3** — ✅ **dibangun (2026-10-06)** lewat `BukuKasPort`; fallback `DILEWATI` sampai admin-be menambah case `refModul` kantin (mitigasi: `refModul=null`) |
+| `BukuKasPort` nyata (REST ke admin-be) | **Q3** — fallback fail-safe mengembalikan `DILEWATI`; impl `@Primary` menyusul |
 | `AuditLogger` ke tabel `audit_log` | Belum ada migrasi tabel audit |
 | `TenantResolver` (isi `sekolahId` dari token) | **Q1/Q2** (klaim JWT admin-be belum membawa `sekolah_id`) |
 
