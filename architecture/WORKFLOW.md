@@ -26,6 +26,10 @@ main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
 | `docs/` | Dokumentasi | `docs/adr-0002-jwt-rs256` |
 
 > **Tidak boleh push langsung ke `main` atau `develop`.** Selalu via PR.
+>
+> ⚠️ **Proteksi branch belum aktif** — lihat [`docs/plan-branch-protection.md`](../docs/plan-branch-protection.md)
+> untuk langkah mengaktifkannya (khusus **owner repo**). Selama belum aktif,
+> aturan di atas hanya berlaku sebagai kesepakatan tim, bukan ditegakkan GitHub.
 
 ---
 
