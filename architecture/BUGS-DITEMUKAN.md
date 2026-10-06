@@ -295,6 +295,13 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Belum selesai (masih terblokir):** **public key RS256 masih temporary** (`.env.jwt-temporary` admin-be + `application-local.properties` kantin-be). Format klaim ✅ terjawab; lokasi key produksi ⏳ masih menunggu admin-be. Q1 → 🟡 **SEBAGIAN TERJAWAB**.
 - **Uji baru:** `KompatibilitasTokenStafAdminTest` (5).
 
+## B36 — (audit keamanan #13) Filter keamanan terdaftar DUA KALI (auto-register + addFilterBefore)
+
+- **Konteks:** menindaklanjuti issue #13 (turunan B33). `RateLimitFilter` & `JwtAuthTokenFilter` adalah `@Component` → Spring Boot **auto-register** keduanya ke rantai filter servlet, **dan** `WebSecurityConfig` mendaftarkannya lagi lewat `http.addFilterBefore(...)`. Reproduksi dibuat lebih dulu (`FilterGandaIT`, gagal sebelum perbaikan).
+- **Cacat:** filter keamanan terdaftar **dua kali** per request. Gejala yang didokumentasikan issue (kuota rate-limit terpotong separuh) **TIDAK tereproduksi** pada kondisi sekarang — karena keduanya `OncePerRequestFilter`, eksekusi ke-2 di-dedup oleh servlet container (`PERIKSA-DIPANGGIL=1` baik sebelum maupun sesudah). Jadi ini **cacat laten/rapuh**, bukan kerusakan aktif: registrasi ganda adalah jaminan tak-terjaga yang akan menimbulkan eksekusi ganda begitu filter diganti `Filter` biasa, dedup dilepas, atau ada `RequestDispatcher.forward`/`ERROR` dispatch. Tetap harus dibereskan agar perilaku filter **tidak bergantung** pada dedup internal Spring.
+- **Perbaikan:** `WebSecurityConfig` menambah dua `FilterRegistrationBean` dengan `setEnabled(false)` untuk `RateLimitFilter` & `JwtAuthTokenFilter` → auto-registrasi servlet container dimatikan; keduanya hanya hidup di `SecurityFilterChain`. (Bukti: `FilterGandaIT.filterTidakTerdaftarDiServletContainer` — `jwtAuthTokenFilter` & `rateLimitFilter` **hilang** dari `ServletContext.getFilterRegistrations()` sesudah perbaikan; `satuRequestSatuKuota` → `periksa` dipanggil **tepat 1×**; `filterMasihAktif` → `/api/auth/me` tanpa token tetap **401**, memastikan perbaikan tidak melumpuhkan filter.)
+- **Uji baru:** `FilterGandaIT` (3 — IT, butuh Docker). Total **99 unit + 85 IT hijau**.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
