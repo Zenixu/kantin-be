@@ -70,6 +70,15 @@ public class KlaimResolver {
             return AktorKantin.TIDAK_DIKENAL;
         }
         String r = role.trim().toUpperCase().replace('-', '_').replace(' ', '_');
+
+        // URUTAN PENTING: cek peran SPESIFIK lebih dulu. Sebelumnya cabang
+        // generik `contains("KANTIN")` mendahului `contains("PETUGAS")`, sehingga
+        // "PETUGAS_KANTIN" (kasir) dipetakan ke PENGELOLA_KANTIN (hak katalog/
+        // stok/HPP) — ESKALASI HAK. Cek PETUGAS dipindah ke atas; sisa urutan
+        // dipertahankan agar perilaku peran lain tidak berubah.
+        if (r.contains("PETUGAS") || r.contains("KASIR")) {
+            return AktorKantin.PETUGAS_KANTIN;
+        }
         if (r.contains("PENGELOLA") || r.contains("KANTIN")) {
             return AktorKantin.PENGELOLA_KANTIN;
         }
@@ -78,9 +87,6 @@ public class KlaimResolver {
         }
         if (r.contains("ADMIN") || r.contains("KEPSEK") || r.contains("KEPALA_SEKOLAH")) {
             return AktorKantin.ADMIN_SEKOLAH;
-        }
-        if (r.contains("PETUGAS") || r.contains("KASIR")) {
-            return AktorKantin.PETUGAS_KANTIN;
         }
         if (r.contains("ORANG_TUA") || r.contains("ORTU") || r.contains("PARENT")) {
             return AktorKantin.ORANG_TUA;

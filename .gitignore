@@ -39,6 +39,10 @@ build/
 application-local.properties
 .env
 
+### Keypair JWT DUMMY (dev/test — JANGAN commit) ###
+.dev-jwt/
+*.pem
+
 ### OS ###
 .DS_Store
 Thumbs.db
