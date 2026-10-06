@@ -40,6 +40,8 @@
 | `GET` | `/api/saldo/refund/kandidat?hanyaTidakAktif=` | TU, admin, pengelola | Daftar siswa bersisa saldo (kandidat refund/pindah); filter siswa nonaktif |
 | `POST` | `/api/saldo/refund` | TU, admin, pengelola | Refund **seluruh** sisa saldo siswa keluar ke ortu; saldo → 0 & kartu diblokir |
 | `POST` | `/api/saldo/pindah-saldo` | TU, admin, pengelola | Pindah **seluruh** sisa saldo ke saudara kandung (aktif, sekolah sama); saldo sumber → 0 |
+| `GET` | `/api/saldo/setoran-tu/rekap?tanggal=` | TU, admin, pengelola | Rekap top-up tunai per petugas per hari + selisih (kosong = hari ini) |
+| `POST` | `/api/saldo/setoran-tu` | TU, admin, pengelola | Konfirmasi setoran kas TU (selisih dicatat, tidak dihapus; `referensiId` = kunci idempotensi) |
 
 ## 4. Stok (StokController)
 
