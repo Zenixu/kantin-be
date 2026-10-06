@@ -80,9 +80,10 @@ public class LedgerSaldoService {
     private HasilMutasiSaldo terapkan(ArahMutasi arah, PerintahMutasiSaldo perintah) {
         validasi(perintah);
 
-        // 1) Idempotency: key sama → kembalikan hasil lama (tanpa mutasi baru).
+        // 1) Idempotency: key sama (per sekolah) → kembalikan hasil lama (tanpa mutasi baru).
         if (perintah.getIdempotencyKey() != null) {
-            Optional<SaldoLedger> lama = ledgerRepo.findByIdempotencyKey(perintah.getIdempotencyKey());
+            Optional<SaldoLedger> lama = ledgerRepo.findBySekolahIdAndIdempotencyKey(
+                    perintah.getSekolahId(), perintah.getIdempotencyKey());
             if (lama.isPresent()) {
                 log.debug("Idempotency replay saldo key={} → saldoSetelah={}",
                         perintah.getIdempotencyKey(), lama.get().getSaldoSetelah());
@@ -134,10 +135,11 @@ public class LedgerSaldoService {
         try {
             ledgerRepo.save(mutasi);
         } catch (DataIntegrityViolationException e) {
-            // Balapan idempotency: dua request dengan key sama nyaris bersamaan.
+            // Balapan idempotency: dua request dengan key sama (per sekolah) nyaris bersamaan.
             // Yang kalah memakai hasil pemenang (idempotent, bukan error).
             if (perintah.getIdempotencyKey() != null) {
-                SaldoLedger pemenang = ledgerRepo.findByIdempotencyKey(perintah.getIdempotencyKey())
+                SaldoLedger pemenang = ledgerRepo.findBySekolahIdAndIdempotencyKey(
+                                perintah.getSekolahId(), perintah.getIdempotencyKey())
                         .orElseThrow(() -> e);
                 return HasilMutasiSaldo.replay(pemenang);
             }
