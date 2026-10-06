@@ -14,12 +14,14 @@ import com.asqi.scholia_kantin_be.repository.MutasiStokRepository;
 import com.asqi.scholia_kantin_be.repository.StokCacheRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Service inti ledger stok — <b>satu-satunya pintu</b> perubahan stok.
@@ -32,6 +34,7 @@ import java.util.List;
  *       penjualan, sehingga dua kasir tak menjual stok yang sama bersamaan.</li>
  *   <li><b>HPP rata-rata tertimbang</b> dihitung ulang saat barang masuk; nilai
  *       saat transaksi disimpan sebagai snapshot (lihat {@link HppService}).</li>
+ *   <li><b>Koreksi = mutasi pembalik baru</b>, bukan edit/hapus (PRD §7.2).</li>
  * </ul>
  */
 @Service
@@ -74,7 +77,8 @@ public class LedgerStokService {
         int stokBaru = stokSebelum + qty;
 
         MutasiStok mutasi = catat(ArahStok.MASUK, JenisMutasiStok.BARANG_MASUK, sekolahId, menuId,
-                qty, stokBaru, hppBaru, null, referensiTipe, referensiId, null, aktorId);
+                qty, stokBaru, hppBaru, null, referensiTipe, referensiId, null, aktorId,
+                hargaBeliPerUnit, null);
 
         cache.setStok(stokBaru);
         cache.setHpp(hppBaru);
@@ -89,6 +93,101 @@ public class LedgerStokService {
 
         log.info("Barang masuk menu={} qty={} hargaBeli={} → stok={} hpp={}",
                 menuId, qty, hargaBeliPerUnit, stokBaru, hppBaru);
+        return HasilMutasiStok.baru(mutasi, stokBaru, hppBaru);
+    }
+
+    /**
+     * Koreksi barang masuk salah input dengan <b>barang masuk pembalik</b>
+     * (PRD §7.2): catat mutasi KELUAR baru yang menunjuk baris asal, kurangi
+     * stok, dan hitung ulang HPP memakai harga beli asal. Baris asal
+     * <b>tidak</b> diubah/dihapus (ledger append-only, PRD §11.1).
+     *
+     * <p>Idempoten lewat {@code referensiId} (nomor bukti pembalik): retry dengan
+     * bukti sama mengembalikan hasil lama tanpa membalik dua kali.
+     *
+     * @param qtyBalik jumlah yang dibalik; {@code null} = balik seluruh sisa
+     *                 yang belum dibalik (pembatalan penuh)
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public HasilMutasiStok pembalikBarangMasuk(Long sekolahId, Long asalMutasiId, Integer qtyBalik,
+                                               String alasan, String referensiId, Long aktorId) {
+        if (alasan == null || alasan.isBlank()) {
+            throw new InvalidOperationException("Alasan pembalik barang masuk wajib diisi (PRD §7.2)");
+        }
+        if (referensiId == null || referensiId.isBlank()) {
+            throw new InvalidOperationException("Nomor bukti pembalik wajib diisi (idempotency)");
+        }
+
+        // Idempotency: bukti pembalik yang sama → kembalikan hasil lama.
+        Optional<MutasiStok> replay = mutasiRepo
+                .cariByReferensi(sekolahId, JenisMutasiStok.BARANG_MASUK_PEMBALIK, referensiId,
+                        PageRequest.of(0, 1))
+                .stream().findFirst();
+        if (replay.isPresent()) {
+            MutasiStok lama = replay.get();
+            log.debug("Idempotency replay pembalik referensi={} → mutasiId={}", referensiId, lama.getId());
+            return HasilMutasiStok.baru(lama, lama.getStokSetelah(), nolBilaNull(lama.getHppSnapshot()));
+        }
+
+        MutasiStok asal = mutasiRepo.findByIdAndSekolahId(asalMutasiId, sekolahId)
+                .orElseThrow(() -> new NotFoundEntity("Barang masuk tidak ditemukan"));
+        if (asal.getJenis() != JenisMutasiStok.BARANG_MASUK) {
+            throw new InvalidOperationException(
+                    "Hanya barang masuk (BARANG_MASUK) yang dapat dibalik — baris ini: " + asal.getJenis());
+        }
+
+        long sudahDibalik = mutasiRepo.totalDibalik(sekolahId, asal.getId());
+        long sisa = asal.getQty() - sudahDibalik;
+        if (sisa <= 0) {
+            throw new ConflictException("Barang masuk ini sudah dibalik seluruhnya");
+        }
+
+        int qty = (qtyBalik == null) ? (int) sisa : qtyBalik;
+        if (qty <= 0) {
+            throw new InvalidOperationException("Qty pembalik harus > 0");
+        }
+        if (qty > sisa) {
+            throw new InvalidOperationException(
+                    "Qty pembalik (" + qty + ") melebihi sisa yang dapat dibalik (" + sisa + ")");
+        }
+
+        // Harga beli asal untuk menghitung ulang HPP (fallback ke HPP snapshot
+        // untuk baris lama yang belum menyimpan harga beli satuan).
+        long hargaBeliAsal = asal.getHargaBeliSatuan() != null
+                ? asal.getHargaBeliSatuan()
+                : nolBilaNull(asal.getHppSnapshot());
+
+        StokCache cache = kunciStok(sekolahId, asal.getMenuId());
+        int stokSebelum = cache.getStok();
+        long hppSebelum = cache.getHpp();
+
+        if (stokSebelum < qty) {
+            throw new ConflictException(
+                    "Stok saat ini (" + stokSebelum + ") lebih kecil dari qty yang dibalik (" + qty
+                            + ") — sebagian barang mungkin sudah terjual. Pakai stok opname.");
+        }
+
+        long hppBaru = hppService.hitungRataRataSetelahPembalik(stokSebelum, hppSebelum, qty, hargaBeliAsal);
+        int stokBaru = stokSebelum - qty;
+
+        MutasiStok mutasi = catat(ArahStok.KELUAR, JenisMutasiStok.BARANG_MASUK_PEMBALIK,
+                sekolahId, asal.getMenuId(), qty, stokBaru, hppBaru, null,
+                "BARANG_MASUK_PEMBALIK", referensiId, alasan, aktorId,
+                hargaBeliAsal, asal.getId());
+
+        cache.setStok(stokBaru);
+        cache.setHpp(hppBaru);
+        cache.setUpdatedAt(jam.sekarang());
+        cacheRepo.save(cache);
+
+        // Audit (PRD §11.7): barang masuk pembalik wajib tercatat + alasan.
+        auditLogger.catat(aktorId, sekolahId, "BARANG_MASUK_PEMBALIK", "Stok",
+                "MENU:" + asal.getMenuId(), alasan,
+                "stok=" + stokSebelum + ";hpp=" + hppSebelum,
+                "stok=" + stokBaru + ";hpp=" + hppBaru + ";asalMutasiId=" + asal.getId());
+
+        log.info("Barang masuk pembalik asal={} qty={} menu={} → stok={} hpp={}",
+                asal.getId(), qty, asal.getMenuId(), stokBaru, hppBaru);
         return HasilMutasiStok.baru(mutasi, stokBaru, hppBaru);
     }
 
@@ -112,7 +211,7 @@ public class LedgerStokService {
         int stokBaru = stokSebelum - qty;
 
         MutasiStok mutasi = catat(ArahStok.KELUAR, JenisMutasiStok.PENJUALAN, sekolahId, menuId,
-                qty, stokBaru, hppSnapshot, transaksiId, null, null, null, null);
+                qty, stokBaru, hppSnapshot, transaksiId, null, null, null, null, null, null);
 
         cache.setStok(stokBaru);
         cache.setUpdatedAt(jam.sekarang());
@@ -136,7 +235,7 @@ public class LedgerStokService {
         int stokBaru = cache.getStok() + qty;
 
         MutasiStok mutasi = catat(ArahStok.MASUK, JenisMutasiStok.VOID_PENJUALAN, sekolahId, menuId,
-                qty, stokBaru, hppSnapshot, transaksiId, null, null, null, aktorId);
+                qty, stokBaru, hppSnapshot, transaksiId, null, null, null, aktorId, null, null);
 
         cache.setStok(stokBaru);
         cache.setUpdatedAt(jam.sekarang());
@@ -175,7 +274,7 @@ public class LedgerStokService {
         JenisMutasiStok jenis = selisih > 0 ? JenisMutasiStok.OPNAME_MASUK : JenisMutasiStok.OPNAME_KELUAR;
 
         MutasiStok mutasi = catat(arah, jenis, sekolahId, menuId, Math.abs(selisih), qtyFisik,
-                cache.getHpp(), null, "OPNAME", referensiId, alasan, aktorId);
+                cache.getHpp(), null, "OPNAME", referensiId, alasan, aktorId, null, null);
 
         cache.setStok(qtyFisik);
         cache.setUpdatedAt(jam.sekarang());
@@ -221,6 +320,19 @@ public class LedgerStokService {
         return hasil == null ? 0L : hasil;
     }
 
+    /** Barang masuk (jenis {@code BARANG_MASUK}) berdasarkan id — tenant-scoped. */
+    @Transactional(readOnly = true)
+    public MutasiStok barangMasuk(Long sekolahId, Long mutasiId) {
+        return mutasiRepo.findByIdAndSekolahId(mutasiId, sekolahId)
+                .orElseThrow(() -> new NotFoundEntity("Barang masuk tidak ditemukan"));
+    }
+
+    /** Total qty yang sudah dibalik untuk sebuah barang masuk (0 bila belum). */
+    @Transactional(readOnly = true)
+    public long totalDibalik(Long sekolahId, Long asalMutasiId) {
+        return mutasiRepo.totalDibalik(sekolahId, asalMutasiId);
+    }
+
     // ────────────────────────────────────────────────────────────────
     // INTERNAL
     // ────────────────────────────────────────────────────────────────
@@ -239,7 +351,8 @@ public class LedgerStokService {
 
     private MutasiStok catat(ArahStok arah, JenisMutasiStok jenis, Long sekolahId, Long menuId,
                              int qty, int stokSetelah, Long hppSnapshot, Long transaksiId,
-                             String referensiTipe, String referensiId, String alasan, Long aktorId) {
+                             String referensiTipe, String referensiId, String alasan, Long aktorId,
+                             Long hargaBeliSatuan, Long mutasiAsalId) {
         OffsetDateTime now = jam.sekarang();
         MutasiStok mutasi = MutasiStok.builder()
                 .id(idGenerator.berikutnyaLong())
@@ -250,6 +363,8 @@ public class LedgerStokService {
                 .qty(qty)
                 .stokSetelah(stokSetelah)
                 .hppSnapshot(hppSnapshot)
+                .hargaBeliSatuan(hargaBeliSatuan)
+                .mutasiAsalId(mutasiAsalId)
                 .transaksiId(transaksiId)
                 .referensiTipe(referensiTipe)
                 .referensiId(referensiId)
@@ -259,5 +374,9 @@ public class LedgerStokService {
                 .createdAt(now)
                 .build();
         return mutasiRepo.save(mutasi);
+    }
+
+    private static long nolBilaNull(Long nilai) {
+        return nilai == null ? 0L : nilai;
     }
 }

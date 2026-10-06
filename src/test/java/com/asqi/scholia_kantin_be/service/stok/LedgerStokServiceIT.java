@@ -1,6 +1,9 @@
 package com.asqi.scholia_kantin_be.service.stok;
 
 import com.asqi.scholia_kantin_be.component.exception.ConflictException;
+import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
+import com.asqi.scholia_kantin_be.enums.ArahStok;
+import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.support.EnabledIfDockerAvailable;
 import com.asqi.scholia_kantin_be.support.TestcontainersConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -139,5 +142,110 @@ class LedgerStokServiceIT {
                 .hasMessageContaining("append-only");
         assertThatThrownBy(() -> jdbc.update("DELETE FROM mutasi_stok"))
                 .hasMessageContaining("append-only");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // PEMBALIK BARANG MASUK (PRD §7.2)
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("pembalik penuh mengembalikan stok & HPP ke kondisi sebelum barang masuk")
+    void pembalikPenuh() {
+        tx.executeWithoutResult(s -> ledger.masukBarang(SEKOLAH, MENU, 10, 5_000, "BARANG_MASUK", "BM-1", 1L));
+        Long asalId = tx.execute(s -> ledger.masukBarang(SEKOLAH, MENU, 10, 6_000, "BARANG_MASUK", "BM-2", 1L)
+                .getMutasi().getId());
+
+        // Stok 20 @ HPP 5500. Balik seluruh batch kedua (10 @ 6000) → stok 10 @ HPP 5000.
+        var hasil = tx.execute(s -> ledger.pembalikBarangMasuk(SEKOLAH, asalId, null, "SALAH INPUT", "PB-1", 2L));
+
+        assertThat(hasil.getStokSetelah()).isEqualTo(10);
+        assertThat(hasil.getHppSetelah()).isEqualTo(5_000L);
+        assertThat(hasil.getMutasi().getJenis()).isEqualTo(JenisMutasiStok.BARANG_MASUK_PEMBALIK);
+        assertThat(hasil.getMutasi().getArah()).isEqualTo(ArahStok.KELUAR);
+        assertThat(hasil.getMutasi().getMutasiAsalId()).isEqualTo(asalId);
+        assertThat(ledger.hitungUlangDariLedger(SEKOLAH, MENU)).isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("pembalik sebagian hanya mengurangi qty yang diminta")
+    void pembalikSebagian() {
+        Long asalId = tx.execute(s -> ledger.masukBarang(SEKOLAH, MENU, 10, 5_000, "BARANG_MASUK", "BM-1", 1L)
+                .getMutasi().getId());
+
+        var hasil = tx.execute(s -> ledger.pembalikBarangMasuk(SEKOLAH, asalId, 4, "SALAH HITUNG", "PB-1", 2L));
+
+        assertThat(hasil.getStokSetelah()).isEqualTo(6);
+        assertThat(ledger.totalDibalik(SEKOLAH, asalId)).isEqualTo(4L);
+    }
+
+    @Test
+    @DisplayName("pembalik melebihi sisa yang belum dibalik ditolak")
+    void pembalikMelebihiSisa() {
+        Long asalId = tx.execute(s -> ledger.masukBarang(SEKOLAH, MENU, 5, 5_000, "BARANG_MASUK", "BM-1", 1L)
+                .getMutasi().getId());
+        tx.executeWithoutResult(s -> ledger.pembalikBarangMasuk(SEKOLAH, asalId, 3, "KOREKSI", "PB-1", 2L));
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(s ->
+                ledger.pembalikBarangMasuk(SEKOLAH, asalId, 3, "KOREKSI", "PB-2", 2L)))
+                .isInstanceOf(InvalidOperationException.class)
+                .hasMessageContaining("melebihi sisa");
+    }
+
+    @Test
+    @DisplayName("pembalik barang masuk yang sudah dibalik seluruhnya ditolak")
+    void pembalikSudahHabis() {
+        Long asalId = tx.execute(s -> ledger.masukBarang(SEKOLAH, MENU, 5, 5_000, "BARANG_MASUK", "BM-1", 1L)
+                .getMutasi().getId());
+        tx.executeWithoutResult(s -> ledger.pembalikBarangMasuk(SEKOLAH, asalId, null, "KOREKSI", "PB-1", 2L));
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(s ->
+                ledger.pembalikBarangMasuk(SEKOLAH, asalId, null, "KOREKSI", "PB-2", 2L)))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("sudah dibalik seluruhnya");
+    }
+
+    @Test
+    @DisplayName("pembalik idempoten: bukti sama tidak membalik dua kali")
+    void pembalikIdempoten() {
+        Long asalId = tx.execute(s -> ledger.masukBarang(SEKOLAH, MENU, 10, 5_000, "BARANG_MASUK", "BM-1", 1L)
+                .getMutasi().getId());
+
+        var pertama = tx.execute(s -> ledger.pembalikBarangMasuk(SEKOLAH, asalId, 4, "KOREKSI", "PB-1", 2L));
+        var kedua = tx.execute(s -> ledger.pembalikBarangMasuk(SEKOLAH, asalId, 4, "KOREKSI", "PB-1", 2L));
+
+        assertThat(kedua.getMutasi().getId()).isEqualTo(pertama.getMutasi().getId());
+        assertThat(ledger.stok(SEKOLAH, MENU)).isEqualTo(6); // tidak berkurang dua kali
+
+        Integer jumlah = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM mutasi_stok WHERE jenis = 'BARANG_MASUK_PEMBALIK'", Integer.class);
+        assertThat(jumlah).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("pembalik menolak baris bukan BARANG_MASUK (mis. penjualan)")
+    void pembalikHanyaBarangMasuk() {
+        tx.executeWithoutResult(s -> ledger.masukBarang(SEKOLAH, MENU, 10, 5_000, "BARANG_MASUK", "BM-1", 1L));
+        Long penjualanId = tx.execute(s -> ledger.keluarPenjualan(SEKOLAH, MENU, 2, 999L).getMutasi().getId());
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(s ->
+                ledger.pembalikBarangMasuk(SEKOLAH, penjualanId, null, "KOREKSI", "PB-1", 2L)))
+                .isInstanceOf(InvalidOperationException.class)
+                .hasMessageContaining("Hanya barang masuk");
+    }
+
+    @Test
+    @DisplayName("pembalik wajib alasan & bukti")
+    void pembalikWajibAlasanDanBukti() {
+        Long asalId = tx.execute(s -> ledger.masukBarang(SEKOLAH, MENU, 5, 5_000, "BARANG_MASUK", "BM-1", 1L)
+                .getMutasi().getId());
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(s ->
+                ledger.pembalikBarangMasuk(SEKOLAH, asalId, null, "  ", "PB-1", 2L)))
+                .isInstanceOf(InvalidOperationException.class)
+                .hasMessageContaining("Alasan");
+        assertThatThrownBy(() -> tx.executeWithoutResult(s ->
+                ledger.pembalikBarangMasuk(SEKOLAH, asalId, null, "KOREKSI", "  ", 2L)))
+                .isInstanceOf(InvalidOperationException.class)
+                .hasMessageContaining("bukti");
     }
 }

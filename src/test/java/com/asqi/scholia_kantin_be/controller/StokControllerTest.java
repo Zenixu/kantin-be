@@ -1,6 +1,11 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.dto.BarangMasukPembalikRequest;
 import com.asqi.scholia_kantin_be.dto.BarangMasukRequest;
+import com.asqi.scholia_kantin_be.dto.HalamanResponse;
+import com.asqi.scholia_kantin_be.dto.RiwayatStokItem;
+import com.asqi.scholia_kantin_be.enums.ArahStok;
+import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.model.StokCache;
 import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.TenantContext;
@@ -21,6 +26,8 @@ import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
+
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -114,5 +121,70 @@ class StokControllerTest {
                 .andExpect(jsonPath("$.data.stok").value(20))
                 .andExpect(jsonPath("$.data.nilaiPersediaan").value(100000))
                 .andExpect(jsonPath("$.data.menipis").value(false));
+    }
+
+    @Test
+    void barangMasukPembalikMeneruskanTenantDanAktor() throws Exception {
+        BarangMasukPembalikRequest req = new BarangMasukPembalikRequest();
+        req.setMutasiId(500L);
+        req.setQty(5);
+        req.setAlasan("SALAH INPUT");
+        req.setReferensiId("PB-2026-0001");
+
+        when(operasi.pembalikBarangMasuk(eq(7L), eq(500L), eq(5), eq("SALAH INPUT"),
+                eq("PB-2026-0001"), eq(42L)))
+                .thenReturn(HasilMutasiStok.baru(null, 5, 5_000L));
+
+        mockMvc.perform(post("/api/stok/barang-masuk-pembalik")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(req)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void barangMasukPembalikTanpaAlasanDitolakValidasi() throws Exception {
+        BarangMasukPembalikRequest req = new BarangMasukPembalikRequest();
+        req.setMutasiId(500L);
+        req.setAlasan("  "); // invalid
+        req.setReferensiId("PB-1");
+
+        mockMvc.perform(post("/api/stok/barang-masuk-pembalik")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void riwayatStokMengembalikanHalaman() throws Exception {
+        RiwayatStokItem item = RiwayatStokItem.builder()
+                .id(500L)
+                .menuId(10L)
+                .menuNama("Nasi Goreng")
+                .arah(ArahStok.MASUK)
+                .jenis(JenisMutasiStok.BARANG_MASUK)
+                .qty(20)
+                .hargaBeliSatuan(5_000L)
+                .totalNilai(100_000L)
+                .stokSetelah(20)
+                .dapatDibalik(true)
+                .sisaDapatDibalik(20)
+                .sudahDibalik(0)
+                .build();
+        HalamanResponse<RiwayatStokItem> halaman = HalamanResponse.<RiwayatStokItem>builder()
+                .items(List.of(item))
+                .total(1)
+                .halaman(0)
+                .ukuran(20)
+                .totalHalaman(1)
+                .build();
+
+        when(operasi.riwayat(eq(7L), any(), any(), any(), any(), eq(0), eq(20)))
+                .thenReturn(halaman);
+
+        mockMvc.perform(get("/api/stok/riwayat"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value(500))
+                .andExpect(jsonPath("$.data.items[0].dapatDibalik").value(true))
+                .andExpect(jsonPath("$.data.total").value(1));
     }
 }
