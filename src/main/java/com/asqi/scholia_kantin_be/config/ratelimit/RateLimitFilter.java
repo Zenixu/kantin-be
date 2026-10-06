@@ -1,6 +1,7 @@
 package com.asqi.scholia_kantin_be.config.ratelimit;
 
 import com.asqi.scholia_kantin_be.component.ratelimit.RateLimiterRedis;
+import com.asqi.scholia_kantin_be.helper.AlamatKlien;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
 import com.asqi.scholia_kantin_be.payload.response.Response;
 import com.asqi.scholia_kantin_be.security.IdentitasKantin;
@@ -131,33 +132,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
     /**
      * Alamat IP klien untuk kunci rate limit.
      *
-     * <p><b>Anti-spoof (audit keamanan):</b> {@code X-Forwarded-For} hanya
-     * dipercaya bila koneksi datang dari proxy tepercaya yang dikonfigurasi
-     * ({@code kantin.rate-limit.trusted-proxies}). Tanpa itu, header XFF
-     * dikendalikan klien dan bisa diputar untuk melewati limit — jadi kita pakai
-     * {@code remoteAddr} apa adanya.
+     * <p><b>Anti-spoof (audit keamanan):</b> delegasi ke {@link AlamatKlien} —
+     * {@code X-Forwarded-For} hanya dipercaya bila koneksi datang dari proxy
+     * tepercaya ({@code kantin.rate-limit.trusted-proxies}). Tanpa itu, header
+     * XFF dikendalikan klien dan bisa diputar untuk melewati limit — jadi kita
+     * pakai {@code remoteAddr} apa adanya.
      */
     private String alamatIp(HttpServletRequest request) {
-        String remote = request.getRemoteAddr();
-        if (remote != null && !remote.isBlank()
-                && properties.getTrustedProxies() != null
-                && properties.getTrustedProxies().contains(remote)) {
-            String xff = request.getHeader("X-Forwarded-For");
-            if (xff != null && !xff.isBlank()) {
-                // Entri paling kanan = hop pertama yang ditambahkan proxy tepercaya
-                // (paling sulit dipalsukan klien, karena proxy menambah di kanan).
-                int koma = xff.lastIndexOf(',');
-                String kandidat = (koma >= 0 ? xff.substring(koma + 1) : xff).trim();
-                if (!kandidat.isBlank()) {
-                    return kandidat;
-                }
-            }
-            String real = request.getHeader("X-Real-IP");
-            if (real != null && !real.isBlank()) {
-                return real.trim();
-            }
-        }
-        return remote;
+        return AlamatKlien.ip(request, properties.getTrustedProxies());
     }
 
     private void tolak(HttpServletResponse response) throws IOException {

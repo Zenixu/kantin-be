@@ -103,6 +103,31 @@
 
 ---
 
+## 5b. Webhook masuk (WebhookController) — 🆕
+
+| Method | Path | Auth | Keterangan |
+|---|---|---|---|
+| `POST` | `/api/webhook/{sumber}` | **HMAC-SHA256 + anti-replay** (bukan token) | Terima event dari SKOOLIA/callback-be. `{sumber}` mis. `skoolia`. Idempotent per `(sumber, eventId)` |
+
+> **Autentikasi webhook (B34, SECURITY.md §5.1).** `/api/webhook/**` dibuka
+> `permitAll` (tanpa token user), **tetapi** setiap request wajib membawa:
+>
+> | Header | Isi |
+> |---|---|
+> | `X-Webhook-Timestamp` | epoch detik penandatanganan |
+> | `X-Webhook-Signature` | `sha256=<hex HMAC-SHA256(rahasia, timestamp + "." + body_mentah)>` |
+> | `X-Webhook-Id` | id event unik (kunci idempotency; boleh dari field body `eventId`) |
+>
+> `WebhookSignatureFilter` menolak, **fail-closed**: signature salah / timestamp
+> kedaluwarsa (replay) / header kurang ⇒ **401**; IP di luar
+> `kantin.webhook.allowed-ips` (bila diisi) ⇒ **403**; badan > batas ⇒ **413**;
+> `KANTIN_WEBHOOK_SECRET` kosong ⇒ **503**. Respons sukses memuat
+> `{ sumber, eventId, eventType, status, replay }` — `replay=true` berarti retry
+> event yang sama **tidak diproses ulang**. Body: `{ eventId?, eventType?,
+> sekolahId?, data? }` (bentuk generik; handler per jenis event menunggu Q4/Q7).
+
+---
+
 ## 6. Storage — Unggah/Tampil Berkas (StorageController) — 🆕
 
 | Method | Path | Peran | Keterangan |

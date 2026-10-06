@@ -39,6 +39,9 @@ build/
 application-local.properties
 .env
 
+### Local secrets (JWT keypair dev - JANGAN commit) ###
+.local-secrets/
+
 ### OS ###
 .DS_Store
 Thumbs.db
