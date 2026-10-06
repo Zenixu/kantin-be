@@ -14,8 +14,14 @@ public enum JenisMutasiStok {
     VOID_PENJUALAN,
     /** Penyesuaian opname menambah stok (PRD §7.3). */
     OPNAME_MASUK,
-    /** Penyesuaian opname mengurangi stok — rusak/hilang/kedaluwarsa (PRD §7.3). */
+    /** Penyesuaian opname mengurangi stok — hilang/selisih hitung (PRD §7.3). */
     OPNAME_KELUAR,
+    /**
+     * Pengurangan stok karena barang <b>rusak/basi/kedaluwarsa</b> (PRD §7.3).
+     * Dipisah dari {@link #OPNAME_KELUAR} agar riwayat kerugian harian bisa
+     * difilter terpisah dari selisih audit opname berkala.
+     */
+    BARANG_RUSAK,
     /** Koreksi barang masuk yang salah input (PRD §7.2) — pembalik. */
     BARANG_MASUK_PEMBALIK
 }

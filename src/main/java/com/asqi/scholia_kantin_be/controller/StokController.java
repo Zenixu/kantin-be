@@ -3,6 +3,8 @@ package com.asqi.scholia_kantin_be.controller;
 import com.asqi.scholia_kantin_be.dto.BarangMasukPembalikRequest;
 import com.asqi.scholia_kantin_be.dto.BarangMasukRequest;
 import com.asqi.scholia_kantin_be.dto.HalamanResponse;
+import com.asqi.scholia_kantin_be.dto.OpnameBatchRequest;
+import com.asqi.scholia_kantin_be.dto.OpnameBatchResponse;
 import com.asqi.scholia_kantin_be.dto.OpnameRequest;
 import com.asqi.scholia_kantin_be.dto.RiwayatStokItem;
 import com.asqi.scholia_kantin_be.dto.StokResponse;
@@ -88,6 +90,24 @@ public class StokController {
                 TenantContext.sekolahIdWajib(), request.getMenuId(), request.getQtyFisik(),
                 request.getAlasan(), request.getReferensiId(), identitas.aktorIdWajib());
         return CommonResponse.data(hasil, "Penyesuaian stok tercatat");
+    }
+
+    /**
+     * Opname <b>batch</b> (PRD §7.3) — sesuaikan banyak menu dalam <b>satu</b>
+     * transaksi (all-or-nothing), satu nomor berita acara. Setiap item bisa
+     * ditandai {@code rusak=true} agar dicatat sebagai {@code BARANG_RUSAK}
+     * (rusak/basi), bukan selisih audit {@code OPNAME_KELUAR}.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.PENGELOLA_KANTIN, AktorKantin.ADMIN_SEKOLAH})
+    @PostMapping("opname-batch")
+    public ResponseEntity<Response<OpnameBatchResponse>> opnameBatch(
+            @Valid @RequestBody OpnameBatchRequest request,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        OpnameBatchResponse hasil = operasi.opnameBatch(
+                TenantContext.sekolahIdWajib(), request.getReferensiId(),
+                request.getItems(), identitas.aktorIdWajib());
+        return CommonResponse.data(hasil, "Penyesuaian stok batch tercatat");
     }
 
     /**

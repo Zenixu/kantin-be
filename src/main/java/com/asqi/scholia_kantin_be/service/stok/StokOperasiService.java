@@ -3,7 +3,11 @@ package com.asqi.scholia_kantin_be.service.stok;
 import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
 import com.asqi.scholia_kantin_be.dto.HalamanResponse;
+import com.asqi.scholia_kantin_be.dto.OpnameBatchHasilItem;
+import com.asqi.scholia_kantin_be.dto.OpnameBatchItemRequest;
+import com.asqi.scholia_kantin_be.dto.OpnameBatchResponse;
 import com.asqi.scholia_kantin_be.dto.RiwayatStokItem;
+import com.asqi.scholia_kantin_be.enums.ArahStok;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.model.Menu;
 import com.asqi.scholia_kantin_be.model.MutasiStok;
@@ -21,7 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -98,6 +104,137 @@ public class StokOperasiService {
         validasiReferensi(referensiId, "Nomor berita acara opname");
         pastikanMenuMilikSekolah(sekolahId, menuId);
         return ledgerStok.sesuaikanOpname(sekolahId, menuId, qtyFisik, alasan, referensiId, aktorId);
+    }
+
+    /**
+     * Opname <b>batch</b> (PRD §7.3): sesuaikan banyak menu dalam <b>satu</b>
+     * transaksi (all-or-nothing). Bila satu item gagal, seluruh batch dibatalkan
+     * — tidak ada penyesuaian separuh jalan.
+     *
+     * <p>Idempotent lewat {@code referensiId} (nomor berita acara): retry batch
+     * dengan nomor sama mengembalikan ringkasan lama tanpa menerapkan dua kali.
+     *
+     * @param rusak per item: {@code true} &amp; stok berkurang → jenis
+     *              {@code BARANG_RUSAK} (rusak/basi), bukan {@code OPNAME_KELUAR}
+     */
+    @Transactional
+    public OpnameBatchResponse opnameBatch(Long sekolahId, String referensiId,
+                                           List<OpnameBatchItemRequest> items, Long aktorId) {
+        validasiReferensi(referensiId, "Nomor berita acara opname");
+        if (items == null || items.isEmpty()) {
+            throw new InvalidOperationException("Minimal satu item opname harus dikirim");
+        }
+
+        // Menu ganda dalam satu batch akan bentrok UNIQUE (sekolah, referensi, menu)
+        // → tolak lebih awal dengan pesan jelas (bukan 409 dari DB).
+        Set<Long> menuDilihat = new HashSet<>();
+        for (OpnameBatchItemRequest item : items) {
+            if (item.getMenuId() == null) {
+                throw new InvalidOperationException("ID menu wajib diisi pada setiap item opname");
+            }
+            if (!menuDilihat.add(item.getMenuId())) {
+                throw new InvalidOperationException(
+                        "Menu " + item.getMenuId() + " muncul lebih dari sekali dalam satu batch");
+            }
+            pastikanMenuMilikSekolah(sekolahId, item.getMenuId());
+        }
+
+        // Idempotency: batch dengan nomor berita acara sama sudah pernah diproses.
+        List<MutasiStok> sudahAda = mutasiRepo.cariByReferensiTipeDanId(
+                sekolahId, "OPNAME_BATCH", referensiId);
+        if (!sudahAda.isEmpty()) {
+            log.debug("Idempotency replay opname batch referensi={} → {} baris",
+                    referensiId, sudahAda.size());
+            return rangkumReplayBatch(referensiId, items, sudahAda);
+        }
+
+        List<OpnameBatchHasilItem> hasil = new ArrayList<>();
+        int berubah = 0;
+        int tanpaSelisih = 0;
+        for (OpnameBatchItemRequest item : items) {
+            HasilMutasiStok h = ledgerStok.sesuaikanOpname(
+                    sekolahId, item.getMenuId(), item.getQtyFisik(), item.getAlasan(),
+                    referensiId, Boolean.TRUE.equals(item.getRusak()), "OPNAME_BATCH", aktorId);
+
+            MutasiStok mutasi = h.getMutasi();
+            int stokSebelum = mutasi == null
+                    ? h.getStokSetelah()
+                    : (mutasi.getArah() == ArahStok.MASUK
+                            ? h.getStokSetelah() - mutasi.getQty()
+                            : h.getStokSetelah() + mutasi.getQty());
+
+            hasil.add(OpnameBatchHasilItem.builder()
+                    .menuId(item.getMenuId())
+                    .stokSebelum(stokSebelum)
+                    .stokFisik(item.getQtyFisik())
+                    .selisih(item.getQtyFisik() - stokSebelum)
+                    .jenis(mutasi == null ? null : mutasi.getJenis())
+                    .mutasiId(mutasi == null ? null : mutasi.getId())
+                    .stokSetelah(h.getStokSetelah())
+                    .build());
+            if (mutasi == null) {
+                tanpaSelisih++;
+            } else {
+                berubah++;
+            }
+        }
+
+        log.info("Opname batch referensi={} sekolah={} berubah={} tanpaSelisih={}",
+                referensiId, sekolahId, berubah, tanpaSelisih);
+
+        return OpnameBatchResponse.builder()
+                .referensiId(referensiId)
+                .jumlahBerubah(berubah)
+                .jumlahTanpaSelisih(tanpaSelisih)
+                .items(hasil)
+                .build();
+    }
+
+    /** Bangun ulang ringkasan batch dari baris yang sudah tercatat (replay). */
+    private OpnameBatchResponse rangkumReplayBatch(String referensiId,
+                                                   List<OpnameBatchItemRequest> items,
+                                                   List<MutasiStok> sudahAda) {
+        Map<Long, MutasiStok> perMenu = new HashMap<>();
+        for (MutasiStok m : sudahAda) {
+            perMenu.put(m.getMenuId(), m);
+        }
+
+        List<OpnameBatchHasilItem> hasil = new ArrayList<>();
+        int berubah = 0;
+        int tanpaSelisih = 0;
+        for (OpnameBatchItemRequest item : items) {
+            MutasiStok m = perMenu.get(item.getMenuId());
+            int stokSebelum;
+            int stokSetelah;
+            if (m == null) {
+                // Item tanpa selisih saat pemrosesan pertama — tak ada baris.
+                stokSebelum = item.getQtyFisik();
+                stokSetelah = item.getQtyFisik();
+                tanpaSelisih++;
+            } else {
+                stokSetelah = m.getStokSetelah();
+                stokSebelum = m.getArah() == ArahStok.MASUK
+                        ? stokSetelah - m.getQty()
+                        : stokSetelah + m.getQty();
+                berubah++;
+            }
+            hasil.add(OpnameBatchHasilItem.builder()
+                    .menuId(item.getMenuId())
+                    .stokSebelum(stokSebelum)
+                    .stokFisik(item.getQtyFisik())
+                    .selisih(item.getQtyFisik() - stokSebelum)
+                    .jenis(m == null ? null : m.getJenis())
+                    .mutasiId(m == null ? null : m.getId())
+                    .stokSetelah(stokSetelah)
+                    .build());
+        }
+
+        return OpnameBatchResponse.builder()
+                .referensiId(referensiId)
+                .jumlahBerubah(berubah)
+                .jumlahTanpaSelisih(tanpaSelisih)
+                .items(hasil)
+                .build();
     }
 
     // ────────────────────────────────────────────────────────────────
