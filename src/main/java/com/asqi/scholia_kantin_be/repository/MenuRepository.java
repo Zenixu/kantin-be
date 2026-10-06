@@ -23,6 +23,9 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
     /** Cari per id <b>dalam tenant</b> — sekolah lain ⇒ kosong (jadi 404). */
     Optional<Menu> findByIdAndSekolahId(Long id, Long sekolahId);
 
+    /** Apakah menu ada <b>dan</b> milik sekolah pemanggil (validasi tenant). */
+    boolean existsByIdAndSekolahId(Long id, Long sekolahId);
+
     /** Apakah ada item (aktif atau tidak) yang memakai kategori ini. */
     boolean existsByKategoriId(Long kategoriId);
 

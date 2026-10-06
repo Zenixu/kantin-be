@@ -67,6 +67,20 @@ public class MutasiStok implements Persistable<Long> {
     @Column(name = "hpp_snapshot")
     private Long hppSnapshot;
 
+    /**
+     * Harga beli/unit (khusus {@code BARANG_MASUK}) — dasar koreksi pembalik
+     * agar HPP rata-rata bisa dihitung ulang dengan harga beli aslinya.
+     */
+    @Column(name = "harga_beli_satuan")
+    private Long hargaBeliSatuan;
+
+    /**
+     * Baris {@code BARANG_MASUK} yang dibalik — terisi hanya untuk mutasi
+     * {@code BARANG_MASUK_PEMBALIK} (jejak koreksi, PRD §7.2).
+     */
+    @Column(name = "mutasi_asal_id")
+    private Long mutasiAsalId;
+
     @Column(name = "transaksi_id")
     private Long transaksiId;
 

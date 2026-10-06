@@ -43,10 +43,42 @@
 | Method | Path | Peran | Keterangan |
 |---|---|---|---|
 | `POST` | `/api/stok/barang-masuk` | TU, pengelola, admin | Barang masuk/stok awal; perbarui HPP rata-rata tertimbang |
+| `POST` | `/api/stok/barang-masuk-pembalik` | TU, pengelola, admin | **Koreksi barang masuk salah input** (PRD §7.2) — catat mutasi pembalik baru (wajib alasan); data asal tak diubah. Body: `{ mutasiId, qty?, alasan, referensiId }` |
 | `POST` | `/api/stok/opname` | TU, pengelola, admin | Penyesuaian stok hasil opname fisik (alasan wajib) |
+| `POST` | `/api/stok/opname-batch` | TU, pengelola, admin | **Opname batch** (PRD §7.3) — sesuaikan banyak menu dalam **satu** transaksi (all-or-nothing). Body: `{ referensiId, items: [{ menuId, qtyFisik, alasan, rusak? }] }` |
+| `GET` | `/api/stok/riwayat` | petugas, TU, pengelola, admin | **Riwayat mutasi stok** (PRD §9.5) — daftar restock sebelum memilih baris untuk dibalik. Query: `menuId?`, `jenis?`, `dari?`, `sampai?`, `halaman=0`, `ukuran=20` |
 | `GET` | `/api/stok/{menuId}` | petugas, TU, pengelola, admin | Stok + HPP + nilai persediaan satu menu |
 | `GET` | `/api/stok/menipis` | petugas, TU, pengelola, admin | Daftar menu dengan stok ≤ minimum |
 | `GET` | `/api/stok/{menuId}/rekonsiliasi` | TU, pengelola, admin | Hitung ulang stok dari ledger |
+
+> **Barang masuk pembalik (PRD §7.2).** Ledger stok **append-only** — koreksi
+> **tidak** mengedit/menghapus baris asal, melainkan mencatat mutasi baru
+> ber-`jenis=BARANG_MASUK_PEMBALIK` (arah `KELUAR`) yang menunjuk baris asal
+> lewat `mutasiAsalId`. Stok berkurang & **HPP rata-rata dihitung ulang** memakai
+> harga beli asli (`harga_beli_satuan` kini disimpan saat barang masuk). Wajib
+> `alasan`; `referensiId` = nomor bukti pembalik (idempotency). `qty` opsional:
+> kosong = batalkan seluruh sisa; diisi = koreksi sebagian (mis. salah input qty).
+> Bila stok saat ini < qty yang dibalik (sebagian sudah terjual) ⇒ **409**, arahkan
+> ke opname. Gagal bila baris bukan `BARANG_MASUK` atau sudah dibalik penuh.
+
+> **Riwayat stok (`GET /api/stok/riwayat`).** Terbaru dulu, berhalaman
+> (`items`, `total`, `halaman`, `ukuran`, `totalHalaman`). Tiap item memuat
+> `id` (dipakai sebagai `mutasiId` saat membalik), `menuId`, `menuNama`, `jenis`,
+> `qty`, `hargaBeliSatuan`, `totalNilai`, `stokSetelah`, `referensiId`, `waktu`,
+> serta untuk `BARANG_MASUK`: `sudahDibalik`, `sisaDapatDibalik`, `dapatDibalik`.
+> Tenant-scoped (sekolah lain ⇒ tidak tampil).
+
+> **Opname batch (`POST /api/stok/opname-batch`).** Satu `referensiId` (nomor
+> berita acara, mis. `OPN-20261006-001`) untuk seluruh `items`. Server menghitung
+> selisih per menu (`qtyFisik − stok sistem`); selisih 0 ⇒ tak ada mutasi.
+> Selisih kurang ber-`rusak=true` dicatat **`BARANG_RUSAK`** (rusak/basi), sisanya
+> **`OPNAME_KELUAR`** (selisih audit) — riwayat kerugian harian bisa difilter
+> terpisah. **Atomik all-or-nothing**: bila satu item gagal (menu tak dikenal,
+> alasan kosong, menu ganda) seluruh batch di-rollback. **Idempotent** per
+> (sekolah, `referensiId`, `menuId`): retry nomor sama mengembalikan ringkasan
+> lama tanpa menerapkan dua kali. Respons: `{ referensiId, jumlahBerubah,
+> jumlahTanpaSelisih, items: [{ menuId, stokSebelum, stokFisik, selisih, jenis,
+> mutasiId, stokSetelah }] }`.
 
 ---
 
@@ -96,9 +128,12 @@
 
 ## 8. Endpoint yang BELUM dibuat (menunggu modul/fase)
 
+> **Kartu Tamu sudah dibuat** (`KartuTamuController`, `/api/kartu-tamu`) —
+> lihat `docs/API-KARTU-TAMU.md` & `KartuTamuServiceIT` (20 uji integrasi).
+> Blocker Q7 yang tersisa hanyalah **anti-tabrakan `rfid_uid` dengan siswa admin-be**.
+
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|
-| Kartu Tamu | daftar/kartu & saldo | Q7 |
 | Blokir kartu | blokir/buka blokir | Q7 |
 | Limit & blokir item | set limit harian, blokir item | Q7 |
 | Laporan | ekspor Excel/PDF | Q3, Q5 |

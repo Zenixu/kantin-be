@@ -260,6 +260,31 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Tes:** `StorageServiceTest` (9), `StorageControllerTest` (1), `KatalogControllerTest` (+3), `KatalogServiceIT` (+2).
 - **Catatan:** tak ada migrasi Flyway baru — `stok_cache` sudah ada (V3) dan `menu.foto_url` sudah ada (V6).
 
+## B32 — (fitur) Barang masuk pembalik + riwayat stok
+
+- **Gejala (dilaporkan tim/FE):** barang masuk yang **salah input** tak bisa dikoreksi. Belum ada endpoint pembalik (PRD §7.2) padahal enum `JenisMutasiStok.BARANG_MASUK_PEMBALIK` sudah ada sejak awal. FE juga tak punya cara melihat daftar restock sebelum memilih baris yang dibatalkan (hanya ada `GET /api/stok/{menuId}` & `menipis`).
+- **Perbaikan:** ✅
+  - **Migrasi `V8__MutasiStokPembalik.sql`** — tambah `mutasi_stok.harga_beli_satuan` (harga beli/unit saat `BARANG_MASUK`, dasar hitung HPP saat dibalik) & `mutasi_stok.mutasi_asal_id` (menunjuk baris asal untuk `BARANG_MASUK_PEMBALIK`), plus indeks `idx_mutasi_stok_asal` & UNIQUE parsial `uq_mutasi_stok_pembalik_referensi` (idempotency bukti pembalik). **Tak ada UPDATE/DELETE** — tetap append-only.
+  - `HppService.hitungRataRataSetelahPembalik(...)` — kebalikan rata-rata tertimbang: `(stok×HPP − qty×hargaBeliAsal) ÷ (stok−qty)`, dijepit ke 0.
+  - `LedgerStokService.pembalikBarangMasuk(...)` — validasi (wajib alasan & bukti; baris harus `BARANG_MASUK`; qty ≤ sisa belum dibalik; stok cukup), catat mutasi `KELUAR/BARANG_MASUK_PEMBALIK` + audit `BARANG_MASUK_PEMBALIK`. Idempoten lewat `referensiId`.
+  - `POST /api/stok/barang-masuk-pembalik` (`BarangMasukPembalikRequest`: `mutasiId`, `qty?`, `alasan`, `referensiId`).
+  - `GET /api/stok/riwayat` — riwayat mutasi berhalaman (filter `menuId`/`jenis`/`dari`/`sampai`); tiap `BARANG_MASUK` menyertakan `sudahDibalik`/`sisaDapatDibalik`/`dapatDibalik` (dihitung **batch**, hindari N+1) agar FE tahu mana yang masih bisa dibatalkan.
+  - DTO `BarangMasukPembalikRequest`, `RiwayatStokItem`, `HalamanResponse<T>`.
+  - Tes: `HppServiceTest` (+5), `LedgerStokServiceIT` (+6, Testcontainers), `StokControllerTest` (+3).
+- **Keputusan desain — koreksi = mutasi pembalik, bukan edit/hapus (PRD §7.2, §11.1).** Baris asal tetap utuh; jejak koreksi ada di baris baru (`mutasi_asal_id`). Bila stok saat ini < qty yang dibalik (sebagian sudah terjual) ⇒ **409** arahkan ke opname — bukan memaksa stok minus.
+- **Catatan:** harga beli asal kini disimpan pada `BARANG_MASUK`; untuk baris lama (pra-V8) yang `harga_beli_satuan` null, HPP pembalik memakai `hpp_snapshot` sebagai fallback (aproksimasi).
+
+## B33 — (audit keamanan) Idempotency tak tenant-scoped + barang masuk tak idempoten + rate-limit bisa di-spoof
+
+- **Konteks:** audit keamanan terarah (bug-hunter `/security`). Empat cacat nyata ditemukan dan **direproduksi dengan uji gagal lebih dulu**, lalu diperbaiki. Semua punya uji regresi.
+- **Cacat & perbaikan:**
+  1. **Barang masuk TIDAK idempoten (kontrak dilanggar).** `BarangMasukRequest.referensiId` didokumentasikan sebagai idempotency key ("input ulang tidak menggandakan stok") tetapi `LedgerStokService.masukBarang` tak punya kunci unik maupun jalur replay → retry jaringan **menggandakan stok & nilai persediaan**. Perbaikan: migrasi **`V9`** UNIQUE parsial `uq_mutasi_stok_barang_masuk_referensi (sekolah_id, referensi_id, menu_id) WHERE jenis='BARANG_MASUK'` + jalur replay di service. (Bukti: `AuditKeamananStokIT.barangMasukHarusIdempoten` — 2 baris sebelum, 1 sesudah.)
+  2. **Idempotency saldo & transaksi GLOBAL, bukan per-sekolah (bocor lintas-tenant).** `saldo_ledger.idempotency_key` UNIQUE global + `findByIdempotencyKey` tanpa `sekolah_id`; nomor bukti top-up (`TU-2026-0001`) **berulang tiap sekolah** → top-up sekolah B tertelan sebagai "replay" milik sekolah A: **saldo B tidak bertambah** dan respons B **membocorkan saldo A** (PRD §11.4). Perbaikan: migrasi **`V10`** UNIQUE `(sekolah_id, idempotency_key)`; lookup replay saldo (`LedgerSaldoService`) & tap (`TapService`) jadi tenant-scoped (`findBySekolahIdAndIdempotencyKey`); varian global di-`@Deprecated`. (Bukti: `AuditKeamananSaldoIT` — gagal sebelum, hijau sesudah.)
+  3. **Barang masuk/opname ke menu tak dikenal membuat "stok hantu".** `masukBarang` tak memverifikasi menu milik tenant → `POST /api/stok/barang-masuk` dengan `menuId` sembarang menulis baris `stok_cache` untuk menu yang tak ada. Perbaikan: guard `pastikanMenuMilikSekolah` di `StokOperasiService` (404, bukan 403). (Bukti: `AuditKeamananStokIT.barangMasukMenuTidakDikenal`.)
+  4. **Rate limit bisa dilewati (XFF spoof).** `RateLimitFilter.alamatIp` memakai entri **paling kiri** `X-Forwarded-For` (dikendalikan klien) sebagai kunci → penyerang memutar XFF tiap request untuk ember baru → limit terlewati di endpoint publik. Perbaikan: XFF hanya dipercaya bila `remoteAddr` ada di `kantin.rate-limit.trusted-proxies` (default **kosong** = jangan percaya XFF); ambil entri **paling kanan** dari proxy tepercaya. (Bukti: `AuditRateLimitSpoofTest` — `ip:1.2.3.4` palsu sebelum, `ip:10.0.0.9` asli sesudah.)
+- **Catatan positif (bukan bug):** pembalik sudah aman karena UNIQUE `uq_mutasi_stok_pembalik_referensi` mencegah dobel saat balapan (loser dapat 409, bukan stok dobel). `saldo_cache`/`stok_cache` berkunci `(subjek_tipe, subjek_id)`/`menu_id` **memang benar** — `subjekId`/`menuId` global unik (lihat `IsolasiTenantLockIT` B17).
+- **Uji baru:** `AuditKeamananStokIT` (3), `AuditKeamananSaldoIT` (1), `AuditRateLimitSpoofTest` (1), `PeranAspectTest` (4 — RBAC sebelumnya **tak teruji**). Total **92 unit + 71 IT hijau**.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:

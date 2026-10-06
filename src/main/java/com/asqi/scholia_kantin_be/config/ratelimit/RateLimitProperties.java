@@ -38,4 +38,16 @@ public class RateLimitProperties {
      * saat infra rusak). Aktifkan hanya bila kebijakan keamanan menuntut.
      */
     private boolean failClosed = false;
+
+    /**
+     * Daftar IP proxy/CDN <b>tepercaya</b> yang boleh mengisi
+     * {@code X-Forwarded-For}. Hanya bila {@code remoteAddr} ada di daftar ini
+     * header XFF dipakai sebagai identitas klien; selain itu memakai
+     * {@code remoteAddr} apa adanya. Kosong (default) = <b>jangan</b> percaya XFF
+     * sama sekali — mencegah penyerang memutar header untuk melewati rate limit.
+     *
+     * <p>Contoh: {@code kantin.rate-limit.trusted-proxies=10.0.0.1,10.0.0.2}
+     * (isi IP reverse-proxy nginx/ALB di depan aplikasi).
+     */
+    private java.util.List<String> trustedProxies = java.util.List.of();
 }

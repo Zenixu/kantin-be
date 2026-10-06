@@ -199,6 +199,34 @@ DELETE /api/kartu-tamu/1728098765000
 
 ---
 
-**Status:** ✅ Implementasi lengkap (model, repo, service, controller, migrasi)  
-**Tested:** ✅ Compile success  
-**TODO:** Integration test, koordinasi anti-tabrakan dengan admin-be
+**Status:** ✅ Implementasi lengkap (model, repo, service, controller, migrasi V7)  
+**Tested:** ✅ `KartuTamuServiceIT` — 20 uji integrasi Testcontainers (PostgreSQL 18 nyata)  
+**TODO:** koordinasi anti-tabrakan `rfid_uid` dengan admin-be (sisi siswa, Q7)
+
+---
+
+## Integration test
+
+`src/test/java/com/asqi/scholia_kantin_be/service/kartu/KartuTamuServiceIT.java`
+(Testcontainers PostgreSQL 18, dijalankan pada fase `verify`) menegakkan:
+
+| Kelompok | Yang diuji |
+|---|---|
+| Create | default aktif, UID `null` bila blank, nomor UNIQUE **per sekolah**, UID UNIQUE **global** (lintas sekolah) |
+| Update | bind / unbind (`""` = hapus), UID sendiri tidak dianggap bentrok (`excludeId`), nomor bentrok ditolak, field `null` = tidak diubah |
+| Soft delete | `nonaktifkanKartu` → `aktif=false` baris tetap ada; `daftarKartu(hanyaAktif)` menyaring |
+| Isolasi tenant | detail/update kartu sekolah lain = 404; data pemilik tak berubah |
+| Lookup tap | `cariByRfidUid` ketemu / 404 |
+| Integrasi ledger | top-up `subjekTipe=KARTU_TAMU, subjekId=kartu.id` masuk `saldo_ledger` & `saldo_cache`; saldo kartu tamu terpisah dari saldo siswa |
+
+Jalankan:
+
+```bash
+# dari kantin-be/ (lihat README-DEV.md §7 untuk mvn-run.sh)
+./mvn-run.sh -Dspring-boot.repackage.skip=true \
+  -Dtest=NoUnitTests -DfailIfNoTests=false \
+  -Dit.test=KartuTamuServiceIT verify
+```
+
+> `-Dspring-boot.repackage.skip=true` hanya perlu bila jar sedang dikunci proses
+> `kantin-be` yang berjalan lokal; tidak wajib di CI.

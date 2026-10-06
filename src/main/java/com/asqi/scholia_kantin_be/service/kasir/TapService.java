@@ -79,7 +79,7 @@ public class TapService {
         String key = request.getIdempotencyKey();
 
         // Idempotency jalur cepat: key sudah pernah diproses → kembalikan hasil lama.
-        if (transaksiRepo.existsByIdempotencyKey(key)) {
+        if (transaksiRepo.existsBySekolahIdAndIdempotencyKey(sekolahId, key)) {
             log.debug("Idempotency replay tap key={}", key);
             return txTemplate.execute(status -> bangunReplay(sekolahId, key));
         }
@@ -88,7 +88,7 @@ public class TapService {
             return txTemplate.execute(status -> eksekusi(sekolahId, identitas, request));
         } catch (DataIntegrityViolationException e) {
             // Balapan idempotency: transaksi kalah sudah di-rollback; pakai hasil pemenang.
-            if (transaksiRepo.existsByIdempotencyKey(key)) {
+            if (transaksiRepo.existsBySekolahIdAndIdempotencyKey(sekolahId, key)) {
                 return txTemplate.execute(status -> bangunReplay(sekolahId, key));
             }
             throw e;
@@ -208,7 +208,7 @@ public class TapService {
      * dimuat untuk menampilkan rincian item.
      */
     private TapResponse bangunReplay(Long sekolahId, String idempotencyKey) {
-        Transaksi trx = transaksiRepo.findByIdempotencyKey(idempotencyKey)
+        Transaksi trx = transaksiRepo.findBySekolahIdAndIdempotencyKey(sekolahId, idempotencyKey)
                 .orElseThrow(() -> new InvalidOperationException(
                         "Transaksi idempoten tidak ditemukan: " + idempotencyKey));
 

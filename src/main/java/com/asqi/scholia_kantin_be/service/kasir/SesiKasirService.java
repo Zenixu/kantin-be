@@ -10,6 +10,8 @@ import com.asqi.scholia_kantin_be.model.SesiKasir;
 import com.asqi.scholia_kantin_be.repository.SesiKasirRepository;
 import com.asqi.scholia_kantin_be.repository.TransaksiRepository;
 import com.asqi.scholia_kantin_be.security.SekolahGuard;
+import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
+import com.asqi.scholia_kantin_be.service.integrasi.HasilPostingBukuKas;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -30,9 +32,10 @@ import java.util.List;
  * ditutup (manual atau otomatis) agar transaksi terkunci dan total bersih bisa
  * diposting ke Buku Kas.
  *
- * <p><b>Belum termasuk posting Buku Kas</b> — itu bagian
- * {@code service/integrasi} (BukuKasClient) yang menunggu Q3. Service ini hanya
- * menandai {@code posting_buku_kas=false} &amp; menyiapkan angka rekapnya.
+ * <p><b>Posting Buku Kas</b> dilakukan setelah sesi ditutup lewat
+ * {@link BukuKasPostingService} (idempoten, INTEGRATIONS.md §3.4). Kegagalan
+ * posting <b>tidak</b> membatalkan penutupan sesi — sesi tetap tertutup dan
+ * bisa di-posting ulang.
  */
 @Service
 @RequiredArgsConstructor
@@ -44,6 +47,7 @@ public class SesiKasirService {
     private final SekolahGuard sekolahGuard;
     private final IdGenerator idGenerator;
     private final JamKantin jam;
+    private final BukuKasPostingService bukuKasPosting;
 
     /**
      * Ambil sesi TERBUKA untuk titik kasir hari ini; buka baru bila belum ada.
@@ -159,7 +163,16 @@ public class SesiKasirService {
 
         log.info("Tutup sesi kasir id={} bersih={} void={} auto={}",
                 sesiId, rekap.getTotalBersih(), rekap.getTotalVoid(), auto);
-        return sesiRepo.save(sesi);
+        SesiKasir tersimpan = sesiRepo.save(sesi);
+
+        // Posting Buku Kas (idempoten). Kegagalan TIDAK membatalkan penutupan —
+        // sesi tetap DITUTUP & bisa di-posting ulang (INTEGRATIONS.md §3.4).
+        HasilPostingBukuKas hasilPosting = bukuKasPosting.postingSesi(tersimpan, oleh);
+        if (!hasilPosting.sukses()) {
+            log.warn("Sesi {} ditutup tanpa posting Buku Kas ({}): {}",
+                    sesiId, hasilPosting.status(), hasilPosting.pesan());
+        }
+        return tersimpan;
     }
 
     /**
@@ -183,6 +196,7 @@ public class SesiKasirService {
             sesi.setAutoTutup(true);
             sesi.setUpdatedAt(now);
             sesiRepo.save(sesi);
+            bukuKasPosting.postingSesi(sesi, null);
             jumlah++;
         }
         if (jumlah > 0) {
@@ -237,6 +251,7 @@ public class SesiKasirService {
             sesi.setAutoTutup(true);
             sesi.setUpdatedAt(now);
             sesiRepo.save(sesi);
+            bukuKasPosting.postingSesi(sesi, null);
             jumlah++;
         }
         if (jumlah > 0) {
