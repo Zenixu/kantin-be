@@ -154,7 +154,41 @@ Optional<Siswa> findByRfidUid(String rfidUid);
 - **Idempotency berdasarkan ID referensi PG** (§11.3).
 - Saldo bertambah **hanya setelah callback sukses**. Callback duplikat ≠ 2×.
 
-> ⛔ **BLOCKING:** kontrak payload callback dari callback-be perlu dikonfirmasi. Lihat Q4.
+### 5.1 Implementasi (issue #37)
+
+Handler `TopUpOnlineWebhookHandler` (implements `WebhookHandlerPort`) sudah
+dipasang pada pipa webhook yang ada:
+
+```
+POST /api/webhook/{sumber}   (mis. CALLBACK_BE)
+  → WebhookSignatureFilter   verifikasi HMAC + anti-replay + allowlist IP
+  → WebhookController        baca badan mentah → WebhookService.terima(...)
+  → WebhookService           idempotency per (sumber, eventId) + dispatch handler
+  → TopUpOnlineWebhookHandler
+  → SaldoTopUpService.topUpOnline(...)   jenis TOPUP_ONLINE, idempoten per refId PG
+  → LedgerSaldoService.kredit(...)       append-only, tenant-scoped
+```
+
+- **Idempotency dua lapis** (PRD §11.3): (1) jurnal `webhook_event` per
+  `(sumber, eventId)` — retry event sama tidak memanggil handler lagi;
+  (2) ledger per `idempotency_key = TOPUP-ONLINE-<refId PG>` **tenant-scoped**
+  (V10) — event id berbeda dengan refId PG sama tetap tidak menggandakan saldo.
+- **Tenant scoping** (PRD §11.4): `sekolahId` diambil dari `sekolahId` body;
+  wajib ada (bila kosong → 400). refId PG sama di sekolah berbeda = mutasi
+  berbeda.
+- **Fail-safe saat kontrak belum final (Q4):** jenis event & tipe subjek default
+  dibuat **konfigurabel** (`kantin.webhook.topup.event-types`,
+  `kantin.webhook.topup.subjek-tipe-default`); field payload dibaca lewat
+  **alias** lazim (`refId`/`orderId`/`trxId`, `nominal`/`amount`, dst). Jenis
+  event yang tidak dikenal cukup dicatat `DIABAIKAN` (tanpa efek), bukan
+  diproses keliru.
+- **Audit** (§11.7): aksi `TOPUP_ONLINE` dicatat untuk mutasi baru (bukan replay).
+- Diuji `TopUpOnlineWebhookIT` (Testcontainers PostgreSQL): saldo bertambah,
+  duplikat idempoten (event & refId), isolasi lintas tenant, validasi payload.
+
+> ⛔ **BLOCKING (tersisa):** nama pasti jenis event & bentuk field payload dari
+> `callback-be` perlu dikonfirmasi. Lihat Q4. Selama itu, sesuaikan hanya lewat
+> konfigurasi/alias — kode keamanan tidak berubah.
 
 ---
 
