@@ -72,6 +72,15 @@ BukuKasService.catatTransaksi(
 | Koreksi sesi tertutup | `MASUK`/`KELUAR` | `"Penyesuaian Kantin"` | sesuai | `KANTIN_KOREKSI` ⚠️ |
 | **Top-up** | ❌ **TIDAK diposting** | — | — | — |
 
+> **Arah koreksi saldo (dijaga invariant PRD §5).** Karena `Σ top-up − Σ refund
+> = Σ saldo + Σ penjualan kantin (bersih setelah void & koreksi)`, koreksi
+> **KREDIT** (menambah saldo siswa) menurunkan pendapatan kantin → `KELUAR`;
+> koreksi **DEBIT** (mengurangi saldo) → `MASUK`. Metode `NON_TUNAI` (jalur
+> saldo/dana titipan, bukan uang fisik). refId deterministik
+> `KANTIN-KOR-<berita acara>` → idempoten; fail-open (kegagalan posting tidak
+> membatalkan koreksi saldo). Diimplementasikan di
+> `BukuKasPostingService.postingKoreksiSaldo()` (issue #32).
+
 ### 3.4 ⚠️ Temuan kritis
 1. **`refModul` baru belum dikenal `migrateBukuKas()`** (switch di baris ~396). Entri kantin berisiko dianggap orphan/duplikat saat migrasi. **Mitigasi sementara:** set `refModul = null` → masuk `remainingBks`, tidak dihapus (baris ~390). **Jangka panjang:** minta tim admin-be menambah case kantin.
 2. **Buku Kas tidak idempoten** — `catatTransaksi()` selalu `save`. **kantin-be wajib** cek `existsByReferensiIdAndReferensiModul` atau simpan flag "sudah diposting" di tabel sesi kantin.
@@ -81,6 +90,25 @@ BukuKasService.catatTransaksi(
 - `GET api/buku-kas/saldo` → `SaldoSekolahDTO{saldoTunai, saldoNonTunai, saldoDanaBos, saldoOnline}`
 - `GET api/buku-kas/laporan-grafik`
 - `GET api/buku-kas/metode-pembayaran`, `GET api/buku-kas/sumber-dana`
+
+### 3.6 Retry posting tertunggak (issue #33)
+
+Karena posting bersifat **fail-open** (poin §3.4-2): bila admin-be sempat
+gangguan, sesi tetap `DITUTUP` dengan `posting_buku_kas=false` sehingga entri
+Buku Kas tertunggak. `RetryPostingBukuKasScheduler` (cron `0 */15 * * * *`,
+dapat dimatikan lewat `kantin.scheduler.retry-posting.enabled=false`) menyapu
+semua sesi `DITUTUP` dengan `posting_buku_kas=false` dan `total_bersih > 0`,
+lalu memposting ulang lewat `RetryPostingBukuKasService` →
+`BukuKasPostingService.postingUlangSistem()`:
+
+- **Idempoten** — sesi yang sudah terposting dilewati; refId tetap
+  `KANTIN-SESI-<id>` sehingga admin-be dapat mengenali entri ganda.
+- **Tenant-safe** — tiap sesi diposting memakai `sekolah_id` dari baris sesi
+  (bukan konteks global); `kunciUntukUpdate` tetap tenant-scoped.
+- **Tahan sebagian** — tiap sesi diposting pada transaksinya sendiri
+  (panggilan lintas-bean), sehingga kegagalan satu sesi tidak me-rollback
+  sesi lain; dicoba lagi pada sweep berikutnya.
+- Sesi `total_bersih = 0` **bukan** tertunggak (memang tak ada yang diposting).
 
 ---
 
@@ -106,8 +134,16 @@ Optional<Siswa> findByRfidUid(String rfidUid);
 
 ### 4.3 Sinkronisasi kartu (PRD §4.3)
 - Perubahan di admin-be (lepas/ganti kartu, siswa nonaktif) **harus dikirim ke kantin-be saat itu juga** (webhook + retry).
+- Webhook masuk kini **diamankan HMAC-SHA256 + anti-replay + idempotency per event id** (SECURITY.md §5.1, BUGS-DITEMUKAN B34). Pengirim wajib menandatangani `timestamp + "." + body` dengan `KANTIN_WEBHOOK_SECRET` dan menyertakan `X-Webhook-Id`.
 - Bila kantin-be meng-cache data kartu/siswa, cache **WAJIB di-invalidate** oleh notifikasi — **dilarang** mengandalkan TTL.
 - Status **blokir** kartu **tidak boleh** di-cache sama sekali (§11.11).
+
+### 4.4 Port status siswa &amp; blokir kartu (`StatusSiswaPort`, issue #38)
+- Refund/pindah saldo siswa keluar (PRD §9.3) butuh dua hal dari admin-be: **(a)** status keaktifan siswa (lulus/pindah/keluar) untuk daftar kandidat & validasi tujuan, dan **(b)** **pemblokiran kartu** siswa setelah saldo 0.
+- Kontraknya belum final (Q7), jadi dipisah sebagai port `service/integrasi/StatusSiswaPort` dengan implementasi sementara `StatusSiswaFallback`:
+  - `tidakAktif(sekolahId, siswaId)` → `null` ("tidak diketahui") — daftar kandidat tetap tampil (tanpa filter), pemindahan tidak diblokir keliru;
+  - `blokirKartu(...)` → **best-effort** (hanya log) — perpindahan uang di ledger tetap sah &amp; idempoten, tidak dibatalkan kegagalan integrasi.
+- Saat Q7 terjawab: tambahkan implementasi nyata (mis. `SiswaKartuClient`) &amp; tandai `@Primary`. Status blokir **tidak boleh** di-cache (§11.11).
 
 ---
 
@@ -118,7 +154,41 @@ Optional<Siswa> findByRfidUid(String rfidUid);
 - **Idempotency berdasarkan ID referensi PG** (§11.3).
 - Saldo bertambah **hanya setelah callback sukses**. Callback duplikat ≠ 2×.
 
-> ⛔ **BLOCKING:** kontrak payload callback dari callback-be perlu dikonfirmasi. Lihat Q4.
+### 5.1 Implementasi (issue #37)
+
+Handler `TopUpOnlineWebhookHandler` (implements `WebhookHandlerPort`) sudah
+dipasang pada pipa webhook yang ada:
+
+```
+POST /api/webhook/{sumber}   (mis. CALLBACK_BE)
+  → WebhookSignatureFilter   verifikasi HMAC + anti-replay + allowlist IP
+  → WebhookController        baca badan mentah → WebhookService.terima(...)
+  → WebhookService           idempotency per (sumber, eventId) + dispatch handler
+  → TopUpOnlineWebhookHandler
+  → SaldoTopUpService.topUpOnline(...)   jenis TOPUP_ONLINE, idempoten per refId PG
+  → LedgerSaldoService.kredit(...)       append-only, tenant-scoped
+```
+
+- **Idempotency dua lapis** (PRD §11.3): (1) jurnal `webhook_event` per
+  `(sumber, eventId)` — retry event sama tidak memanggil handler lagi;
+  (2) ledger per `idempotency_key = TOPUP-ONLINE-<refId PG>` **tenant-scoped**
+  (V10) — event id berbeda dengan refId PG sama tetap tidak menggandakan saldo.
+- **Tenant scoping** (PRD §11.4): `sekolahId` diambil dari `sekolahId` body;
+  wajib ada (bila kosong → 400). refId PG sama di sekolah berbeda = mutasi
+  berbeda.
+- **Fail-safe saat kontrak belum final (Q4):** jenis event & tipe subjek default
+  dibuat **konfigurabel** (`kantin.webhook.topup.event-types`,
+  `kantin.webhook.topup.subjek-tipe-default`); field payload dibaca lewat
+  **alias** lazim (`refId`/`orderId`/`trxId`, `nominal`/`amount`, dst). Jenis
+  event yang tidak dikenal cukup dicatat `DIABAIKAN` (tanpa efek), bukan
+  diproses keliru.
+- **Audit** (§11.7): aksi `TOPUP_ONLINE` dicatat untuk mutasi baru (bukan replay).
+- Diuji `TopUpOnlineWebhookIT` (Testcontainers PostgreSQL): saldo bertambah,
+  duplikat idempoten (event & refId), isolasi lintas tenant, validasi payload.
+
+> ⛔ **BLOCKING (tersisa):** nama pasti jenis event & bentuk field payload dari
+> `callback-be` perlu dikonfirmasi. Lihat Q4. Selama itu, sesuaikan hanya lewat
+> konfigurasi/alias — kode keamanan tidak berubah.
 
 ---
 

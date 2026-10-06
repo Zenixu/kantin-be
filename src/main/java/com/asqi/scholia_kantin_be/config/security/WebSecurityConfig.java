@@ -4,9 +4,12 @@ import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitFilter;
 import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitProperties;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthTokenFilter;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthenticationEntryPoint;
+import com.asqi.scholia_kantin_be.config.webhook.WebhookProperties;
+import com.asqi.scholia_kantin_be.config.webhook.WebhookSignatureFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -39,21 +42,26 @@ import java.util.List;
  * </ul>
  *
  * <p>Endpoint publik yang dikecualikan: health/actuator + webhook dari SKOOLIA
- * (callback top-up, sinkronisasi kartu). Webhook diamankan dengan
- * <b>signature/secara internal</b> di layer controller (bukan token user).
+ * (callback top-up, sinkronisasi kartu). Webhook <b>bukan</b> endpoint tanpa
+ * autentikasi: {@code permitAll} hanya mematikan cek token user, sementara
+ * {@link WebhookSignatureFilter} mewajibkan <b>HMAC-SHA256 sah + anti-replay</b>
+ * (SECURITY.md §5, BUGS-DITEMUKAN B34). Tanpa rahasia webhook terkonfigurasi,
+ * endpoint itu fail-closed (503).
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @EnableConfigurationProperties({JwtProperties.class,
         com.asqi.scholia_kantin_be.config.security.jwt.JwtConfigValues.class,
-        RateLimitProperties.class})
+        RateLimitProperties.class,
+        WebhookProperties.class})
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
     private final JwtAuthTokenFilter jwtAuthTokenFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final RateLimitFilter rateLimitFilter;
+    private final WebhookSignatureFilter webhookSignatureFilter;
 
     /** Endpoint tanpa autentikasi. */
     private static final String[] PUBLIC_ENDPOINTS = {
@@ -81,14 +89,59 @@ public class WebSecurityConfig {
                 ex.authenticationEntryPoint(jwtAuthenticationEntryPoint));
 
         // Urutan filter: JWT dulu agar identitas (sekolah:user) tersedia untuk
-        // rate limit, lalu rate limit sebelum pemrosesan request.
-        // (Catatan: RateLimitFilter punya @Order lebih rendah sehingga bila
-        //  di-auto-register servlet container ia juga jalan lebih dulu; lihat
-        //  BUGS-DITEMUKAN B33 tentang risiko urutan ganda.)
+        // rate limit, lalu verifikasi signature webhook (khusus /api/webhook/**),
+        // lalu rate limit sebelum pemrosesan request.
+        // Ketiga filter didaftarkan manual di sini; auto-registrasi servlet
+        // container dimatikan lewat FilterRegistrationBean di bawah (B33/#13).
         http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(jwtAuthTokenFilter, RateLimitFilter.class);
+        http.addFilterAfter(webhookSignatureFilter, JwtAuthTokenFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Matikan auto-registrasi servlet container untuk filter yang didaftarkan
+     * manual di {@link #filterChain(HttpSecurity, CorsConfigurationSource)}.
+     *
+     * <p><b>BUG B33 (#13):</b> sebagai {@code @Component}, Spring Boot
+     * mendaftarkan {@code RateLimitFilter} &amp; {@code JwtAuthTokenFilter} ke
+     * rantai filter servlet <b>dan</b> keduanya didaftarkan lagi lewat
+     * {@code addFilterBefore}. Filter berjalan dua kali per request — untuk rate
+     * limit ini memotong kuota (tiap request dihitung 2×). Bean ini
+     * menonaktifkan registrasi otomatis; bean tetap ada untuk SecurityFilterChain.
+     */
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
+            RateLimitFilter filter) {
+        FilterRegistrationBean<RateLimitFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    @Bean
+    public FilterRegistrationBean<JwtAuthTokenFilter> jwtAuthTokenFilterRegistration(
+            JwtAuthTokenFilter filter) {
+        FilterRegistrationBean<JwtAuthTokenFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    /**
+     * Matikan auto-registrasi {@link WebhookSignatureFilter} oleh servlet
+     * container (Spring Boot mendaftarkan setiap bean {@code Filter}).
+     *
+     * <p>Tanpa ini, filter ber-{@code @Component} ikut dipasang di rantai
+     * servlet <b>dan</b> di rantai Spring Security → verifikasi HMAC berjalan
+     * dua kali (pemborosan + risiko baca badan dua kali). Ini adalah masalah
+     * urutan ganda yang sama dengan catatan B33; di sini dicegah sejak awal.
+     */
+    @Bean
+    public FilterRegistrationBean<WebhookSignatureFilter>
+    webhookSignatureFilterRegistration(WebhookSignatureFilter filter) {
+        FilterRegistrationBean<WebhookSignatureFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
     }
 
     /**

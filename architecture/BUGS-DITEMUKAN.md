@@ -285,7 +285,21 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Catatan positif (bukan bug):** pembalik sudah aman karena UNIQUE `uq_mutasi_stok_pembalik_referensi` mencegah dobel saat balapan (loser dapat 409, bukan stok dobel). `saldo_cache`/`stok_cache` berkunci `(subjek_tipe, subjek_id)`/`menu_id` **memang benar** — `subjekId`/`menuId` global unik (lihat `IsolasiTenantLockIT` B17).
 - **Uji baru:** `AuditKeamananStokIT` (3), `AuditKeamananSaldoIT` (1), `AuditRateLimitSpoofTest` (1), `PeranAspectTest` (4 — RBAC sebelumnya **tak teruji**). Total **92 unit + 71 IT hijau**.
 
-## B34 — (audit integrasi Q1) Token staf admin-be ditolak & `user_id` terbaca `"42.0"`
+## B34 — (audit keamanan) Endpoint webhook `permitAll` tanpa verifikasi signature
+
+- **Konteks:** `WebSecurityConfig` membuka `/api/webhook/**` dengan `permitAll` (agar SKOOLIA bisa memanggil tanpa token user), tetapi **belum ada** controller yang menanganinya. Celah ini menjadi **nyata** begitu webhook diimplementasikan: `permitAll` berarti tanpa autentikasi apa pun, sehingga siapa pun bisa memalsukan event (mis. memalsukan pembayaran/saldo). PR #6 (B33) menyisakan temuan ini sebagai pekerjaan lanjutan.
+- **Perbaikan (fail-closed, berlapis):**
+  1. **Verifikasi HMAC-SHA256 wajib.** `WebhookSignatureFilter` menolak setiap request `/api/webhook/**` tanpa tanda tangan sah. Skema: `signature = hex(HMAC-SHA256(rahasia, timestamp + "." + badan_mentah))` — timestamp ikut ditandatangani agar tak bisa digeser. Perbandingan **konstan-waktu** (`MessageDigest.isEqual`) untuk mencegah timing attack.
+  2. **Rahasia dari environment, bukan hardcode.** `kantin.webhook.secret` ← `KANTIN_WEBHOOK_SECRET`. Bila **kosong**, endpoint menjawab **503** (bukan terbuka) — lupa konfigurasi tidak pernah membuka celah.
+  3. **Anti-replay.** Header `X-Webhook-Timestamp` (epoch detik) wajib dalam jendela `±kantin.webhook.tolerance-seconds` (default 300 dtk) → di luar itu **401** walau signature sah.
+  4. **Allowlist IP opsional.** `kantin.webhook.allowed-ips` (IP/CIDR) → di luar daftar **403**. XFF hanya dipercaya dari proxy tepercaya (`kantin.webhook.trusted-proxies`) — pola anti-spoof sama dengan B33.
+  5. **Idempotency per event id.** Migrasi **`V12`** tabel `webhook_event` + UNIQUE `(sumber, event_id)`. Retry event yang sama → **tidak diproses ulang** (dijawab sebagai `replay=true`); event id sama dengan payload berbeda → **409**. Tabel append-only (trigger `tolak_perubahan_ledger`).
+  6. **Batas ukuran badan** (`kantin.webhook.max-body-bytes`, default 1 MiB) → lewat batas **413** (mencegah HMAC atas badan raksasa).
+- **Perluasan kontrak:** handler event (top-up online Q4, sinkronisasi kartu Q7) masuk lewat port `WebhookHandlerPort`; belum ada implementasi → event dicatat `DIABAIKAN` (pipa keamanan tak terblokir menunggu kontrak).
+- **Uji:** `WebhookSignatureVerifierTest` (8), `WebhookSignatureFilterTest` (9 — signature salah ⇒ 401, replay ⇒ 401, rahasia kosong ⇒ 503, IP luar allowlist ⇒ 403), `TandaTanganWebhookTest` (4), `IpAllowlistTest` (6), `WebhookControllerTest` (3), `WebhookServiceIT` (5 — Testcontainers: retry ⇒ handler dipanggil **sekali**, payload beda ⇒ 409, jurnal append-only). Semua GAGAL dulu (repro) / kini hijau.
+- **Catatan:** `FilterRegistrationBean.setEnabled(false)` mencegah filter ber-`@Component` didaftarkan **dua kali** (rantai servlet + rantai Security) — kelas masalah urutan ganda yang sama dengan B33.
+
+## B35 — (audit integrasi Q1) Token staf admin-be ditolak & `user_id` terbaca `"42.0"`
 
 - **Konteks:** menindaklanjuti Q1 (#14) — kompatibilitas token staf dari admin-be. Repo `admin-be` ada di lokal (`skoolia/admin-be`, GitLab), jadi format klaim dibaca **langsung dari sumber** (`JwtUtils.buildToken()`), bukan ditebak. Dua bug integrasi ditemukan dan **direproduksi dengan uji gagal lebih dulu** (`KompatibilitasTokenStafAdminTest`).
 - **Cacat & perbaikan:**
@@ -295,7 +309,18 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Belum selesai (masih terblokir):** **public key RS256 masih temporary** (`.env.jwt-temporary` admin-be + `application-local.properties` kantin-be). Format klaim ✅ terjawab; lokasi key produksi ⏳ masih menunggu admin-be. Q1 → 🟡 **SEBAGIAN TERJAWAB**.
 - **Uji baru:** `KompatibilitasTokenStafAdminTest` (5).
 
+
 ## B35 — (audit RBAC) Peran `PETUGAS_KANTIN` dipetakan ke `PENGELOLA_KANTIN` (eskalasi hak)
+
+## B36 — (audit keamanan #13) Filter keamanan terdaftar DUA KALI (auto-register + addFilterBefore)
+
+- **Konteks:** menindaklanjuti issue #13 (turunan B33). `RateLimitFilter` & `JwtAuthTokenFilter` adalah `@Component` → Spring Boot **auto-register** keduanya ke rantai filter servlet, **dan** `WebSecurityConfig` mendaftarkannya lagi lewat `http.addFilterBefore(...)`. Reproduksi dibuat lebih dulu (`FilterGandaIT`, gagal sebelum perbaikan).
+- **Cacat:** filter keamanan terdaftar **dua kali** per request. Gejala yang didokumentasikan issue (kuota rate-limit terpotong separuh) **TIDAK tereproduksi** pada kondisi sekarang — karena keduanya `OncePerRequestFilter`, eksekusi ke-2 di-dedup oleh servlet container (`PERIKSA-DIPANGGIL=1` baik sebelum maupun sesudah). Jadi ini **cacat laten/rapuh**, bukan kerusakan aktif: registrasi ganda adalah jaminan tak-terjaga yang akan menimbulkan eksekusi ganda begitu filter diganti `Filter` biasa, dedup dilepas, atau ada `RequestDispatcher.forward`/`ERROR` dispatch. Tetap harus dibereskan agar perilaku filter **tidak bergantung** pada dedup internal Spring.
+- **Perbaikan:** `WebSecurityConfig` menambah dua `FilterRegistrationBean` dengan `setEnabled(false)` untuk `RateLimitFilter` & `JwtAuthTokenFilter` → auto-registrasi servlet container dimatikan; keduanya hanya hidup di `SecurityFilterChain`. (Bukti: `FilterGandaIT.filterTidakTerdaftarDiServletContainer` — `jwtAuthTokenFilter` & `rateLimitFilter` **hilang** dari `ServletContext.getFilterRegistrations()` sesudah perbaikan; `satuRequestSatuKuota` → `periksa` dipanggil **tepat 1×**; `filterMasihAktif` → `/api/auth/me` tanpa token tetap **401**, memastikan perbaikan tidak melumpuhkan filter.)
+- **Uji baru:** `FilterGandaIT` (3 — IT, butuh Docker). Total **99 unit + 85 IT hijau**.
+
+## B37 — (audit RBAC) Peran `PETUGAS_KANTIN` dipetakan ke `PENGELOLA_KANTIN` (eskalasi hak)
+
 
 - **Konteks:** ditemukan saat membangun **harness JWT dummy** (#14/#15). Saat menguji token dummy berperan `PETUGAS_KANTIN`, `KlaimResolver.petakanPeran` mengembalikan `PENGELOLA_KANTIN` — bukan `PETUGAS_KANTIN`.
 - **Gejala:** `KlaimResolver.petakanPeran` memeriksa cabang generik `r.contains("KANTIN")` **sebelum** cabang spesifik `r.contains("PETUGAS")`. Karena `"PETUGAS_KANTIN"` mengandung `"KANTIN"`, ia tertangkap lebih dulu → dipetakan ke `PENGELOLA_KANTIN`.
@@ -303,6 +328,18 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Perbaikan:** pindahkan cek `contains("PETUGAS")`/`contains("KASIR")` ke **atas** cek generik `contains("KANTIN")`; sisa urutan dipertahankan agar perilaku peran lain tak berubah.
 - **Bukti:** `KlaimResolverPeranTest` — `PETUGAS_KANTIN → PETUGAS_KANTIN` (sebelumnya `PENGELOLA_KANTIN`) + 18 kasus pemetaan peran lain. Pemetaan peran **sebelumnya tak teruji**; uji ini jadi guard regresi.
 - **Catatan positif:** pemisahan peran lain sudah benar (`ADMIN`→`ADMIN_SEKOLAH`, `TU`/`BENDAHARA`→`TU_SEKOLAH`, `ORANG_TUA`/`ORTU`→`ORANG_TUA`, tak dikenal→`TIDAK_DIKENAL` fail-closed).
+
+
+
+## B38 — (bug laporan #41) `stok_cache.stok_minimum` tidak pernah disinkron dari katalog → penanda "stok menipis" selalu salah
+
+- **Konteks:** ditemukan saat menulis `LaporanServiceIT` untuk modul laporan (#41, PRD §9.5). Uji `laporanStok` mengharapkan menu dengan stok 1 (min 2) ditandai **menipis**, tetapi hasilnya `false`.
+- **Gejala:** `stok_cache.stok_minimum` **selalu 0** — tidak ada kode yang menyalin `menu.stok_minimum` ke `stok_cache` saat katalog dibuat/diubah. Akibatnya `stok <= stokMinimum` nyaris tak pernah benar (hanya saat stok 0).
+- **Dampak:** laporan stok "menipis" (PRD §9.5) dan **peringatan stok minimum** (PRD §7.1) tidak pernah menyala untuk stok > 0 → pengelola tak diberi tahu saat persediaan hampir habis. Bukan hanya laporan: fitur notifikasi stok menipis apa pun yang membaca `stok_cache.stok_minimum` ikut salah.
+- **Perbaikan (sisi laporan):** `LaporanService.laporanStok` mengambil `stok_minimum` dari **katalog `menu`** (sumber kebenaran PRD §7.1), bukan dari `stok_cache`. Sekaligus mengisi `kategoriId` dari menu.
+- **Perbaikan lanjutan yang disarankan (di luar #41):** sinkronkan `menu.stok_minimum` → `stok_cache.stok_minimum` saat menu dibuat/diubah (atau jadikan `stok_cache` tanpa kolom itu dan baca dari katalog di semua pemakaian), agar fitur peringatan stok lain konsisten. Perlu keputusan apakah `stok_minimum` memang milik katalog (ya, PRD §7.1) — bila ya, `stok_cache.stok_minimum` adalah kolom **redundan** yang layak dihapus.
+- **Bukti:** `LaporanServiceIT.laporanStok` — menu stok 1 (min 2) → `menipis=true`; `hanyaMenipis=true` hanya mengembalikan menu tersebut.
+
 
 ## Ringkasan untuk tim
 

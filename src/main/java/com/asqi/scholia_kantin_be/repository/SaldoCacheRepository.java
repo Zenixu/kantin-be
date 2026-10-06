@@ -50,6 +50,18 @@ public interface SaldoCacheRepository extends JpaRepository<SaldoCache, SaldoCac
     List<SaldoCache> findBySekolahIdAndSubjekTipe(Long sekolahId, SubjekTipe subjekTipe);
 
     /**
+     * Total saldo mengendap per jenis subjek (PRD §9.5) — kewajiban sekolah.
+     * Mengembalikan baris {@code [subjekTipe, Σ saldo, jumlah baris]}.
+     */
+    @Query("""
+            SELECT s.subjekTipe, COALESCE(SUM(s.saldo), 0), COUNT(s)
+            FROM SaldoCache s
+            WHERE s.sekolahId = :sekolahId
+            GROUP BY s.subjekTipe
+            """)
+    List<Object[]> totalMengendapPerTipe(@Param("sekolahId") Long sekolahId);
+
+    /**
      * Pastikan baris saldo ada <b>tanpa race</b>: {@code INSERT ... ON CONFLICT
      * DO NOTHING}. Bila dua kasir mencoba membuat baris yang sama serentak,
      * hanya satu yang berhasil dan yang lain diam-diam dilewati — lalu keduanya

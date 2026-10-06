@@ -8,6 +8,7 @@ import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.service.kasir.HasilMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.kasir.LedgerSaldoService;
 import com.asqi.scholia_kantin_be.service.kasir.PerintahMutasiSaldo;
+import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,8 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Koreksi</b> dilakukan sebagai <b>mutasi pembalik</b> dengan alasan
  * (data tidak pernah diedit/dihapus — PRD §11.1). Semua aksi diaudit (§11.7).
  *
- * <p>Top-up <b>online</b> (via payment gateway) TIDAK ada di sini — menunggu
- * kontrak callback-be (OPEN-QUESTIONS Q4) dan ditangani lewat webhook.
+ * <p>Top-up <b>online</b> (via payment gateway) memakai jalur
+ * {@link #topUpOnline}: saldo bertambah <b>hanya setelah</b> callback PG sukses
+ * (PRD §8.2, INTEGRATIONS §5), dipanggil oleh handler webhook
+ * {@code TopUpOnlineWebhookHandler}. Kontrak payload callback-be belum final
+ * (OPEN-QUESTIONS Q4); pemisahan itu dijaga di lapisan webhook, sedangkan
+ * pencatatan saldo di sini sudah final &amp; idempoten berbasis {@code refId} PG
+ * (tenant-scoped, PRD §11.3/§11.4).
  */
 @Service
 @RequiredArgsConstructor
@@ -33,6 +39,7 @@ public class SaldoTopUpService {
 
     private final LedgerSaldoService ledgerSaldo;
     private final AuditLogger auditLogger;
+    private final BukuKasPostingService bukuKasPosting;
 
     /**
      * Top-up tunai di TU/bendahara.
@@ -71,6 +78,60 @@ public class SaldoTopUpService {
         // Audit hanya untuk mutasi baru (bukan replay idempotent).
         if (!hasil.isIdempotentReplay()) {
             auditLogger.catat(aktorId, sekolahId, "TOPUP_TUNAI", "Saldo",
+                    subjekTipe + ":" + subjekId, keterangan,
+                    null, String.valueOf(nominal));
+        }
+        return hasil;
+    }
+
+    /**
+     * Top-up <b>online</b> via payment gateway — dipanggil handler webhook
+     * callback-be setelah callback PG <b>sukses</b> (PRD §8.2, INTEGRATIONS §5).
+     *
+     * <p>Saldo bertambah <b>hanya</b> di sini (bukan saat ortu membuka PG), dan
+     * idempoten berbasis <b>refId PG</b>: callback duplikat ≠ saldo dua kali
+     * (PRD §11.3). Idempotency key bersifat <b>tenant-scoped</b> — refId PG yang
+     * sama di sekolah berbeda adalah mutasi berbeda (PRD §11.4, V10).
+     *
+     * <p>Bukan uang fisik: {@link JenisMutasiSaldo#TOPUP_ONLINE} dicatat sebagai
+     * dana titipan (bukan pendapatan — PRD §5). Aksi diaudit (§11.7).
+     *
+     * @param refIdPg referensi transaksi PG (kunci idempotency; wajib)
+     * @param kanal   kanal pembayaran (mis. {@code QRIS}, {@code VA}) untuk keterangan
+     * @param aktorId pelaku (biasanya {@code null} — aksi sistem webhook)
+     */
+    @Transactional
+    public HasilMutasiSaldo topUpOnline(Long sekolahId, SubjekTipe subjekTipe, Long subjekId,
+                                        long nominal, String refIdPg, String penyetor,
+                                        String kanal, Long aktorId) {
+        if (nominal <= 0) {
+            throw new InvalidOperationException("Nominal top-up harus > 0");
+        }
+        if (refIdPg == null || refIdPg.isBlank()) {
+            throw new InvalidOperationException("Referensi transaksi PG (refId) wajib diisi");
+        }
+        String ref = refIdPg.trim();
+
+        String keterangan = "Top-up online"
+                + (kanal == null || kanal.isBlank() ? "" : " via " + kanal)
+                + (penyetor == null || penyetor.isBlank() ? "" : " oleh " + penyetor);
+
+        HasilMutasiSaldo hasil = ledgerSaldo.kredit(PerintahMutasiSaldo.builder()
+                .sekolahId(sekolahId)
+                .subjekTipe(subjekTipe)
+                .subjekId(subjekId)
+                .jenis(JenisMutasiSaldo.TOPUP_ONLINE)
+                .nominal(nominal)
+                .idempotencyKey("TOPUP-ONLINE-" + ref)
+                .referensiTipe("TOPUP_ONLINE")
+                .referensiId(ref)
+                .keterangan(keterangan)
+                .aktorId(aktorId)
+                .build());
+
+        // Audit hanya untuk mutasi baru (bukan replay idempotent).
+        if (!hasil.isIdempotentReplay()) {
+            auditLogger.catat(aktorId, sekolahId, "TOPUP_ONLINE", "Saldo",
                     subjekTipe + ":" + subjekId, keterangan,
                     null, String.valueOf(nominal));
         }
@@ -127,6 +188,14 @@ public class SaldoTopUpService {
             auditLogger.catat(aktorId, sekolahId, "KOREKSI_SALDO", "Saldo",
                     subjekTipe + ":" + subjekId, alasan,
                     String.valueOf(saldoSebelum), String.valueOf(hasil.getSaldoSetelah()));
+
+            // PRD §5.1/§9.2: koreksi bendahara diposting sebagai entri penyesuaian
+            // pos "Penyesuaian Kantin" (bukan mengubah entri lama). Idempoten
+            // (refId dari berita acara) & fail-open — kegagalan posting tidak
+            // membatalkan koreksi saldo yang sudah tercatat.
+            bukuKasPosting.postingKoreksiSaldo(sekolahId, arah == ArahMutasi.KREDIT, nominal,
+                    referensiId, alasan,
+                    hasil.getMutasi() == null ? null : hasil.getMutasi().getId(), aktorId);
         }
 
         return hasil;

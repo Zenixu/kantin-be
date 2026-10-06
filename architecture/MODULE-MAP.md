@@ -40,13 +40,14 @@ FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                �
 | Stok opname | §7.3 | `service/stok` | `stok_opname`, `penyesuaian_stok` | alasan wajib |
 | HPP | §7.4 | `service/kasir` (HppService) | — | rata-rata tertimbang |
 | Top-up tunai | §9.2 | `service/saldo` | `topup`, `setoran_tu` | + bukti bernomor |
-| Refund/pindah | §9.3 | `service/saldo` | `topup` (refund) | + audit |
+| Top-up online (webhook) | §8.2 | `service/webhook`, `service/saldo` | `webhook_event` | HMAC + idempoten per `refId` PG |
+| Refund/pindah | §9.3 | `service/saldo` | `refund`, `pindah-saldo` | + audit; saldo→0 |
 | Koreksi | §9.2 | `service/saldo` | mutasi pembalik | + audit |
 | Kartu Tamu | §9.4 | `service/kartu` | `kartu_tamu` | saldo ikut nomor |
 | Blokir kartu | §6.1, §11.11 | `service/kartu` | `blokir_kartu` | **tanpa cache** |
 | Limit & blokir item | §8.3 | `service/kartu` | `limit_harian`, `blokir_item` | diperiksa tiap tap |
 | Kontrol atas nama ortu | §8.6 | `service/kartu` | (pakai limit/blokir) | + audit |
-| Laporan | §9.5 | `service/laporan` | — (query) | ekspor POI |
+| Laporan | §9.5 | `service/laporan` | — (query) | ekspor POI ✅ (Excel; PDF menunggu Q3/Q5) |
 | Buku Kas integrasi | §5.1 | `service/integrasi` | — | idempoten |
 | Notifikasi | §8.4 | `service/integrasi` | — | ke mobile-be |
 | Aktivasi & fee | §10 | `service/aktivasi` | `aktivasi_modul`, `fee_platform` | internal-be |

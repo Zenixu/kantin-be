@@ -37,6 +37,11 @@
 | `POST` | `/api/saldo/koreksi` | TU, admin, pengelola | Koreksi saldo (arah KREDIT/DEBIT, alasan + berita acara wajib) |
 | `GET` | `/api/saldo?subjekTipe=&subjekId=&batasMutasi=` | petugas, TU, pengelola, admin | Saldo berjalan + belanja hari ini + mutasi terbaru |
 | `GET` | `/api/saldo/rekonsiliasi?subjekTipe=&subjekId=` | TU, admin, pengelola | Hitung ulang saldo dari ledger |
+| `GET` | `/api/saldo/refund/kandidat?hanyaTidakAktif=` | TU, admin, pengelola | Daftar siswa bersisa saldo (kandidat refund/pindah); filter siswa nonaktif |
+| `POST` | `/api/saldo/refund` | TU, admin, pengelola | Refund **seluruh** sisa saldo siswa keluar ke ortu; saldo → 0 & kartu diblokir |
+| `POST` | `/api/saldo/pindah-saldo` | TU, admin, pengelola | Pindah **seluruh** sisa saldo ke saudara kandung (aktif, sekolah sama); saldo sumber → 0 |
+| `GET` | `/api/saldo/setoran-tu/rekap?tanggal=` | TU, admin, pengelola | Rekap top-up tunai per petugas per hari + selisih (kosong = hari ini) |
+| `POST` | `/api/saldo/setoran-tu` | TU, admin, pengelola | Konfirmasi setoran kas TU (selisih dicatat, tidak dihapus; `referensiId` = kunci idempotensi) |
 
 ## 4. Stok (StokController)
 
@@ -103,6 +108,31 @@
 
 ---
 
+## 5b. Webhook masuk (WebhookController) — 🆕
+
+| Method | Path | Auth | Keterangan |
+|---|---|---|---|
+| `POST` | `/api/webhook/{sumber}` | **HMAC-SHA256 + anti-replay** (bukan token) | Terima event dari SKOOLIA/callback-be. `{sumber}` mis. `skoolia`. Idempotent per `(sumber, eventId)` |
+
+> **Autentikasi webhook (B34, SECURITY.md §5.1).** `/api/webhook/**` dibuka
+> `permitAll` (tanpa token user), **tetapi** setiap request wajib membawa:
+>
+> | Header | Isi |
+> |---|---|
+> | `X-Webhook-Timestamp` | epoch detik penandatanganan |
+> | `X-Webhook-Signature` | `sha256=<hex HMAC-SHA256(rahasia, timestamp + "." + body_mentah)>` |
+> | `X-Webhook-Id` | id event unik (kunci idempotency; boleh dari field body `eventId`) |
+>
+> `WebhookSignatureFilter` menolak, **fail-closed**: signature salah / timestamp
+> kedaluwarsa (replay) / header kurang ⇒ **401**; IP di luar
+> `kantin.webhook.allowed-ips` (bila diisi) ⇒ **403**; badan > batas ⇒ **413**;
+> `KANTIN_WEBHOOK_SECRET` kosong ⇒ **503**. Respons sukses memuat
+> `{ sumber, eventId, eventType, status, replay }` — `replay=true` berarti retry
+> event yang sama **tidak diproses ulang**. Body: `{ eventId?, eventType?,
+> sekolahId?, data? }` (bentuk generik; handler per jenis event menunggu Q4/Q7).
+
+---
+
 ## 6. Storage — Unggah/Tampil Berkas (StorageController) — 🆕
 
 | Method | Path | Peran | Keterangan |
@@ -113,6 +143,31 @@
 > **Isolasi tenant wajib (B19, PRD §11.4).** Prefix `sekolah-<id>/` dibentuk **server-side**
 > dari tenant token — bukan dari input klien. Berkas sekolah lain ⇒ **404**.
 > `folder` dibatasi allowlist agar klien tak membuat struktur folder sembarang.
+
+---
+
+## 6b. Laporan & Ekspor Excel (LaporanController) — 🆕
+
+> Semua laporan **tenant-scoped** dari token. Periode: kirim `tanggal`
+> (YYYY-MM-DD, default hari ini zona kantin) **atau** rentang `dari`/`sampai`
+> (ISO date-time). Keduanya kosong ⇒ hari ini. Peran: TU, admin, pengelola
+> (PRD §9.5).
+
+| Method | Path | Peran | Keterangan |
+|---|---|---|---|
+| `GET` | `/api/laporan/penjualan` | TU, admin, pengelola | Ringkasan: jumlah transaksi, bruto, HPP, **laba kotor**, void |
+| `GET` | `/api/laporan/penjualan/item` | TU, admin, pengelola | Penjualan per item (terlaris dulu): qty & nilai |
+| `GET` | `/api/laporan/penjualan/kategori` | TU, admin, pengelola | Penjualan per kategori |
+| `GET` | `/api/laporan/saldo-mengendap` | TU, admin, pengelola | Dana titipan: Σ saldo siswa + Kartu Tamu (kewajiban sekolah) |
+| `GET` | `/api/laporan/rekonsiliasi` | TU, admin, pengelola | Arus kas per jenis + cek invariant `seimbang`/`selisih` (PRD §5) |
+| `GET` | `/api/laporan/stok?hanyaMenipis=` | TU, admin, pengelola | Stok + nilai persediaan (stok × HPP); `menipis` dari `menu.stok_minimum` |
+| `GET` | `/api/laporan/kerugian-stok` | TU, admin, pengelola | Opname keluar & barang rusak: qty + nilai kerugian |
+| `GET` | `/api/laporan/ekspor?jenis=&tanggal=&dari=&sampai=` | TU, admin, pengelola | Unduh **Excel `.xlsx`** (bukan JSON); `jenis` ∈ `JenisLaporan` |
+
+> **Invariant rekonsiliasi (PRD §5).** `selisih = (Σ KREDIT − Σ DEBIT) − saldo
+> mengendap` **harus 0**; `seimbang=false` menandakan ledger & cache tidak
+> sinkron (perlu diselidiki). Laba kotor = penjualan bersih − Σ HPP snapshot
+> item terjual; transaksi **void dipisah** (tidak masuk bruto).
 
 ---
 

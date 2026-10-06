@@ -48,3 +48,13 @@ SKOOLIA_ADMIN_BE_URL=http://localhost:8081
 SKOOLIA_MOBILE_BE_URL=
 SKOOLIA_INTERNAL_BE_URL=
 SKOOLIA_CALLBACK_BE_URL=
+
+# --- Webhook masuk: HMAC-SHA256 (SECURITY.md §5.1, B34) ---
+# Rahasia bersama (shared secret) untuk menandatangani webhook. WAJIB diisi
+# sebelum endpoint /api/webhook/** dipakai; bila kosong endpoint menjawab 503.
+# JANGAN commit nilai asli — pakai environment di staging/produksi.
+KANTIN_WEBHOOK_SECRET=<GANTI_WEBHOOK_SECRET>
+# Anti-replay: toleransi jam (detik) untuk X-Webhook-Timestamp.
+KANTIN_WEBHOOK_TOLERANCE_SECONDS=300
+# Allowlist IP/CIDR pengirim (dipisah koma). Kosong = tidak membatasi.
+KANTIN_WEBHOOK_ALLOWED_IPS=
