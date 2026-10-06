@@ -119,6 +119,13 @@ Optional<Siswa> findByRfidUid(String rfidUid);
 - Bila kantin-be meng-cache data kartu/siswa, cache **WAJIB di-invalidate** oleh notifikasi — **dilarang** mengandalkan TTL.
 - Status **blokir** kartu **tidak boleh** di-cache sama sekali (§11.11).
 
+### 4.4 Port status siswa &amp; blokir kartu (`StatusSiswaPort`, issue #38)
+- Refund/pindah saldo siswa keluar (PRD §9.3) butuh dua hal dari admin-be: **(a)** status keaktifan siswa (lulus/pindah/keluar) untuk daftar kandidat & validasi tujuan, dan **(b)** **pemblokiran kartu** siswa setelah saldo 0.
+- Kontraknya belum final (Q7), jadi dipisah sebagai port `service/integrasi/StatusSiswaPort` dengan implementasi sementara `StatusSiswaFallback`:
+  - `tidakAktif(sekolahId, siswaId)` → `null` ("tidak diketahui") — daftar kandidat tetap tampil (tanpa filter), pemindahan tidak diblokir keliru;
+  - `blokirKartu(...)` → **best-effort** (hanya log) — perpindahan uang di ledger tetap sah &amp; idempoten, tidak dibatalkan kegagalan integrasi.
+- Saat Q7 terjawab: tambahkan implementasi nyata (mis. `SiswaKartuClient`) &amp; tandai `@Primary`. Status blokir **tidak boleh** di-cache (§11.11).
+
 ---
 
 ## 5. Top-up Online (callback-be)

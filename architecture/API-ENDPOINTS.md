@@ -37,6 +37,9 @@
 | `POST` | `/api/saldo/koreksi` | TU, admin, pengelola | Koreksi saldo (arah KREDIT/DEBIT, alasan + berita acara wajib) |
 | `GET` | `/api/saldo?subjekTipe=&subjekId=&batasMutasi=` | petugas, TU, pengelola, admin | Saldo berjalan + belanja hari ini + mutasi terbaru |
 | `GET` | `/api/saldo/rekonsiliasi?subjekTipe=&subjekId=` | TU, admin, pengelola | Hitung ulang saldo dari ledger |
+| `GET` | `/api/saldo/refund/kandidat?hanyaTidakAktif=` | TU, admin, pengelola | Daftar siswa bersisa saldo (kandidat refund/pindah); filter siswa nonaktif |
+| `POST` | `/api/saldo/refund` | TU, admin, pengelola | Refund **seluruh** sisa saldo siswa keluar ke ortu; saldo → 0 & kartu diblokir |
+| `POST` | `/api/saldo/pindah-saldo` | TU, admin, pengelola | Pindah **seluruh** sisa saldo ke saudara kandung (aktif, sekolah sama); saldo sumber → 0 |
 
 ## 4. Stok (StokController)
 

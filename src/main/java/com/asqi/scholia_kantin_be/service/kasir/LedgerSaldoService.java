@@ -64,7 +64,7 @@ public class LedgerSaldoService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public HasilMutasiSaldo kredit(PerintahMutasiSaldo perintah) {
-        return terapkan(ArahMutasi.KREDIT, perintah);
+        return terapkan(ArahMutasi.KREDIT, perintah, false);
     }
 
     /**
@@ -74,11 +74,66 @@ public class LedgerSaldoService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public HasilMutasiSaldo debit(PerintahMutasiSaldo perintah) {
-        return terapkan(ArahMutasi.DEBIT, perintah);
+        return terapkan(ArahMutasi.DEBIT, perintah, false);
     }
 
-    private HasilMutasiSaldo terapkan(ArahMutasi arah, PerintahMutasiSaldo perintah) {
-        validasi(perintah);
+    /**
+     * Kurangi saldo <b>sebanyak sisa</b> yang ada (PRD §9.3 — refund siswa
+     * keluar). Nominal <b>ditentukan dari saldo berjalan</b>, bukan masukan,
+     * sehingga saldo pasti menjadi 0 (tidak bisa salah ketik nominal).
+     *
+     * <p>Gagal ({@link ConflictException}) bila saldo sudah 0 — tidak ada yang
+     * dapat direfund. Idempoten lewat {@code idempotencyKey}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public HasilMutasiSaldo debitSisaPenuh(PerintahMutasiSaldo perintah) {
+        return terapkan(ArahMutasi.DEBIT, perintah, true);
+    }
+
+    /**
+     * Pindahkan <b>seluruh</b> saldo sumber ke tujuan (saudara kandung, PRD
+     * §9.3) dalam <b>satu</b> transaksi: satu kaki DEBIT (sumber → 0) + satu
+     * kaki KREDIT (tujuan += nominal). Bila kaki kredit gagal, kaki debit ikut
+     * di-rollback (atomik) — saldo tidak boleh "hilang" di tengah.
+     *
+     * <p>Idempoten lewat {@code referensiId} (nomor berita acara): replay
+     * mengembalikan kaki debit lama tanpa mutasi baru.
+     *
+     * @return hasil kaki <b>keluar</b> (sumber) — {@code saldoSetelah} = 0
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public HasilMutasiSaldo pindahSaldo(Long sekolahId, SubjekTipe subjekTipe, Long sumberId,
+                                        Long tujuanId, String referensiId, String keterangan,
+                                        Long aktorId) {
+        String keySumber = "TRANSFER-" + referensiId;
+
+        // Idempotency: replay → kembalikan kaki keluar lama tanpa menyentuh saldo.
+        Optional<SaldoLedger> lama = ledgerRepo.findBySekolahIdAndIdempotencyKey(sekolahId, keySumber);
+        if (lama.isPresent()) {
+            return HasilMutasiSaldo.replay(lama.get());
+        }
+
+        HasilMutasiSaldo keluar = terapkan(ArahMutasi.DEBIT, PerintahMutasiSaldo.builder()
+                .sekolahId(sekolahId).subjekTipe(subjekTipe).subjekId(sumberId)
+                .jenis(JenisMutasiSaldo.TRANSFER).nominal(0L)
+                .idempotencyKey(keySumber).referensiTipe("TRANSFER").referensiId(referensiId)
+                .keterangan(keterangan).aktorId(aktorId).build(), true);
+
+        long nominal = keluar.getMutasi().getNominal() == null ? 0L : keluar.getMutasi().getNominal();
+
+        // Kaki masuk — key turunan agar tidak bentrok dengan kaki keluar, tetapi
+        // tetap idempoten (replay kredit tidak menambah saldo dua kali).
+        terapkan(ArahMutasi.KREDIT, PerintahMutasiSaldo.builder()
+                .sekolahId(sekolahId).subjekTipe(subjekTipe).subjekId(tujuanId)
+                .jenis(JenisMutasiSaldo.TRANSFER).nominal(nominal)
+                .idempotencyKey(keySumber + "-MASUK").referensiTipe("TRANSFER").referensiId(referensiId)
+                .keterangan(keterangan).aktorId(aktorId).build(), false);
+
+        return keluar;
+    }
+
+    private HasilMutasiSaldo terapkan(ArahMutasi arah, PerintahMutasiSaldo perintah, boolean seluruhSaldo) {
+        validasi(perintah, seluruhSaldo);
 
         // 1) Idempotency: key sama (per sekolah) → kembalikan hasil lama (tanpa mutasi baru).
         if (perintah.getIdempotencyKey() != null) {
@@ -103,8 +158,15 @@ public class LedgerSaldoService {
         }
 
         long sebelum = cache.getSaldo() == null ? 0L : cache.getSaldo();
-        long setelah = (arah == ArahMutasi.KREDIT) ? sebelum + perintah.getNominal()
-                : sebelum - perintah.getNominal();
+
+        // Nominal: dari perintah, atau SELURUH saldo berjalan (refund/pindah §9.3).
+        long nominal = seluruhSaldo ? sebelum : perintah.getNominal();
+        if (seluruhSaldo && sebelum <= 0) {
+            throw new ConflictException("Saldo kosong — tidak ada yang dapat dipindahkan/direfund");
+        }
+
+        long setelah = (arah == ArahMutasi.KREDIT) ? sebelum + nominal
+                : sebelum - nominal;
 
         // 4) Anti saldo minus (PRD §11.2) — gagal lebih awal dengan pesan jelas.
         if (setelah < 0) {
@@ -120,7 +182,7 @@ public class LedgerSaldoService {
                 .subjekId(perintah.getSubjekId())
                 .arah(arah)
                 .jenis(perintah.getJenis())
-                .nominal(perintah.getNominal())
+                .nominal(nominal)
                 .saldoSetelah(setelah)
                 .transaksiId(perintah.getTransaksiId())
                 .idempotencyKey(perintah.getIdempotencyKey())
@@ -154,7 +216,7 @@ public class LedgerSaldoService {
         return HasilMutasiSaldo.baru(mutasi, setelah);
     }
 
-    private void validasi(PerintahMutasiSaldo p) {
+    private void validasi(PerintahMutasiSaldo p, boolean seluruhSaldo) {
         if (p.getSekolahId() == null) {
             throw new IllegalArgumentException("sekolahId wajib diisi");
         }
@@ -164,7 +226,9 @@ public class LedgerSaldoService {
         if (p.getJenis() == null) {
             throw new IllegalArgumentException("jenis mutasi wajib diisi");
         }
-        if (p.getNominal() <= 0) {
+        // Nominal > 0 wajib, KECUALI mode "seluruh saldo" (nominal diambil dari
+        // saldo berjalan, bukan masukan — PRD §9.3 refund/pindah).
+        if (!seluruhSaldo && p.getNominal() <= 0) {
             throw new IllegalArgumentException("nominal harus > 0");
         }
     }
