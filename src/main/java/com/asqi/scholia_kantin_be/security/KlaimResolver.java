@@ -96,13 +96,37 @@ public class KlaimResolver {
         for (String k : kandidat) {
             Object v = claims.get(k);
             if (v != null) {
-                String s = String.valueOf(v).trim();
+                String s = stringDari(v);
                 if (!s.isEmpty()) {
                     return s;
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Ubah nilai klaim menjadi string, menormalkan angka.
+     *
+     * <p><b>Kenapa perlu:</b> jjwt-gson mendeserialisasi angka JSON apa pun
+     * menjadi {@link Double} — klaim {@code user_id} bernilai {@code 42} dari
+     * admin-be terbaca sebagai {@code 42.0}. Akibatnya {@code String.valueOf}
+     * menghasilkan {@code "42.0"} dan {@code Long.valueOf("42.0")} di
+     * {@code IdentitasKantin.aktorIdWajib()} GAGAL, sehingga seluruh endpoint
+     * tulis (saldo, kartu tamu, katalog) error dengan token staf yang sah.
+     * Angka integral dinormalkan ke bentuk tanpa pecahan ({@code "42"}).
+     */
+    private String stringDari(Object v) {
+        if (v instanceof Number n) {
+            double d = n.doubleValue();
+            if (!Double.isNaN(d) && !Double.isInfinite(d)
+                    && d == Math.rint(d)
+                    && d >= Long.MIN_VALUE && d <= Long.MAX_VALUE) {
+                return String.valueOf((long) d);
+            }
+            return String.valueOf(v).trim();
+        }
+        return String.valueOf(v).trim();
     }
 
     private Long ambilLong(Claims claims, List<String> kandidat) {

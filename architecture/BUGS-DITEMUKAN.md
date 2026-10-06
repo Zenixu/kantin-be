@@ -285,6 +285,16 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Catatan positif (bukan bug):** pembalik sudah aman karena UNIQUE `uq_mutasi_stok_pembalik_referensi` mencegah dobel saat balapan (loser dapat 409, bukan stok dobel). `saldo_cache`/`stok_cache` berkunci `(subjek_tipe, subjek_id)`/`menu_id` **memang benar** — `subjekId`/`menuId` global unik (lihat `IsolasiTenantLockIT` B17).
 - **Uji baru:** `AuditKeamananStokIT` (3), `AuditKeamananSaldoIT` (1), `AuditRateLimitSpoofTest` (1), `PeranAspectTest` (4 — RBAC sebelumnya **tak teruji**). Total **92 unit + 71 IT hijau**.
 
+## B34 — (audit integrasi Q1) Token staf admin-be ditolak & `user_id` terbaca `"42.0"`
+
+- **Konteks:** menindaklanjuti Q1 (#14) — kompatibilitas token staf dari admin-be. Repo `admin-be` ada di lokal (`skoolia/admin-be`, GitLab), jadi format klaim dibaca **langsung dari sumber** (`JwtUtils.buildToken()`), bukan ditebak. Dua bug integrasi ditemukan dan **direproduksi dengan uji gagal lebih dulu** (`KompatibilitasTokenStafAdminTest`).
+- **Cacat & perbaikan:**
+  1. **Klaim `iss` absen → token staf yang SAH ditolak.** admin-be menerbitkan `sub`/`typ`/`user_id`/`nama`/`role`/`sekolah_id` tetapi **tidak** menyetel `iss`. Kantin-be memakai `requireIssuer("skoolia-admin")` (default `jwt.verify-issuer=true`) → jjwt melempar `MissingClaimException: Missing 'iss' claim`. Artinya **semua** token staf ditolak 401 di staging meski signature benar. Perbaikan (`KantinJwtDecoder.verifikasi`): `iss` **salah** tetap DITOLAK, tetapi `iss` **absen** DITERIMA + peringatan log. Pemisahan issuer sejati tetap ditegakkan **public key berbeda per sumber** (token mobile-be tak lolos verifikasi tanda tangan dengan kunci admin-be), jadi keamanan tidak melemah. (Bukti: `tokenTanpaIssuerDiterimaSetelahPerbaikan` + kontrol `tokenIssuerSalahDitolak` & `tandaTanganSalahDitolak`.)
+  2. **`user_id` numerik terbaca `"42.0"` → `aktorIdWajib()` gagal.** jjwt-gson mendeserialisasi angka JSON apa pun menjadi `Double`; klaim `user_id`=`42` (Long di admin-be) terbaca `42.0`, sehingga `String.valueOf` → `"42.0"` dan `Long.valueOf("42.0")` melempar `NumberFormatException`. Dampak: **seluruh endpoint tulis** (saldo, kartu tamu, katalog) error dengan token staf yang sah. Perbaikan (`KlaimResolver.stringDari`): angka integral dinormalkan ke bentuk tanpa pecahan (`"42"`). (Bukti: `userIdNumerikTerbacaSebagaiLong` → `aktorIdWajib()==42L`.)
+- **Temuan dokumentasi:** javadoc `IdentitasKantin` masih menyatakan "token admin-be tidak membawa `sekolah_id`/`role`" — **usang** (admin-be sekarang mengeluarkannya). Diperbarui.
+- **Belum selesai (masih terblokir):** **public key RS256 masih temporary** (`.env.jwt-temporary` admin-be + `application-local.properties` kantin-be). Format klaim ✅ terjawab; lokasi key produksi ⏳ masih menunggu admin-be. Q1 → 🟡 **SEBAGIAN TERJAWAB**.
+- **Uji baru:** `KompatibilitasTokenStafAdminTest` (5).
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
