@@ -5,6 +5,7 @@ import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.dto.TapRequest;
 import com.asqi.scholia_kantin_be.dto.TapResponse;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
+import com.asqi.scholia_kantin_be.enums.JenisNotifikasi;
 import com.asqi.scholia_kantin_be.enums.MetodeRequestKartu;
 import com.asqi.scholia_kantin_be.enums.StatusTransaksi;
 import com.asqi.scholia_kantin_be.helper.IdGenerator;
@@ -17,6 +18,8 @@ import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.service.integrasi.InfoKartu;
 import com.asqi.scholia_kantin_be.service.integrasi.KartuLookupPort;
 import com.asqi.scholia_kantin_be.service.integrasi.MenuLookupPort;
+import com.asqi.scholia_kantin_be.service.integrasi.NotifikasiService;
+import com.asqi.scholia_kantin_be.service.integrasi.PerintahNotifikasi;
 import com.asqi.scholia_kantin_be.service.stok.HasilMutasiStok;
 import com.asqi.scholia_kantin_be.service.stok.LedgerStokService;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +69,7 @@ public class TapService {
     private final IdGenerator idGenerator;
     private final JamKantin jam;
     private final TransactionTemplate txTemplate;
+    private final NotifikasiService notifikasi;
 
     /**
      * Proses satu tap.
@@ -188,6 +192,22 @@ public class TapService {
         log.info("Tap sukses trx={} sekolah={} subjek={}/{} total={} saldoSisa={}",
                 transaksiId, sekolahId, kartu.getSubjekTipe(), kartu.getSubjekId(),
                 hasil.getTotal(), hasilDebit.getSaldoSetelah());
+
+        // Notifikasi ke ortu (PRD §8.4) — best-effort/fail-open: kegagalan
+        // pengiriman TIDAK membatalkan tap yang sudah tercatat di ledger.
+        notifikasi.kirim(PerintahNotifikasi.builder()
+                .sekolahId(sekolahId)
+                .jenis(JenisNotifikasi.BELANJA)
+                .subjekTipe(kartu.getSubjekTipe())
+                .subjekId(kartu.getSubjekId())
+                .nominal(hasil.getTotal())
+                .saldoSetelah(hasilDebit.getSaldoSetelah())
+                .referensiId(String.valueOf(transaksiId))
+                .ringkasan((kartu.getNama() == null ? "Siswa" : kartu.getNama())
+                        + " belanja Rp" + hasil.getTotal() + " di kantin")
+                .aktorId(petugasId)
+                .waktu(now)
+                .build());
 
         return TapResponse.builder()
                 .transaksiId(transaksiId)

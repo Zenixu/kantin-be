@@ -5,9 +5,12 @@ import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
 import com.asqi.scholia_kantin_be.dto.HasilRefundResponse;
 import com.asqi.scholia_kantin_be.dto.KandidatRefundItem;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
+import com.asqi.scholia_kantin_be.enums.JenisNotifikasi;
 import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.model.SaldoCache;
 import com.asqi.scholia_kantin_be.repository.SaldoCacheRepository;
+import com.asqi.scholia_kantin_be.service.integrasi.NotifikasiService;
+import com.asqi.scholia_kantin_be.service.integrasi.PerintahNotifikasi;
 import com.asqi.scholia_kantin_be.service.integrasi.StatusSiswaPort;
 import com.asqi.scholia_kantin_be.service.kasir.HasilMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.kasir.LedgerSaldoService;
@@ -51,6 +54,7 @@ public class RefundSaldoService {
     private final SaldoCacheRepository cacheRepo;
     private final StatusSiswaPort statusSiswa;
     private final AuditLogger auditLogger;
+    private final NotifikasiService notifikasi;
 
     /**
      * Daftar kandidat refund/pindah: subjek SISWA yang masih bersisa saldo,
@@ -121,6 +125,19 @@ public class RefundSaldoService {
             }
             log.info("Refund saldo sekolah={} siswa={} nominal={} ref={}",
                     sekolahId, siswaId, nominal, referensiId);
+
+            // Notifikasi ke ortu (PRD §8.4) — best-effort/fail-open.
+            notifikasi.kirim(PerintahNotifikasi.builder()
+                    .sekolahId(sekolahId)
+                    .jenis(JenisNotifikasi.REFUND)
+                    .subjekTipe(SubjekTipe.SISWA)
+                    .subjekId(siswaId)
+                    .nominal(nominal)
+                    .saldoSetelah(hasil.getSaldoSetelah())
+                    .referensiId(referensiId)
+                    .ringkasan("Refund sisa saldo Rp" + nominal + " telah diproses")
+                    .aktorId(aktorId)
+                    .build());
         }
 
         return HasilRefundResponse.builder()
@@ -178,6 +195,20 @@ public class RefundSaldoService {
             }
             log.info("Pindah saldo sekolah={} dari={} ke={} nominal={} ref={}",
                     sekolahId, sumberId, tujuanId, nominal, referensiId);
+
+            // Notifikasi ke ortu (PRD §8.4) — best-effort/fail-open.
+            notifikasi.kirim(PerintahNotifikasi.builder()
+                    .sekolahId(sekolahId)
+                    .jenis(JenisNotifikasi.PINDAH_SALDO)
+                    .subjekTipe(SubjekTipe.SISWA)
+                    .subjekId(sumberId)
+                    .nominal(nominal)
+                    .saldoSetelah(hasil.getSaldoSetelah())
+                    .referensiId(referensiId)
+                    .ringkasan("Saldo Rp" + nominal + " dipindahkan ke saudara (siswa "
+                            + tujuanId + ")")
+                    .aktorId(aktorId)
+                    .build());
         }
 
         return HasilRefundResponse.builder()
