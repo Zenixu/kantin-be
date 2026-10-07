@@ -4,6 +4,8 @@ import com.asqi.scholia_kantin_be.component.exception.ConflictException;
 import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.enums.ArahStok;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
+import com.asqi.scholia_kantin_be.security.IdentitasKantin;
+import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.support.EnabledIfDockerAvailable;
 import com.asqi.scholia_kantin_be.support.TestcontainersConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +51,7 @@ class LedgerStokServiceIT {
 
     @BeforeEach
     void bersihkan() {
+        TenantContext.clear();
         jdbc.execute("TRUNCATE TABLE mutasi_stok, stok_cache CASCADE");
     }
 
@@ -142,6 +145,61 @@ class LedgerStokServiceIT {
                 .hasMessageContaining("append-only");
         assertThatThrownBy(() -> jdbc.update("DELETE FROM mutasi_stok"))
                 .hasMessageContaining("append-only");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // SNAPSHOT NAMA AKTOR (issue #99)
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("aktorNama — snapshot dari konteks request (klaim JWT 'nama')")
+    void aktorNamaDariKonteks() {
+        TenantContext.set(IdentitasKantin.builder()
+                .userId("42").nama("Bu Sri").sekolahId(SEKOLAH).build());
+        try {
+            Long mutasiId = tx.execute(s -> ledger.masukBarang(
+                    SEKOLAH, MENU, 5, 5_000, "BARANG_MASUK", "BM-1", 42L).getMutasi().getId());
+
+            String aktorNama = jdbc.queryForObject(
+                    "SELECT aktor_nama FROM mutasi_stok WHERE id = ?", String.class, mutasiId);
+            assertThat(aktorNama).isEqualTo("Bu Sri");
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("aktorNama — penjualan merekam aktor dari konteks (kolom Aktor terisi)")
+    void aktorNamaPenjualan() {
+        tx.executeWithoutResult(s -> ledger.masukBarang(SEKOLAH, MENU, 10, 5_000, "BARANG_MASUK", "BM-1", 1L));
+
+        TenantContext.set(IdentitasKantin.builder()
+                .userId("77").nama("Pak Kasir").sekolahId(SEKOLAH).build());
+        try {
+            Long penjualanId = tx.execute(s -> ledger.keluarPenjualan(SEKOLAH, MENU, 2, 999L)
+                    .getMutasi().getId());
+
+            var baris = jdbc.queryForMap(
+                    "SELECT aktor_id, aktor_nama FROM mutasi_stok WHERE id = ?", penjualanId);
+            assertThat(((Number) baris.get("aktor_id")).longValue()).isEqualTo(77L);
+            assertThat(baris.get("aktor_nama")).isEqualTo("Pak Kasir");
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("aktorNama — tanpa konteks (aksi sistem) bernilai null, bukan error")
+    void aktorNamaSistemNull() {
+        tx.executeWithoutResult(s -> ledger.masukBarang(SEKOLAH, MENU, 10, 5_000, "BARANG_MASUK", "BM-1", 1L));
+
+        // Tanpa TenantContext: meniru scheduler/aksi sistem → aktorNama null.
+        Long mutasiId = tx.execute(s -> ledger.sesuaikanOpname(
+                SEKOLAH, MENU, 7, "KOREKSI SISTEM", "OPN-SYS-1", null).getMutasi().getId());
+
+        String aktorNama = jdbc.queryForObject(
+                "SELECT aktor_nama FROM mutasi_stok WHERE id = ?", String.class, mutasiId);
+        assertThat(aktorNama).isNull();
     }
 
     // ────────────────────────────────────────────────────────────────

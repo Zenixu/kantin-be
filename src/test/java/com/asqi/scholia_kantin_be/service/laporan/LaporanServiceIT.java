@@ -234,6 +234,21 @@ class LaporanServiceIT {
     }
 
     @Test
+    @DisplayName("laporan stok — alias FE namaMenu & stokBerjalan (issue #98)")
+    void laporanStokAliasFe() {
+        tx.executeWithoutResult(s -> ledgerStok.masukBarang(SEKOLAH, MENU_A, 10, 4_000, "BM-1", "BM-1", 1L));
+
+        BarisStok nasi = laporan.laporanStok(SEKOLAH, false).stream()
+                .filter(b -> b.menuId().equals(MENU_A)).findFirst().orElseThrow();
+
+        // Alias wajib sama nilainya dengan field asal (kontrak FE Laporan Inventaris).
+        assertThat(nasi.namaMenu()).isEqualTo(nasi.nama());
+        assertThat(nasi.stokBerjalan()).isEqualTo(nasi.stok());
+        assertThat(nasi.stokBerjalan()).isEqualTo(10);
+        assertThat(nasi.namaMenu()).isNotBlank();
+    }
+
+    @Test
     @DisplayName("ekspor Excel — berkas .xlsx valid & berisi data")
     void eksporExcelValid() throws Exception {
         topup(SISWA, SubjekTipe.SISWA, 50_000, JenisMutasiSaldo.TOPUP_TUNAI);
