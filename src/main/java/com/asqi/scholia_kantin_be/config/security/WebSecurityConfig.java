@@ -55,6 +55,7 @@ import java.util.List;
         com.asqi.scholia_kantin_be.config.security.jwt.JwtConfigValues.class,
         RateLimitProperties.class,
         WebhookProperties.class,
+        com.asqi.scholia_kantin_be.dev.DevLoginProperties.class,
         com.asqi.scholia_kantin_be.config.KantinProfilProperties.class})
 @RequiredArgsConstructor
 public class WebSecurityConfig {
@@ -72,14 +73,27 @@ public class WebSecurityConfig {
             "/error"
     };
 
+    /**
+     * Shim login dev (profil local). Bila aktif, {@code /api/v1/auth/login}
+     * dibuka agar FE bisa memperoleh token RS256 lokal. Default {@code false} →
+     * endpoint tetap tertutup (401), sesuai ADR-0002.
+     */
+    @Value("${kantin.dev-login.enabled:false}")
+    private boolean devLoginEnabled;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            CorsConfigurationSource corsConfigurationSource) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable);
         http.cors(cors -> cors.configurationSource(corsConfigurationSource));
 
+        String[] publik = devLoginEnabled
+                ? new String[]{"/actuator/health/**", "/actuator/info", "/api/webhook/**",
+                        "/error", "/api/v1/auth/login"}
+                : PUBLIC_ENDPOINTS;
+
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                .requestMatchers(publik).permitAll()
                 .anyRequest().authenticated()
         );
 
