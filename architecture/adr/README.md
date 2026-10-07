@@ -17,6 +17,11 @@
 | [0007](./0007-layanan-tap-tetap-java.md) | Layanan tap tetap di Java (tanpa split ke service ringan) | Diusulkan | 2026-10-06 |
 | [0008](./0008-reader-rfid-samakan-kiosk-demo.md) | Reader RFID USB kasir = reader Kiosk Presensi (asumsi demo) | Diusulkan | 2026-10-07 |
 | [0009](./0009-postur-regulasi-dana-titipan-closed-loop.md) | Postur regulasi: dana titipan closed-loop (bukan uang elektronik) | Diusulkan | 2026-10-07 |
+ chore/adr-topologi-postgresql-q11
 | [0010](./0010-topologi-postgresql-kantin.md) | Topologi PostgreSQL kantin: DB terpisah, server terpisah (produksi) | Diusulkan | 2026-10-08 |
+
+| [0010](./0010-topologi-postgresql-db-terpisah-server-sama.md) | Topologi PostgreSQL: DB terpisah, server boleh sama untuk MVP | Diterima | 2026-10-07 |
+| [0011](./0011-rfid-usb-bridge-keyboard-wedge-mvp.md) | RFID USB bridge: keyboard-wedge untuk MVP, WebHID/agent menuju produksi | Diterima | 2026-10-07 |
+ main
 
 > Status: `Diusulkan` → `Diterima` → (`Ditolak` / `Digantikan oleh NNNN`).

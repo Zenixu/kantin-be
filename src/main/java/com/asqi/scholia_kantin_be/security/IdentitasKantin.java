@@ -19,12 +19,16 @@ import java.security.Principal;
  * {@code userId} sebagai string, supaya Spring Security bisa mengaitkan
  * autentikasi dengan benar (audit, logging, {@code sessionManagement}).
  *
- * <p>⚠️ <b>Status Q1 (diperbarui):</b> admin-be kini <i>sudah</i> menyetel klaim
- * {@code sekolah_id} &amp; {@code role} (lihat {@code admin-be/JwtUtils.buildToken()}),
- * tetapi <b>belum</b> menyetel {@code iss}. Karena itu {@code sekolahId} &amp;
- * {@code peran} tetap <i>nullable</i> (fail-closed bila absen) dan decoder
- * menerima {@code iss} yang absen — lihat
- * {@code KantinJwtDecoder.verifikasi()} &amp; {@code KompatibilitasTokenStafAdminTest}.
+ * <p>⚠️ <b>Status Q1 (diperbarui 2026-10-07):</b> admin-be <b>TIDAK</b> menyetel klaim
+ * {@code user_id}, {@code nama}, {@code role}, {@code sekolah_id}, maupun {@code iss}
+ * di JWT — diverifikasi langsung dari {@code admin-be/JwtUtils.buildToken()} baris 87-100:
+ * token hanya berisi {@code sub}(username), {@code typ}, {@code jti}/{@code iat}/{@code exp}.
+ * Catatan sebelumnya yang mengklaim "admin-be sudah menyetel sekolah_id & role" adalah
+ * <b>SALAH</b> (info tersebut ada di response body login {@code JwtResponse}, bukan di JWT).
+ * Karena itu {@code sekolahId} & {@code peran} tetap <i>nullable</i> (fail-closed bila absen)
+ * dan decoder menerima {@code iss} yang absen — lihat {@code KantinJwtDecoder.verifikasi()}
+ * & {@code KompatibilitasTokenStafAdminTest}. Kantin-be menyesuaikan dengan memanggil
+ * {@code GET /api/auth/me} admin-be (lihat OPEN-QUESTIONS Q1 adaptasi).
  */
 @Getter
 @Builder

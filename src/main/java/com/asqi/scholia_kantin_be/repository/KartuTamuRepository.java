@@ -57,4 +57,17 @@ public interface KartuTamuRepository extends JpaRepository<KartuTamu, Long> {
             AND (:excludeId IS NULL OR k.id != :excludeId)
             """)
     boolean existsByRfidUidExcluding(String rfidUid, Long excludeId);
+
+    /**
+     * Cek apakah RFID UID dipakai kartu tamu mana pun (aktif maupun tidak),
+     * lintas sekolah. Dipakai endpoint internal anti-tabrakan (issue #29) agar
+     * admin-be dapat menolak {@code rfid_uid} siswa yang sudah dipakai Kartu Tamu.
+     *
+     * <p>UID bersifat <b>UNIQUE global</b> (bukan per sekolah), jadi pengecekan
+     * tidak dibatasi tenant — mencegah dua pemegang kartu dengan UID sama.
+     *
+     * @param rfidUid UID yang mau dicek
+     * @return {@code true} jika UID sudah dipakai kartu tamu mana pun
+     */
+    boolean existsByRfidUid(String rfidUid);
 }
