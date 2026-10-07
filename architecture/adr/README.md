@@ -15,5 +15,7 @@
 | [0005](./0005-rfid-usb-bridge.md) | RFID USB bridge untuk kasir | Diusulkan | 2026-10-02 |
 | [0006](./0006-prosedur-darurat-offline.md) | Prosedur darurat saat kantin kehilangan koneksi | Diusulkan | 2026-10-06 |
 | [0007](./0007-layanan-tap-tetap-java.md) | Layanan tap tetap di Java (tanpa split ke service ringan) | Diusulkan | 2026-10-06 |
+| [0008](./0008-reader-rfid-samakan-kiosk-demo.md) | Reader RFID USB kasir = reader Kiosk Presensi (asumsi demo) | Diusulkan | 2026-10-07 |
+| [0009](./0009-postur-regulasi-dana-titipan-closed-loop.md) | Postur regulasi: dana titipan closed-loop (bukan uang elektronik) | Diusulkan | 2026-10-07 |
 
 > Status: `Diusulkan` → `Diterima` → (`Ditolak` / `Digantikan oleh NNNN`).

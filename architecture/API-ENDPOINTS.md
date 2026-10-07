@@ -171,6 +171,30 @@
 
 ---
 
+## 6c. Konfigurasi Kantin & Solusi Demo (KonfigurasiKantinController) — 🆕
+
+> Solusi "seadanya" untuk pertanyaan terblokir tim lain (#21–#25) selama
+> kantin-be belum rilis penuh. Semua **tenant-scoped** dari token (kecuali
+> `profil` yang konfigurasi-level). Lihat `OPEN-QUESTIONS.md` Q8/Q14–Q17.
+
+| Method | Path | Peran | Keterangan |
+|---|---|---|---|
+| `POST` | `/api/konfigurasi/pos-buku-kas/aktivasi` | admin, pengelola, TU | **#21/Q8** — buat pos Buku Kas standar (Pendapatan/Belanja Stok/Penyesuaian), **idempoten** |
+| `GET` | `/api/konfigurasi/pos-buku-kas` | admin, pengelola, TU, petugas | Daftar pos Buku Kas kantin |
+| `POST` | `/api/konfigurasi/insiden-offline` | petugas, pengelola, TU, admin | **#23/Q14** — catat insiden offline (prosedur darurat ADR-0006), append-only |
+| `GET` | `/api/konfigurasi/insiden-offline` | pengelola, TU, admin | Daftar insiden offline, terbaru dulu |
+| `GET` | `/api/konfigurasi/kebijakan` | admin, pengelola, TU | **#25/Q16** — ambil kebijakan kantin (default `REFUND` bila belum diisi) |
+| `PUT` | `/api/konfigurasi/kebijakan` | admin | Ubah kebijakan saldo mengendap (`REFUND`/`PINDAH_SAUDARA`/`TETAP_MENGENDAP`) |
+| `GET` | `/api/konfigurasi/profil` | semua peran kantin | **#22/Q17 & #24/Q15** — profil reader RFID & postur regulasi (asumsi demo) |
+
+> **#21** pos Buku Kas dibuat otomatis per sekolah (fallback lokal sampai
+> admin-be konfirmasi); posting tetap lewat `BukuKasPort`. **#23** insiden
+> offline **append-only** (trigger `tolak_perubahan_ledger`). **#25** default
+> `REFUND` (kembalikan ke ortu). **#22/#24** nilai `kantin.profil.*`
+> konfigurabel via environment (ADR-0008, ADR-0009).
+
+---
+
 ## 7. Hal yang perlu diperhatikan tim
 
 1. **Tenant dari token, bukan query/body.** Sekolah lain → **404** (bukan 403) agar tidak membocorkan keberadaan data (PRD §11.4).

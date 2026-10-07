@@ -54,7 +54,8 @@ import java.util.List;
 @EnableConfigurationProperties({JwtProperties.class,
         com.asqi.scholia_kantin_be.config.security.jwt.JwtConfigValues.class,
         RateLimitProperties.class,
-        WebhookProperties.class})
+        WebhookProperties.class,
+        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class})
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
