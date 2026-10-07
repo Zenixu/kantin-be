@@ -195,6 +195,55 @@
 
 ---
 
+## 6d. Kontrol Kartu — Blokir & Limit (KontrolKartuController) — 🆕 #40
+
+> **#40** — blokir kartu **instan**, limit harian, dan blokir item/kategori.
+> Semua **tenant-scoped** dari token. Kontrol dibaca **tanpa cache** saat tap
+> (PRD §11.11) agar blokir langsung berlaku. Bagian yang bergantung kontrak
+> lookup kartu eksternal (Q7) dilindungi port/fallback, bukan ditunda.
+
+| Method | Path | Peran | Keterangan |
+|---|---|---|---|
+| `POST` | `/api/kontrol-kartu/blokir` | admin, pengelola, petugas, TU | Blokir kartu (siswa/Kartu Tamu); berlaku instan di tap berikutnya |
+| `DELETE` | `/api/kontrol-kartu/blokir` | admin, pengelola, petugas, TU | Buka blokir kartu |
+| `GET` | `/api/kontrol-kartu/blokir` | admin, pengelola, TU | Daftar kartu terblokir |
+| `PUT` | `/api/kontrol-kartu/limit` | admin, pengelola | Set limit belanja harian (siswa/Kartu Tamu) |
+| `DELETE` | `/api/kontrol-kartu/limit` | admin, pengelola | Hapus limit harian |
+| `GET` | `/api/kontrol-kartu/limit` | admin, pengelola, TU | Daftar limit harian |
+| `POST` | `/api/kontrol-kartu/blokir-item` | admin, pengelola | Blokir item/kategori untuk satu kartu |
+| `DELETE` | `/api/kontrol-kartu/blokir-item` | admin, pengelola | Buka blokir item/kategori |
+| `GET` | `/api/kontrol-kartu/blokir-item` | admin, pengelola, TU | Daftar blokir item |
+
+> **Q7** (anti-tabrakan `rfid_uid` dengan admin-be) tidak menghalangi penegakan
+> kontrol: penegakan dilakukan kantin-be pada data kartu yang sudah dikenali
+> (`TapService` → `KontrolKartuService.terapkan`). Kontrak lookup eksternal
+> masuk lewat `KartuLookupPort`.
+
+---
+
+## 6e. Pengaturan Kantin & Titik Kasir + Aktivasi Modul (PengaturanKantinController) — 🆕 #42
+
+> **#42** — pengaturan kantin per sekolah, CRUD titik kasir, dan status
+> aktivasi modul/fee. Semua **tenant-scoped** dari token.
+
+| Method | Path | Peran | Keterangan |
+|---|---|---|---|
+| `GET` | `/api/pengaturan-kantin` | admin, pengelola, TU | Ambil pengaturan (default aman bila belum diatur) |
+| `PUT` | `/api/pengaturan-kantin` | admin | Ubah nama, jam tutup otomatis, konfirmasi manual, durasi foto, min/maks top-up, batas saldo siswa/Kartu Tamu |
+| `GET` | `/api/pengaturan-kantin/titik-kasir` | petugas, pengelola, TU, admin | Daftar titik kasir (`?hanyaAktif=true`) |
+| `GET` | `/api/pengaturan-kantin/titik-kasir/{id}` | petugas, pengelola, TU, admin | Detail titik kasir |
+| `POST` | `/api/pengaturan-kantin/titik-kasir` | admin | Buat titik kasir (kode unik per sekolah) |
+| `PUT` | `/api/pengaturan-kantin/titik-kasir/{id}` | admin | Ubah titik kasir (nama, kode, aktif) |
+| `DELETE` | `/api/pengaturan-kantin/titik-kasir/{id}` | admin | Nonaktifkan titik kasir (soft delete; tolak bila ada sesi terbuka) |
+| `GET` | `/api/pengaturan-kantin/aktivasi-modul` | admin, pengelola, TU | **#42/Q6** — status aktivasi modul & fee (fail-open via `AktivasiModulPort`) |
+
+> **Jam tutup otomatis** dipakai penjadwal `JamTutupKasirScheduler` (berkala)
+> yang menutup sesi **hari ini** begitu jam tutup sekolah terlewati
+> (`kantin.scheduler.jam-tutup.*`). **Aktivasi/fee platform (§10)** dimiliki
+> internal-be (Q6) — kantin-be tidak menduplikasi data, hanya menanyakannya.
+
+---
+
 ## 7. Hal yang perlu diperhatikan tim
 
 1. **Tenant dari token, bukan query/body.** Sekolah lain → **404** (bukan 403) agar tidak membocorkan keberadaan data (PRD §11.4).
@@ -213,10 +262,10 @@
 
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|
-| Blokir kartu | blokir/buka blokir | Q7 |
-| Limit & blokir item | set limit harian, blokir item | Q7 |
+| Blokir kartu | blokir/buka blokir | ✅ dibuat (#40, `/api/kontrol-kartu/blokir`) |
+| Limit & blokir item | set limit harian, blokir item | ✅ dibuat (#40, `/api/kontrol-kartu/limit`, `/blokir-item`) |
 | Laporan | ekspor Excel/PDF | Q3, Q5 |
-| Aktivasi & fee | toggle modul, fee platform | Q6 |
+| Aktivasi & fee | toggle modul, fee platform | ✅ status dibaca (#42, `/api/pengaturan-kantin/aktivasi-modul`); toggle tetap milik internal-be (Q6) |
 | Top-up online | (dari mobile-be) | Q4 |
 
 > Lihat `MODULE-MAP.md` §1 untuk urutan fase & `OPEN-QUESTIONS.md` untuk Q1–Q7.

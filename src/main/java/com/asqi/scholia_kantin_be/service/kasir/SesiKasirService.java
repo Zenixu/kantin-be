@@ -12,6 +12,7 @@ import com.asqi.scholia_kantin_be.repository.TransaksiRepository;
 import com.asqi.scholia_kantin_be.security.SekolahGuard;
 import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import com.asqi.scholia_kantin_be.service.integrasi.HasilPostingBukuKas;
+import com.asqi.scholia_kantin_be.service.konfigurasi.PengaturanKantinService;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -48,6 +50,7 @@ public class SesiKasirService {
     private final IdGenerator idGenerator;
     private final JamKantin jam;
     private final BukuKasPostingService bukuKasPosting;
+    private final PengaturanKantinService pengaturanKantin;
 
     /**
      * Ambil sesi TERBUKA untuk titik kasir hari ini; buka baru bila belum ada.
@@ -230,6 +233,42 @@ public class SesiKasirService {
         }
         if (total > 0) {
             log.info("Auto-tutup lintas-tenant selesai: {} sesi ditutup", total);
+        }
+        return total;
+    }
+
+    /**
+     * Auto-tutup sesi hari ini untuk sekolah yang <b>jam tutupnya sudah lewat</b>
+     * (PRD §6.4, §9.1) — memakai pengaturan {@code jam_tutup_otomatis} per sekolah.
+     *
+     * <p>Berbeda dari {@link #tutupOtomatisLintasTenant()} (yang hanya menutup sesi
+     * <i>hari-hari sebelumnya</i>), method ini menutup sesi <b>hari ini</b> begitu
+     * jam tutup sekolah terlewati. Dijalankan penjadwal berkala; idempoten karena
+     * hanya menyentuh sesi yang masih {@code TERBUKA}.
+     *
+     * <p>Bila sekolah belum mengatur jam tutup, default 23:59 dipakai
+     * ({@link PengaturanKantinService#DEFAULT_JAM_TUTUP}).
+     *
+     * @return jumlah total sesi yang ditutup
+     */
+    public int tutupSesiLewatJamTutup() {
+        LocalTime sekarang = jam.sekarang().toLocalTime();
+        int total = 0;
+        for (Long sekolahId : sesiRepo.daftarSekolahIdDenganStatus(StatusSesiKasir.TERBUKA)) {
+            try {
+                LocalTime batas = pengaturanKantin.jamTutupOtomatis(sekolahId);
+                if (sekarang.isBefore(batas)) {
+                    continue; // belum lewat jam tutup sekolah ini
+                }
+                // Lintas-bean tidak perlu: tutupOtomatis menyimpan per baris
+                // (auto-commit) sehingga satu sekolah gagal tak me-rollback yang lain.
+                total += tutupOtomatis(sekolahId);
+            } catch (RuntimeException e) {
+                log.error("Auto-tutup (jam pengaturan) gagal sekolah={}: {}", sekolahId, e.getMessage(), e);
+            }
+        }
+        if (total > 0) {
+            log.info("Auto-tutup sesuai jam tutup selesai: {} sesi ditutup", total);
         }
         return total;
     }
