@@ -5,6 +5,7 @@ import com.asqi.scholia_kantin_be.component.exception.ConflictException;
 import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
 import com.asqi.scholia_kantin_be.model.KartuTamu;
 import com.asqi.scholia_kantin_be.repository.KartuTamuRepository;
+import com.asqi.scholia_kantin_be.service.integrasi.UidSiswaPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +19,18 @@ import java.util.List;
  * <p>Kartu Tamu = kartu RFID untuk non-siswa (guru/staf/tamu). Saldo terikat
  * ke nomor kartu (bukan orang). Diisi tunai di TU (PRD §9.4).
  *
- * <p><b>Anti-tabrakan UID:</b> {@code rfidUid} UNIQUE global — tidak boleh
- * sama dengan {@code rfid_uid} siswa di admin-be. Validasi sisi kantin-be:
- * cek {@link KartuTamuRepository#existsByRfidUidExcluding}. Validasi sisi
- * admin-be: akan ditambahkan di SiswaService (TODO Q-koordinasi).
+ * <p><b>Anti-tabrakan UID (issue #29):</b> {@code rfidUid} UNIQUE global —
+ * tidak boleh sama dengan {@code rfid_uid} siswa di admin-be. Validasi
+ * <b>dua arah</b>:
+ * <ul>
+ *   <li><b>kantin-be (lokal):</b> tolak UID yang sudah dipakai Kartu Tamu lain
+ *       ({@link KartuTamuRepository#existsByRfidUidExcluding});</li>
+ *   <li><b>kantin-be → admin-be:</b> tolak UID yang sudah dipakai siswa lewat
+ *       {@link UidSiswaPort} (fail-open sampai Q7 terjawab);</li>
+ *   <li><b>admin-be → kantin-be:</b> admin-be menanyakan UID Kartu Tamu lewat
+ *       endpoint internal {@code GET /api/internal/kartu-tamu/cek-uid} agar
+ *       {@code SiswaService} menolak UID yang sudah dipakai Kartu Tamu.</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +38,7 @@ public class KartuTamuService {
 
     private final KartuTamuRepository repo;
     private final IdGenerator idGenerator;
+    private final UidSiswaPort uidSiswaPort;
 
     /**
      * Buat kartu tamu baru.
@@ -54,6 +64,7 @@ public class KartuTamuService {
             if (repo.existsByRfidUidExcluding(rfidUid, null)) {
                 throw new ConflictException("RFID UID " + rfidUid + " sudah terdaftar pada kartu lain");
             }
+            tolakBilaDipakaiSiswa(sekolahId, rfidUid);
         }
 
         KartuTamu kartu = KartuTamu.builder()
@@ -111,10 +122,11 @@ public class KartuTamuService {
                 // Hapus binding (unbind)
                 kartu.setRfidUid(null);
             } else if (!rfidUid.equals(kartu.getRfidUid())) {
-                // Bind UID baru — cek bentrok
+                // Bind UID baru — cek bentrok (Kartu Tamu lain + siswa admin-be)
                 if (repo.existsByRfidUidExcluding(rfidUid, kartuId)) {
                     throw new ConflictException("RFID UID " + rfidUid + " sudah terdaftar pada kartu lain");
                 }
+                tolakBilaDipakaiSiswa(sekolahId, rfidUid);
                 kartu.setRfidUid(rfidUid);
             }
         }
@@ -179,6 +191,35 @@ public class KartuTamuService {
         }
 
         return kartu;
+    }
+
+    /**
+     * Cek apakah sebuah RFID UID sudah dipakai Kartu Tamu mana pun (issue #29).
+     *
+     * <p>Dipakai endpoint internal (mesin-ke-mesin, HMAC) agar admin-be dapat
+     * menolak {@code rfid_uid} siswa yang sudah dipakai Kartu Tamu. UID bersifat
+     * UNIQUE global, jadi tidak dibatasi tenant.
+     *
+     * @param rfidUid UID yang dicek
+     * @return {@code true} bila UID dipakai Kartu Tamu
+     */
+    @Transactional(readOnly = true)
+    public boolean dipakaiKartuTamu(String rfidUid) {
+        return rfidUid != null && !rfidUid.isBlank() && repo.existsByRfidUid(rfidUid);
+    }
+
+    /**
+     * Tolak bila UID sudah dipakai siswa di admin-be (anti-tabrakan, issue #29).
+     *
+     * <p><b>Fail-open:</b> {@link UidSiswaPort} mengembalikan {@code null} bila
+     * integrasi belum siap (Q7) — registrasi tidak diblokir keliru. Hanya
+     * {@code Boolean.TRUE} yang menolak.
+     */
+    private void tolakBilaDipakaiSiswa(Long sekolahId, String rfidUid) {
+        if (Boolean.TRUE.equals(uidSiswaPort.dipakaiSiswa(sekolahId, rfidUid))) {
+            throw new ConflictException(
+                    "RFID UID " + rfidUid + " sudah terdaftar sebagai kartu siswa");
+        }
     }
 
     /**

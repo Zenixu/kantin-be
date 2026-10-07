@@ -246,6 +246,22 @@
 
 ---
 
+## 6f. Endpoint Internal (mesin-ke-mesin) — 🆕 #29
+
+> Dipanggil SKOOLIA (mis. admin-be) **bukan** oleh user. Autentikasi:
+> **HMAC-SHA256 + anti-replay** (`InternalSignatureFilter`), rahasia **terpisah**
+> `KANTIN_INTERNAL_SECRET`. Kosong/disabled ⇒ **503** (fail-closed). Lihat
+> `docs/integrasi-anti-tabrakan-uid.md`.
+
+| Method | Path | Keterangan |
+|---|---|---|
+| `GET` | `/api/internal/kartu-tamu/cek-uid?rfidUid=&sekolahId=` | **#29** — cek apakah `rfid_uid` sudah dipakai Kartu Tamu (anti-tabrakan UID ↔ siswa) |
+
+> **Header:** `X-Internal-Timestamp` (epoch detik) + `X-Internal-Signature`
+> (`sha256=<hex HMAC-SHA256(rahasia, timestamp + "." + body)>`). GET tanpa body.
+
+---
+
 ## 7. Hal yang perlu diperhatikan tim
 
 1. **Tenant dari token, bukan query/body.** Sekolah lain → **404** (bukan 403) agar tidak membocorkan keberadaan data (PRD §11.4).
