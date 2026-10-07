@@ -1,6 +1,6 @@
 # ADR-0005 — RFID USB Bridge untuk Layar Kasir
 
-- **Status:** Diusulkan
+- **Status:** Digantikan oleh [ADR-0011](./0011-rfid-usb-bridge-keyboard-wedge-mvp.md) (2026-10-07) — keputusan berjenjang: keyboard-wedge untuk MVP, WebHID/agent menuju produksi
 - **Tanggal:** 2026-10-02
 - **Pengusul:** FE-1 / BE-1
 - **Terkait:** PRD §6.1, §13 poin 5, Q10, Q17
