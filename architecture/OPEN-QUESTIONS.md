@@ -17,7 +17,7 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 | **Q5** | Endpoint & format **push notification** mobile-be? | Tim mobile-be | 🔴 | Blokir notifikasi ortu |
 | **Q6** | Kontrak API **aktivasi modul & fee platform** (internal-be)? | Tim internal-be | 🟡 | Blokir pengecekan aktivasi |
 | **Q7** | **Lookup kartu**: REST API internal vs akses data; SLA latency? | Tim admin-be | 🔴 | Menentukan `SiswaKartuClient` |
-| **Q8** | Pos Buku Kas **"Pendapatan Kantin" & "Belanja Stok Kantin"** dibuat otomatis saat modul diaktifkan? | Tim admin-be | 🟡 | PRD §13 poin 7 |
+| **Q8** | Pos Buku Kas **"Pendapatan Kantin" & "Belanja Stok Kantin"** dibuat otomatis saat modul diaktifkan? | Tim admin-be | 🟢 (solusi demo) | ✅ **Seeding otomatis sisi kantin-be (2026-10-07, #21):** `PosBukuKasService.pastikanPosStandar()` membuat pos standar ("Pendapatan Kantin"/MASUK, "Belanja Stok Kantin"/KELUAR, "Penyesuaian Kantin"/MASUK) per sekolah, **idempoten** (UNIQUE `(sekolah_id, nama)`); endpoint `POST /api/konfigurasi/pos-buku-kas/aktivasi`. Fallback lokal sampai admin-be konfirmasi — posting tetap lewat `BukuKasPort` |
 
 ---
 
@@ -37,10 +37,10 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 
 | # | Topik | Status | Pemilik |
 |---|---|---|---|
-| **Q14** | **Internet/server mati → kantin tak bisa jualan.** Butuh prosedur darurat? | 🔴 Perlu keputusan | Produk/Sekolah — usulan di [ADR-0006](./adr/0006-prosedur-darurat-offline.md) |
-| **Q15** | **Regulasi BI** soal dana titipan closed-loop — aman dari ketentuan uang elektronik? | 🔴 **Wajib konfirmasi legal sebelum rilis** | Legal |
-| **Q16** | **Kebijakan saldo mengendap** yang tak diklaim setelah siswa lulus? | 🟡 Perlu keputusan | Sekolah/Legal |
-| **Q17** | Spesifikasi **RFID reader USB** kasir = reader Kiosk Presensi? | 🟡 Cek tim RFID | Tim RFID |
+| **Q14** | **Internet/server mati → kantin tak bisa jualan.** Butuh prosedur darurat? | 🟢 (solusi demo) | Produk/Sekolah — [ADR-0006](./adr/0006-prosedur-darurat-offline.md) + pencatatan insiden `InsidenOfflineService` (2026-10-07, #23); `POST/GET /api/konfigurasi/insiden-offline` |
+| **Q15** | **Regulasi BI** soal dana titipan closed-loop — aman dari ketentuan uang elektronik? | 🟢 (postur demo, ⚠️ legal sebelum prod) | Legal — postur `DANA_TITIPAN_CLOSED_LOOP` [ADR-0009](./adr/0009-postur-regulasi-dana-titipan-closed-loop.md) (2026-10-07, #24); lihat `GET /api/konfigurasi/profil` |
+| **Q16** | **Kebijakan saldo mengendap** yang tak diklaim setelah siswa lulus? | 🟢 (solusi demo) | Sekolah/Legal — default `REFUND`, konfigurabel per sekolah `KebijakanKantinService` (2026-10-07, #25); `GET/PUT /api/konfigurasi/kebijakan` |
+| **Q17** | Spesifikasi **RFID reader USB** kasir = reader Kiosk Presensi? | 🟢 (asumsi demo) | Tim RFID — asumsi sama Kiosk (HID keyboard-wedge) [ADR-0008](./adr/0008-reader-rfid-samakan-kiosk-demo.md) (2026-10-07, #22); lihat `GET /api/konfigurasi/profil` |
 | **Q18** | Siswa tanpa foto boleh transaksi (dengan peringatan)? | 🟢 Diputuskan (v4), ditinjau pasca-pilot | — |
 | **Q19** | Guru/karyawan/tamu bayar pakai apa? | 🟢 Diputuskan: **Kartu Tamu** | — |
 
