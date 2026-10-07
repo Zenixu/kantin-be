@@ -26,8 +26,13 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 | # | Pertanyaan | Saran | Status |
 |---|---|---|---|
 | **Q9** | Java 21 (lokal) atau 25 (parity admin-be)? | **Java 25** | 🟢 Diputuskan & dipakai — toolchain dikunci ke Java 25 (ADR-0001) |
+ chore/adr-topologi-postgresql-q11
+| **Q10** | **RFID USB bridge** — browser tak bisa baca USB/serial langsung. Opsi: WebHID, WebSerial, atau agent lokal (Node/Electron)? | Perlu spike; **belum di PRD §13 poin 5** | 🔴 |
+| **Q11** | PostgreSQL kantin: DB terpisah, tapi server sama dengan admin-be? | DB terpisah | 🟢 (diputuskan, #27) | ✅ **[ADR-0010](./adr/0010-topologi-postgresql-kantin.md) (2026-10-08):** DB kantin **TERPISAH** dari admin-be (menegaskan ADR-0001); **produksi = server PostgreSQL TERPISAH** (isolasi failure domain/resource/keamanan); **dev/CI boleh satu host** (nama DB & kredensial tetap beda). Penjaga `kantin.topologi.enforce` (default `false`=peringatan) **menggagalkan start** bila menunjuk DB admin-be. ⏳ Konfirmasi tim DB untuk server produksi |
+
 | **Q10** | **RFID USB bridge** — browser tak bisa baca USB/serial langsung. Opsi: WebHID, WebSerial, atau agent lokal (Node/Electron)? | Perlu spike; **belum di PRD §13 poin 5** | 🟢 Diputuskan (ADR-0011, 2026-10-07) | **Keputusan tim kantin-be:** berjenjang — **MVP/demo pakai keyboard-wedge (HID)** (selaras asumsi reader = Kiosk Presensi, ADR-0008; tanpa komponen tambahan), **target produksi pakai WebHID/WebSerial** bila reader mendukung, **fallback agent lokal** untuk reader non-standar. Transport reader **tidak mengubah** kontrak backend (`TapRequest.rfidUid` divalidasi `@UidKartuValid`). Pemilihan final menunggu konfirmasi Q17. ADR-0005 digantikan ADR-0011. Sisa: spike kompatibilitas reader (issue #26). |
 | **Q11** | PostgreSQL kantin: DB terpisah, tapi server sama dengan admin-be? | DB terpisah | 🟢 Diputuskan (ADR-0010, 2026-10-07) | **Keputusan tim kantin-be:** **DB TERPISAH** (`kantin_db`, sudah diimplementasi), **server boleh sama (co-located) untuk MVP** dengan syarat: user/role DB terpisah tanpa grant lintas-DB, tanpa FK/join/dblink ke tabel admin-be, backup terpisah, resource dibatasi. Produksi ditentukan infra lewat `DB_URL` — tanpa ubah kode; pindah ke instance terpisah cukup ganti `DB_URL`. Wajib ditinjau ulang sebelum skala multi-sekolah. |
+ main
 | **Q12** | Strategi locking ledger: pessimistic (`FOR UPDATE`) vs optimistic? | Pessimistic untuk debit | 🟢 Diputuskan (ADR-0003): pessimistic `FOR UPDATE` untuk debit |
 | **Q13** | Pemisahan layanan tap berlatensi rendah (Java vs service ringan)? | **Java dulu**; split hanya bila gagal SLO p95<1dtk | 🟢 Diputuskan (ADR-0007): tap **tetap di Java**; split hanya bila uji beban buktikan p95>1dtk → ADR baru |
 

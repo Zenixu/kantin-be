@@ -68,8 +68,12 @@ import java.util.List;
 
         com.asqi.scholia_kantin_be.dev.DevLoginProperties.class,
         com.asqi.scholia_kantin_be.config.KantinProfilProperties.class,
+ chore/adr-topologi-postgresql-q11
+        com.asqi.scholia_kantin_be.config.TopologiProperties.class})
+
         AktivasiModulProperties.class})
 main
+ main
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
