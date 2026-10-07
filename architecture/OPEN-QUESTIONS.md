@@ -26,7 +26,7 @@ Legenda status: 🔴 Blocking · 🟡 Perlu dijawab (tidak memblokir sekarang) �
 | # | Pertanyaan | Saran | Status |
 |---|---|---|---|
 | **Q9** | Java 21 (lokal) atau 25 (parity admin-be)? | **Java 25** | 🟢 Diputuskan & dipakai — toolchain dikunci ke Java 25 (ADR-0001) |
-| **Q10** | **RFID USB bridge** — browser tak bisa baca USB/serial langsung. Opsi: WebHID, WebSerial, atau agent lokal (Node/Electron)? | Perlu spike; **belum di PRD §13 poin 5** | 🔴 |
+| **Q10** | **RFID USB bridge** — browser tak bisa baca USB/serial langsung. Opsi: WebHID, WebSerial, atau agent lokal (Node/Electron)? | Perlu spike; **belum di PRD §13 poin 5** | 🟢 (spike selesai) | ✅ **Spike selesai (2026-10-08, #26)** → keputusan bertingkat di [ADR-0005](./adr/0005-rfid-usb-bridge.md): demo = **keyboard-wedge** (reader Kiosk, ADR-0008); produksi = **WebHID/WebSerial** (bila browser boleh dikunci Chromium) **atau agent lokal** (bila reader vendor-SDK/bebas browser). Perbandingan & pola aman FE: `docs/spesifikasi-rfid-usb-bridge.md`. ⏳ Tetap butuh **Q17** (spesifikasi reader fisik) untuk memilih opsi produksi |
 | **Q11** | PostgreSQL kantin: DB terpisah, tapi server sama dengan admin-be? | DB terpisah | 🟡 |
 | **Q12** | Strategi locking ledger: pessimistic (`FOR UPDATE`) vs optimistic? | Pessimistic untuk debit | 🟢 Diputuskan (ADR-0003): pessimistic `FOR UPDATE` untuk debit |
 | **Q13** | Pemisahan layanan tap berlatensi rendah (Java vs service ringan)? | **Java dulu**; split hanya bila gagal SLO p95<1dtk | 🟢 Diputuskan (ADR-0007): tap **tetap di Java**; split hanya bila uji beban buktikan p95>1dtk → ADR baru |
