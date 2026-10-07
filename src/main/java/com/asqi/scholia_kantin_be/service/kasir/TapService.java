@@ -20,6 +20,7 @@ import com.asqi.scholia_kantin_be.service.integrasi.KartuLookupPort;
 import com.asqi.scholia_kantin_be.service.integrasi.MenuLookupPort;
 import com.asqi.scholia_kantin_be.service.integrasi.NotifikasiService;
 import com.asqi.scholia_kantin_be.service.integrasi.PerintahNotifikasi;
+import com.asqi.scholia_kantin_be.service.kartu.KontrolKartuService;
 import com.asqi.scholia_kantin_be.service.stok.HasilMutasiStok;
 import com.asqi.scholia_kantin_be.service.stok.LedgerStokService;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +71,7 @@ public class TapService {
     private final JamKantin jam;
     private final TransactionTemplate txTemplate;
     private final NotifikasiService notifikasi;
+    private final KontrolKartuService kontrolKartu;
 
     /**
      * Proses satu tap.
@@ -105,6 +107,12 @@ public class TapService {
 
         // 2) Lookup kartu (port). Status blokir diperiksa server tiap tap.
         InfoKartu kartu = kartuLookup.cariBerdasarkanUid(sekolahId, request.getRfidUid());
+
+        // 2b) Tempelkan kontrol kantin-be (blokir kartu/limit/blokir item) — data
+        // milik kantin-be, dibaca tiap tap TANPA cache (PRD §11.11) sehingga
+        // blokir yang baru disimpan langsung menolak tap berikutnya. Ini membuat
+        // blokir/limit tetap berfungsi walau lookup identitas (Q7) masih fallback.
+        kartu = kontrolKartu.terapkan(sekolahId, kartu);
 
         long saldo = 0L;
         long belanjaHariIni = 0L;
