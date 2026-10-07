@@ -70,8 +70,10 @@
 > (`items`, `total`, `halaman`, `ukuran`, `totalHalaman`). Tiap item memuat
 > `id` (dipakai sebagai `mutasiId` saat membalik), `menuId`, `menuNama`, `jenis`,
 > `qty`, `hargaBeliSatuan`, `totalNilai`, `stokSetelah`, `referensiId`, `waktu`,
-> serta untuk `BARANG_MASUK`: `sudahDibalik`, `sisaDapatDibalik`, `dapatDibalik`.
-> Tenant-scoped (sekolah lain ⇒ tidak tampil).
+> `aktorId`, **`aktorNama`** (nama petugas saat mutasi dicatat; `null` = aksi
+> sistem/baris lama — FE tampilkan "Sistem"), serta untuk `BARANG_MASUK`:
+> `sudahDibalik`, `sisaDapatDibalik`, `dapatDibalik`. Tenant-scoped (sekolah
+> lain ⇒ tidak tampil).
 
 > **Opname batch (`POST /api/stok/opname-batch`).** Satu `referensiId` (nomor
 > berita acara, mis. `OPN-20261006-001`) untuk seluruh `items`. Server menghitung
@@ -160,7 +162,7 @@
 | `GET` | `/api/laporan/penjualan/kategori` | TU, admin, pengelola | Penjualan per kategori |
 | `GET` | `/api/laporan/saldo-mengendap` | TU, admin, pengelola | Dana titipan: Σ saldo siswa + Kartu Tamu (kewajiban sekolah) |
 | `GET` | `/api/laporan/rekonsiliasi` | TU, admin, pengelola | Arus kas per jenis + cek invariant `seimbang`/`selisih` (PRD §5) |
-| `GET` | `/api/laporan/stok?hanyaMenipis=` | TU, admin, pengelola | Stok + nilai persediaan (stok × HPP); `menipis` dari `menu.stok_minimum` |
+| `GET` | `/api/laporan/stok?hanyaMenipis=` | TU, admin, pengelola | Stok + nilai persediaan (stok × HPP); `menipis` dari `menu.stok_minimum`. **Ringkasan semua menu dalam 1 panggilan** (anti-N+1) — field `namaMenu`/`stokBerjalan` (alias dari `nama`/`stok`) untuk FE Laporan Inventaris (issue #98) |
 | `GET` | `/api/laporan/kerugian-stok` | TU, admin, pengelola | Opname keluar & barang rusak: qty + nilai kerugian |
 | `GET` | `/api/laporan/ekspor?jenis=&tanggal=&dari=&sampai=` | TU, admin, pengelola | Unduh **Excel `.xlsx`** (bukan JSON); `jenis` ∈ `JenisLaporan` |
 
