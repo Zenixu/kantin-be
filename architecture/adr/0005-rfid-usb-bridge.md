@@ -1,12 +1,7 @@
 # ADR-0005 — RFID USB Bridge untuk Layar Kasir
 
- feat/spike-rfid-usb-bridge-adr
-- **Status:** Diterima (bertahap) — demo = keyboard-wedge; produksi menunggu Q17
-- **Tanggal:** 2026-10-02 (diperbarui 2026-10-08 — hasil spike #26)
-
 - **Status:** Digantikan oleh [ADR-0011](./0011-rfid-usb-bridge-keyboard-wedge-mvp.md) (2026-10-07) — keputusan berjenjang: keyboard-wedge untuk MVP, WebHID/agent menuju produksi
-- **Tanggal:** 2026-10-02
- main
+- **Tanggal:** 2026-10-02 (diperbarui 2026-10-08 — hasil spike #26)
 - **Pengusul:** FE-1 / BE-1
 - **Terkait:** PRD §6.1, §13 poin 5; Q10, Q17; ADR-0008; issue #26 & #22;
   `docs/spesifikasi-rfid-usb-bridge.md`

@@ -1,12 +1,9 @@
 package com.asqi.scholia_kantin_be.config.security;
 
-feat/anti-tabrakan-uid-kartu-siswa
-import com.asqi.scholia_kantin_be.config.internal.InternalApiProperties;
-import com.asqi.scholia_kantin_be.config.internal.InternalSignatureFilter;
-
 import com.asqi.scholia_kantin_be.config.aktivasi.AktivasiModulFilter;
 import com.asqi.scholia_kantin_be.config.aktivasi.AktivasiModulProperties;
-main
+import com.asqi.scholia_kantin_be.config.internal.InternalApiProperties;
+import com.asqi.scholia_kantin_be.config.internal.InternalSignatureFilter;
 import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitFilter;
 import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitProperties;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthTokenFilter;
@@ -62,18 +59,11 @@ import java.util.List;
         com.asqi.scholia_kantin_be.config.security.jwt.JwtConfigValues.class,
         RateLimitProperties.class,
         WebhookProperties.class,
-        feat/anti-tabrakan-uid-kartu-siswa
-        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class,
-        InternalApiProperties.class})
-
         com.asqi.scholia_kantin_be.dev.DevLoginProperties.class,
         com.asqi.scholia_kantin_be.config.KantinProfilProperties.class,
- chore/adr-topologi-postgresql-q11
-        com.asqi.scholia_kantin_be.config.TopologiProperties.class})
-
+        com.asqi.scholia_kantin_be.config.TopologiProperties.class,
+        InternalApiProperties.class,
         AktivasiModulProperties.class})
-main
- main
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
@@ -81,11 +71,8 @@ public class WebSecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final RateLimitFilter rateLimitFilter;
     private final WebhookSignatureFilter webhookSignatureFilter;
- feat/anti-tabrakan-uid-kartu-siswa
     private final InternalSignatureFilter internalSignatureFilter;
-
     private final AktivasiModulFilter aktivasiModulFilter;
- main
 
     /** Endpoint tanpa autentikasi. */
     private static final String[] PUBLIC_ENDPOINTS = {
