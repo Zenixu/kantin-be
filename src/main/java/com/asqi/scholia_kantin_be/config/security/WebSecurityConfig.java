@@ -1,5 +1,7 @@
 package com.asqi.scholia_kantin_be.config.security;
 
+import com.asqi.scholia_kantin_be.config.internal.InternalApiProperties;
+import com.asqi.scholia_kantin_be.config.internal.InternalSignatureFilter;
 import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitFilter;
 import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitProperties;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthTokenFilter;
@@ -55,8 +57,8 @@ import java.util.List;
         com.asqi.scholia_kantin_be.config.security.jwt.JwtConfigValues.class,
         RateLimitProperties.class,
         WebhookProperties.class,
-        com.asqi.scholia_kantin_be.dev.DevLoginProperties.class,
-        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class})
+        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class,
+        InternalApiProperties.class})
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
@@ -64,12 +66,14 @@ public class WebSecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final RateLimitFilter rateLimitFilter;
     private final WebhookSignatureFilter webhookSignatureFilter;
+    private final InternalSignatureFilter internalSignatureFilter;
 
     /** Endpoint tanpa autentikasi. */
     private static final String[] PUBLIC_ENDPOINTS = {
             "/actuator/health/**",
             "/actuator/info",
             "/api/webhook/**",
+            "/api/internal/**",
             "/error"
     };
 
@@ -89,7 +93,7 @@ public class WebSecurityConfig {
 
         String[] publik = devLoginEnabled
                 ? new String[]{"/actuator/health/**", "/actuator/info", "/api/webhook/**",
-                        "/error", "/api/v1/auth/login"}
+                        "/api/internal/**", "/error", "/api/v1/auth/login"}
                 : PUBLIC_ENDPOINTS;
 
         http.authorizeHttpRequests(auth -> auth
@@ -111,6 +115,8 @@ public class WebSecurityConfig {
         http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(jwtAuthTokenFilter, RateLimitFilter.class);
         http.addFilterAfter(webhookSignatureFilter, JwtAuthTokenFilter.class);
+        // Endpoint internal (mesin-ke-mesin, issue #29) — verifikasi HMAC terpisah.
+        http.addFilterAfter(internalSignatureFilter, WebhookSignatureFilter.class);
 
         return http.build();
     }
@@ -155,6 +161,19 @@ public class WebSecurityConfig {
     public FilterRegistrationBean<WebhookSignatureFilter>
     webhookSignatureFilterRegistration(WebhookSignatureFilter filter) {
         FilterRegistrationBean<WebhookSignatureFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    /**
+     * Matikan auto-registrasi {@link InternalSignatureFilter} oleh servlet
+     * container (masalah urutan ganda yang sama dengan B33) — filter hanya
+     * dipasang sekali di rantai Spring Security.
+     */
+    @Bean
+    public FilterRegistrationBean<InternalSignatureFilter>
+    internalSignatureFilterRegistration(InternalSignatureFilter filter) {
+        FilterRegistrationBean<InternalSignatureFilter> reg = new FilterRegistrationBean<>(filter);
         reg.setEnabled(false);
         return reg;
     }

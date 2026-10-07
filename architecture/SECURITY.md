@@ -90,6 +90,7 @@ Controller (tipis) ──► Service (aturan bisnis) ──► DB
 |---|---|---|
 | `GET /actuator/health` | publik | — |
 | `POST /api/webhook/{sumber}` | **HMAC-SHA256 + anti-replay** (bukan token) | — |
+| `GET /api/internal/**` | **HMAC-SHA256 + anti-replay** (rahasia terpisah) | — (mesin-ke-mesin) |
 | `GET /api/auth/me` | token | apa pun yang valid |
 | `POST /api/kasir/tap` | token | PETUGAS/PENGELOLA/ADMIN |
 
@@ -161,6 +162,11 @@ Lihat `BUGS-DITEMUKAN.md` B6–B8 tentang perbaikan status 403 dari `admin-be`.
   `KANTIN_WEBHOOK_SECRET` (kosong ⇒ 503, fail-closed). Idempotency per event id
   (tabel `webhook_event`, V12). **Isi `KANTIN_WEBHOOK_SECRET` sebelum endpoint
   webhook dipakai di produksi.**
+- ✅ **Endpoint internal (mesin-ke-mesin, #29)** — `/api/internal/**` (mis. admin-be
+  cek UID Kartu Tamu untuk anti-tabrakan) diamankan `InternalSignatureFilter`
+  dengan **rahasia TERPISAH** `KANTIN_INTERNAL_SECRET` (kosong/disabled ⇒ 503,
+  fail-closed) + anti-replay + allowlist IP opsional. Lihat
+  `docs/integrasi-anti-tabrakan-uid.md`.
 - ⚠️ **Audit top-up/void/barang-masuk/opname** sudah menulis `audit_log` (B18).
   Aksi lain (ubah harga jual, blokir item, ubah limit) menunggu service terkait
   dibuat — pastikan tiap service baru memanggil `AuditLogger.catat`.
