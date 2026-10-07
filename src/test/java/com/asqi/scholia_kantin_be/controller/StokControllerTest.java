@@ -170,6 +170,8 @@ class StokControllerTest {
                 .hargaBeliSatuan(5_000L)
                 .totalNilai(100_000L)
                 .stokSetelah(20)
+                .aktorId(42L)
+                .aktorNama("Bu Sri")
                 .dapatDibalik(true)
                 .sisaDapatDibalik(20)
                 .sudahDibalik(0)
@@ -188,6 +190,7 @@ class StokControllerTest {
         mockMvc.perform(get("/api/stok/riwayat"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].id").value(500))
+                .andExpect(jsonPath("$.data.items[0].aktorNama").value("Bu Sri"))
                 .andExpect(jsonPath("$.data.items[0].dapatDibalik").value(true))
                 .andExpect(jsonPath("$.data.total").value(1));
     }

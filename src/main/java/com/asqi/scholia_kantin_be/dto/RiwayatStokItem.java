@@ -63,6 +63,12 @@ public class RiwayatStokItem {
 
     private Long aktorId;
 
+    /**
+     * Nama aktor (snapshot saat mutasi dicatat). {@code null} bila aksi sistem
+     * atau baris lama sebelum kolom ini ada — FE menampilkan "Sistem".
+     */
+    private String aktorNama;
+
     private OffsetDateTime waktu;
 
     /** Proyeksi entitas ledger → DTO (menyembunyikan kolom internal). */
@@ -84,6 +90,7 @@ public class RiwayatStokItem {
                 .alasan(m.getAlasan())
                 .mutasiAsalId(m.getMutasiAsalId())
                 .aktorId(m.getAktorId())
+                .aktorNama(m.getAktorNama())
                 .waktu(m.getWaktu())
                 .build();
     }

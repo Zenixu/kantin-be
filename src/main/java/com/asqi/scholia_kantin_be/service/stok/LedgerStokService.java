@@ -12,6 +12,8 @@ import com.asqi.scholia_kantin_be.model.MutasiStok;
 import com.asqi.scholia_kantin_be.model.StokCache;
 import com.asqi.scholia_kantin_be.repository.MutasiStokRepository;
 import com.asqi.scholia_kantin_be.repository.StokCacheRepository;
+import com.asqi.scholia_kantin_be.security.IdentitasKantin;
+import com.asqi.scholia_kantin_be.security.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -418,11 +420,37 @@ public class LedgerStokService {
                 .referensiTipe(referensiTipe)
                 .referensiId(referensiId)
                 .alasan(alasan)
-                .aktorId(aktorId)
+                // Bila pemanggil tidak menyuplai aktor (mis. penjualan lewat
+                // TapService), lengkapi dari konteks request — supaya kolom
+                // "Aktor" pada Kartu Stok terisi konsisten (issue #99).
+                .aktorId(aktorId != null ? aktorId : aktorIdKonteks())
+                .aktorNama(namaAktorKonteks())
                 .waktu(now)
                 .createdAt(now)
                 .build();
         return mutasiRepo.save(mutasi);
+    }
+
+    /**
+     * Nama aktor dari konteks request (klaim JWT {@code nama}). {@code null}
+     * bila aksi sistem/scheduler (tanpa konteks user) — FE menampilkan "Sistem".
+     */
+    private static String namaAktorKonteks() {
+        IdentitasKantin id = TenantContext.get();
+        return id == null ? null : id.getNama();
+    }
+
+    /** ID aktor dari konteks request — pelengkap bila pemanggil tak menyuplai. */
+    private static Long aktorIdKonteks() {
+        IdentitasKantin id = TenantContext.get();
+        if (id == null) {
+            return null;
+        }
+        try {
+            return id.aktorIdWajib();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private static long nolBilaNull(Long nilai) {

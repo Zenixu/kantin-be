@@ -97,6 +97,13 @@ public class MutasiStok implements Persistable<Long> {
     @Column(name = "aktor_id")
     private Long aktorId;
 
+    /**
+     * Snapshot nama aktor saat mutasi dicatat (klaim JWT {@code nama}).
+     * {@code null} untuk aksi sistem/scheduler &amp; baris lama (issue #99).
+     */
+    @Column(name = "aktor_nama", length = 150)
+    private String aktorNama;
+
     @Column(name = "waktu", nullable = false)
     private OffsetDateTime waktu;
 
