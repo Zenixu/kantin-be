@@ -309,6 +309,9 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Belum selesai (masih terblokir):** **public key RS256 masih temporary** (`.env.jwt-temporary` admin-be + `application-local.properties` kantin-be). Format klaim ✅ terjawab; lokasi key produksi ⏳ masih menunggu admin-be. Q1 → 🟡 **SEBAGIAN TERJAWAB**.
 - **Uji baru:** `KompatibilitasTokenStafAdminTest` (5).
 
+
+## B35 — (audit RBAC) Peran `PETUGAS_KANTIN` dipetakan ke `PENGELOLA_KANTIN` (eskalasi hak)
+
 ## B36 — (audit keamanan #13) Filter keamanan terdaftar DUA KALI (auto-register + addFilterBefore)
 
 - **Konteks:** menindaklanjuti issue #13 (turunan B33). `RateLimitFilter` & `JwtAuthTokenFilter` adalah `@Component` → Spring Boot **auto-register** keduanya ke rantai filter servlet, **dan** `WebSecurityConfig` mendaftarkannya lagi lewat `http.addFilterBefore(...)`. Reproduksi dibuat lebih dulu (`FilterGandaIT`, gagal sebelum perbaikan).
@@ -318,12 +321,15 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 
 ## B37 — (audit RBAC) Peran `PETUGAS_KANTIN` dipetakan ke `PENGELOLA_KANTIN` (eskalasi hak)
 
+
 - **Konteks:** ditemukan saat membangun **harness JWT dummy** (#14/#15). Saat menguji token dummy berperan `PETUGAS_KANTIN`, `KlaimResolver.petakanPeran` mengembalikan `PENGELOLA_KANTIN` — bukan `PETUGAS_KANTIN`.
 - **Gejala:** `KlaimResolver.petakanPeran` memeriksa cabang generik `r.contains("KANTIN")` **sebelum** cabang spesifik `r.contains("PETUGAS")`. Karena `"PETUGAS_KANTIN"` mengandung `"KANTIN"`, ia tertangkap lebih dulu → dipetakan ke `PENGELOLA_KANTIN`.
 - **Dampak:** `PENGELOLA_KANTIN` punya hak lebih tinggi daripada `PETUGAS_KANTIN` (katalog, stok, HPP, laporan). Kasir ber-token `PETUGAS_KANTIN` akan **mendapat hak pengelola** — **eskalasi hak istimewa** (melanggar PRD §11.5). Bug **laten**: admin-be saat ini belum punya role bernama mengandung "KANTIN" (role-nya `ADMIN`/`TU`/`BENDAHARA`/`KEPSEK`/`GURU`/dll.), jadi baru aktif begitu role kantin ditambahkan.
 - **Perbaikan:** pindahkan cek `contains("PETUGAS")`/`contains("KASIR")` ke **atas** cek generik `contains("KANTIN")`; sisa urutan dipertahankan agar perilaku peran lain tak berubah.
 - **Bukti:** `KlaimResolverPeranTest` — `PETUGAS_KANTIN → PETUGAS_KANTIN` (sebelumnya `PENGELOLA_KANTIN`) + 18 kasus pemetaan peran lain. Pemetaan peran **sebelumnya tak teruji**; uji ini jadi guard regresi.
 - **Catatan positif:** pemisahan peran lain sudah benar (`ADMIN`→`ADMIN_SEKOLAH`, `TU`/`BENDAHARA`→`TU_SEKOLAH`, `ORANG_TUA`/`ORTU`→`ORANG_TUA`, tak dikenal→`TIDAK_DIKENAL` fail-closed).
+
+
 
 ## B38 — (bug laporan #41) `stok_cache.stok_minimum` tidak pernah disinkron dari katalog → penanda "stok menipis" selalu salah
 
@@ -333,6 +339,7 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Perbaikan (sisi laporan):** `LaporanService.laporanStok` mengambil `stok_minimum` dari **katalog `menu`** (sumber kebenaran PRD §7.1), bukan dari `stok_cache`. Sekaligus mengisi `kategoriId` dari menu.
 - **Perbaikan lanjutan yang disarankan (di luar #41):** sinkronkan `menu.stok_minimum` → `stok_cache.stok_minimum` saat menu dibuat/diubah (atau jadikan `stok_cache` tanpa kolom itu dan baca dari katalog di semua pemakaian), agar fitur peringatan stok lain konsisten. Perlu keputusan apakah `stok_minimum` memang milik katalog (ya, PRD §7.1) — bila ya, `stok_cache.stok_minimum` adalah kolom **redundan** yang layak dihapus.
 - **Bukti:** `LaporanServiceIT.laporanStok` — menu stok 1 (min 2) → `menipis=true`; `hanyaMenipis=true` hanya mengembalikan menu tersebut.
+
 
 ## Ringkasan untuk tim
 
