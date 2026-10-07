@@ -3,7 +3,38 @@
 > ⚠️ **DUMMY — JANGAN dipakai di staging/production.** Ganti ke public key RS256
 > **produksi** sebelum rilis (OPEN-QUESTIONS Q1/Q2).
 
-## Kenapa ada
+## Cara tercepat: SHIM LOGIN DEV (disarankan untuk FE ↔ BE)
+
+Bila yang dibutuhkan hanya **FE bisa login ke kantin-be**, pakai shim — tak
+perlu mint token manual.
+
+```properties
+# src/main/resources/application-local.properties (untracked)
+kantin.dev-login.enabled=true
+kantin.dev-login.issuer=skoolia-admin
+# Private key RSA base64 PKCS#8 DER — pasangan jwt.admin-public-key
+kantin.dev-login.private-key=<BASE64_PRIVATE_KEY>
+```
+
+Lalu jalankan app (profil `local`) dan login dari FE:
+
+```bash
+curl -X POST http://localhost:8082/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@skoolia.id","password":"password123","sekolah_id":10}'
+# -> { code:200, data:{ token:"eyJ...", user:{ currentRole:"admin", ... } } }
+```
+
+Role dipetakan dari email: `kasir@…`->kasir, `pengelola@…`->pengelola,
+`tu@…`->tu, `bendahara@…`->bendahara, lainnya->admin.
+
+**Gerbang keamanan:** kelas shim `@Profile("local")` **dan**
+`kantin.dev-login.enabled=true`. Default `false` -> endpoint tetap **401**
+(parity ADR-0002: kantin-be tanpa login sendiri).
+
+## Harness JWT dummy (jalur lama — token manual)
+
+
 
 kantin-be **tidak punya login sendiri** (ADR-0002) — identitas hanya dari token
 JWT yang diterbitkan **admin-be** (staf) & **mobile-be** (orang tua), diverifikasi

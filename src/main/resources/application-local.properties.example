@@ -40,6 +40,21 @@ JWT_MOBILE_PUBLIC_KEY=
 # token uji belum memuat issuer "skoolia-admin"/"skoolia-mobile".
 JWT_VERIFY_ISSUER=true
 
+# --- SHIM LOGIN DEV (HANYA lokal) ---
+# kantin-be TIDAK punya login sendiri (ADR-0002); identitas dari JWT admin-be.
+# Selama admin-be belum bisa dijalankan di mesin dev (Q1), aktifkan shim ini
+# agar FE (kantin-fe) bisa login ke POST /api/v1/auth/login dan FE <-> BE
+# teruji end-to-end tanpa menunggu tim lain.
+#
+# AMAN: default false. Hanya hidup di profil "local" + enabled=true. JANGAN
+# aktifkan di staging/production.
+kantin.dev-login.enabled=false
+kantin.dev-login.issuer=skoolia-admin
+kantin.dev-login.ttl-ms=43200000
+# Private key RSA base64 PKCS#8 DER — HARUS pasangan jwt.admin-public-key di atas.
+# Isi HANYA di application-local.properties (untracked). JANGAN commit (AGENTS.md §10).
+kantin.dev-login.private-key=
+
 # --- CORS: origin FE yang diizinkan (dipisah koma, TANPA nilai "*") ---
 KANTIN_CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 
