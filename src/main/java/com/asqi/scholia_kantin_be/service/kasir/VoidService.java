@@ -4,6 +4,7 @@ import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
 import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
+import com.asqi.scholia_kantin_be.enums.JenisNotifikasi;
 import com.asqi.scholia_kantin_be.enums.StatusTransaksi;
 import com.asqi.scholia_kantin_be.helper.JamKantin;
 import com.asqi.scholia_kantin_be.model.SesiKasir;
@@ -12,6 +13,8 @@ import com.asqi.scholia_kantin_be.model.TransaksiItem;
 import com.asqi.scholia_kantin_be.repository.SesiKasirRepository;
 import com.asqi.scholia_kantin_be.repository.TransaksiRepository;
 import com.asqi.scholia_kantin_be.security.SekolahGuard;
+import com.asqi.scholia_kantin_be.service.integrasi.NotifikasiService;
+import com.asqi.scholia_kantin_be.service.integrasi.PerintahNotifikasi;
 import com.asqi.scholia_kantin_be.service.stok.LedgerStokService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +49,7 @@ public class VoidService {
     private final SekolahGuard sekolahGuard;
     private final AuditLogger auditLogger;
     private final JamKantin jam;
+    private final NotifikasiService notifikasi;
 
     /**
      * Batalkan (void) sebuah transaksi.
@@ -118,6 +122,25 @@ public class VoidService {
                 StatusTransaksi.SUKSES.name(), StatusTransaksi.VOID.name());
 
         log.info("Void transaksi id={} oleh={} alasan={}", trx.getId(), aktorId, alasan);
+
+        // Notifikasi ke ortu (PRD §8.4) — best-effort/fail-open: kegagalan
+        // pengiriman TIDAK membatalkan void yang sudah tercatat di ledger.
+        Long saldoSetelah = (trx.getSubjekTipe() == null || trx.getSubjekId() == null)
+                ? null
+                : ledgerSaldo.saldo(sekolahId, trx.getSubjekTipe(), trx.getSubjekId());
+        notifikasi.kirim(PerintahNotifikasi.builder()
+                .sekolahId(sekolahId)
+                .jenis(JenisNotifikasi.VOID)
+                .subjekTipe(trx.getSubjekTipe())
+                .subjekId(trx.getSubjekId())
+                .nominal(trx.getTotal())
+                .saldoSetelah(saldoSetelah)
+                .referensiId(String.valueOf(trx.getId()))
+                .ringkasan("Transaksi dibatalkan (void): " + alasan)
+                .aktorId(aktorId)
+                .waktu(now)
+                .build());
+
         return trx;
     }
 }

@@ -4,11 +4,14 @@ import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
 import com.asqi.scholia_kantin_be.enums.ArahMutasi;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
+import com.asqi.scholia_kantin_be.enums.JenisNotifikasi;
 import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.service.kasir.HasilMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.kasir.LedgerSaldoService;
 import com.asqi.scholia_kantin_be.service.kasir.PerintahMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
+import com.asqi.scholia_kantin_be.service.integrasi.NotifikasiService;
+import com.asqi.scholia_kantin_be.service.integrasi.PerintahNotifikasi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,6 +43,7 @@ public class SaldoTopUpService {
     private final LedgerSaldoService ledgerSaldo;
     private final AuditLogger auditLogger;
     private final BukuKasPostingService bukuKasPosting;
+    private final NotifikasiService notifikasi;
 
     /**
      * Top-up tunai di TU/bendahara.
@@ -80,6 +84,19 @@ public class SaldoTopUpService {
             auditLogger.catat(aktorId, sekolahId, "TOPUP_TUNAI", "Saldo",
                     subjekTipe + ":" + subjekId, keterangan,
                     null, String.valueOf(nominal));
+
+            // Notifikasi ke ortu (PRD §8.4) — best-effort/fail-open.
+            notifikasi.kirim(PerintahNotifikasi.builder()
+                    .sekolahId(sekolahId)
+                    .jenis(JenisNotifikasi.TOPUP_TUNAI)
+                    .subjekTipe(subjekTipe)
+                    .subjekId(subjekId)
+                    .nominal(nominal)
+                    .saldoSetelah(hasil.getSaldoSetelah())
+                    .referensiId(referensiId)
+                    .ringkasan("Top-up tunai Rp" + nominal + " berhasil")
+                    .aktorId(aktorId)
+                    .build());
         }
         return hasil;
     }
@@ -134,6 +151,20 @@ public class SaldoTopUpService {
             auditLogger.catat(aktorId, sekolahId, "TOPUP_ONLINE", "Saldo",
                     subjekTipe + ":" + subjekId, keterangan,
                     null, String.valueOf(nominal));
+
+            // Notifikasi ke ortu (PRD §8.4) — best-effort/fail-open.
+            notifikasi.kirim(PerintahNotifikasi.builder()
+                    .sekolahId(sekolahId)
+                    .jenis(JenisNotifikasi.TOPUP_ONLINE)
+                    .subjekTipe(subjekTipe)
+                    .subjekId(subjekId)
+                    .nominal(nominal)
+                    .saldoSetelah(hasil.getSaldoSetelah())
+                    .referensiId(ref)
+                    .ringkasan("Top-up online Rp" + nominal + " berhasil"
+                            + (kanal == null || kanal.isBlank() ? "" : " via " + kanal))
+                    .aktorId(aktorId)
+                    .build());
         }
         return hasil;
     }

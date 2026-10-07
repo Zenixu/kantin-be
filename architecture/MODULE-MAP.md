@@ -53,6 +53,7 @@ FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                �
 | Aktivasi & fee | §10 | `service/aktivasi` | `aktivasi_modul`, `fee_platform` | internal-be |
 | Audit log | §11.7 | `service/audit` | `audit_log` | lintas modul |
 | Pengaturan kantin | §9.1 | `service/aktivasi` | `sekolah_kantin_config` | jam, durasi foto, dll |
+| Konfigurasi & solusi demo | §9.1, §13 | `service/konfigurasi` | `pos_buku_kas`, `insiden_offline`, `kebijakan_kantin` | **#21–#25 (demo)**: pos Buku Kas otomatis, insiden offline, kebijakan saldo mengendap, profil reader/regulasi |
 
 ---
 
