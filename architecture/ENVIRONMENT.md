@@ -160,6 +160,13 @@ docker compose ps      # pastikan keduanya healthy
 
 **Waktu & zona:** set `TZ=Asia/Jakarta` pada service, agar konsisten dengan app.
 
+> **Topologi DB (ADR-0010 / Q11).** DB kantin **terpisah** dari admin-be (ADR-0001).
+> **Dev/CI** boleh satu host (seperti `docker-compose` di atas) — yang penting
+> **nama DB & kredensial berbeda**. **Produksi** sebaiknya **server PostgreSQL
+> terpisah** (isolasi failure domain/resource). Kantin-be memeriksa ini saat start
+> lewat `kantin.topologi.*`: `enforce=true` **menggagalkan start** bila datasource
+> menunjuk DB admin-be; `host-db-admin-be` memicu peringatan bila host sama.
+
 ---
 
 ## 7. Config Aplikasi
