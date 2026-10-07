@@ -1,5 +1,7 @@
 package com.asqi.scholia_kantin_be.config.security;
 
+import com.asqi.scholia_kantin_be.config.aktivasi.AktivasiModulFilter;
+import com.asqi.scholia_kantin_be.config.aktivasi.AktivasiModulProperties;
 import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitFilter;
 import com.asqi.scholia_kantin_be.config.ratelimit.RateLimitProperties;
 import com.asqi.scholia_kantin_be.config.security.jwt.JwtAuthTokenFilter;
@@ -56,7 +58,8 @@ import java.util.List;
         RateLimitProperties.class,
         WebhookProperties.class,
         com.asqi.scholia_kantin_be.dev.DevLoginProperties.class,
-        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class})
+        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class,
+        AktivasiModulProperties.class})
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
@@ -64,6 +67,7 @@ public class WebSecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final RateLimitFilter rateLimitFilter;
     private final WebhookSignatureFilter webhookSignatureFilter;
+    private final AktivasiModulFilter aktivasiModulFilter;
 
     /** Endpoint tanpa autentikasi. */
     private static final String[] PUBLIC_ENDPOINTS = {
@@ -108,8 +112,11 @@ public class WebSecurityConfig {
         // lalu rate limit sebelum pemrosesan request.
         // Ketiga filter didaftarkan manual di sini; auto-registrasi servlet
         // container dimatikan lewat FilterRegistrationBean di bawah (B33/#13).
+        // AktivasiModulFilter (PRD §10/Q6) berjalan setelah JWT — butuh tenant —
+        // dan sebelum rate limit agar sekolah nonaktif ditolak tanpa memakai kuota.
         http.addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
-        http.addFilterBefore(jwtAuthTokenFilter, RateLimitFilter.class);
+        http.addFilterBefore(aktivasiModulFilter, RateLimitFilter.class);
+        http.addFilterBefore(jwtAuthTokenFilter, AktivasiModulFilter.class);
         http.addFilterAfter(webhookSignatureFilter, JwtAuthTokenFilter.class);
 
         return http.build();
@@ -138,6 +145,19 @@ public class WebSecurityConfig {
     public FilterRegistrationBean<JwtAuthTokenFilter> jwtAuthTokenFilterRegistration(
             JwtAuthTokenFilter filter) {
         FilterRegistrationBean<JwtAuthTokenFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    /**
+     * Matikan auto-registrasi servlet container untuk
+     * {@link AktivasiModulFilter} (pola sama B33/#13) — filter didaftarkan manual
+     * di {@link #filterChain(HttpSecurity, CorsConfigurationSource)}.
+     */
+    @Bean
+    public FilterRegistrationBean<AktivasiModulFilter> aktivasiModulFilterRegistration(
+            AktivasiModulFilter filter) {
+        FilterRegistrationBean<AktivasiModulFilter> reg = new FilterRegistrationBean<>(filter);
         reg.setEnabled(false);
         return reg;
     }
