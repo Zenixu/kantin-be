@@ -56,7 +56,8 @@ import java.util.List;
         RateLimitProperties.class,
         WebhookProperties.class,
         com.asqi.scholia_kantin_be.dev.DevLoginProperties.class,
-        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class})
+        com.asqi.scholia_kantin_be.config.KantinProfilProperties.class,
+        com.asqi.scholia_kantin_be.config.TopologiProperties.class})
 @RequiredArgsConstructor
 public class WebSecurityConfig {
 
