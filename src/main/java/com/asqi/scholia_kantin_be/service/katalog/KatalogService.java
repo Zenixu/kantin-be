@@ -202,6 +202,10 @@ public class KatalogService {
                 .build();
 
         Menu tersimpan = menuRepo.save(menu);
+        // Sinkronkan ambang stok menipis ke stok_cache (PRD §7.5, issue #113):
+        // baris stok dibuat bila belum ada, ambangnya mengikuti katalog.
+        stokRepo.sinkronStokMinimum(tersimpan.getId(), sekolahId,
+                tersimpan.getStokMinimum() == null ? 0 : tersimpan.getStokMinimum());
         auditLogger.catat(aktorId, sekolahId, "MENU_DIBUAT", "Menu",
                 String.valueOf(tersimpan.getId()), null, null,
                 bersih + " @ " + hargaJual);
@@ -255,6 +259,9 @@ public class KatalogService {
         menu.setUpdatedAt(jam.sekarang());
 
         Menu tersimpan = menuRepo.save(menu);
+        // Sinkronkan ambang stok menipis bila berubah (PRD §7.5, issue #113).
+        stokRepo.sinkronStokMinimum(tersimpan.getId(), sekolahId,
+                tersimpan.getStokMinimum() == null ? 0 : tersimpan.getStokMinimum());
         auditLogger.catat(aktorId, sekolahId, "MENU_DIUBAH", "Menu",
                 String.valueOf(menuId), null, null, tersimpan.getNama());
         return tersimpan;
