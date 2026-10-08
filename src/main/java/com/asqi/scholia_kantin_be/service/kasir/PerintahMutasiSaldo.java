@@ -29,6 +29,13 @@ public class PerintahMutasiSaldo {
     /** Nominal rupiah integer &gt; 0. */
     private final long nominal;
 
+    /**
+     * Batas saldo maksimum setelah mutasi (rupiah); {@code null} = tanpa batas
+     * (PRD §8.2/§9.1/§9.4, issue #112). Bila diisi, kredit yang membuat saldo
+     * melebihi batas ditolak di dalam seksi terkunci (bebas race).
+     */
+    private final Long batasSaldoMaksimum;
+
     /** UNIQUE — anti tap/retry ganda (PRD §11.3). Boleh null untuk mutasi manual tanpa retry. */
     private final String idempotencyKey;
 
