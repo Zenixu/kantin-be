@@ -41,7 +41,11 @@ class KlaimResolverPeranTest {
             "BENDAHARA,           TU_SEKOLAH",
             "TATA_USAHA,          TU_SEKOLAH",
             "ADMIN,               ADMIN_SEKOLAH",
-            "KEPSEK,              ADMIN_SEKOLAH",
+            // ── REGRESI #123: kepsek TIDAK boleh jadi ADMIN_SEKOLAH (eskalasi hak) ──
+            "KEPSEK,              KEPSEK",
+            "KEPALA_SEKOLAH,      KEPSEK",
+            "kepala sekolah,      KEPSEK",
+            "Kepala Sekolah,      KEPSEK",
             "ORANG_TUA,           ORANG_TUA",
             "ORTU,                ORANG_TUA",
             // ── tak dikenal → fail-closed ──

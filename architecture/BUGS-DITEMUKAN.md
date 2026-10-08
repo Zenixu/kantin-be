@@ -341,6 +341,21 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Bukti:** `LaporanServiceIT.laporanStok` — menu stok 1 (min 2) → `menipis=true`; `hanyaMenipis=true` hanya mengembalikan menu tersebut.
 
 
+## B39 — (RBAC #123) Peran Kepsek dipetakan ke `ADMIN_SEKOLAH` → eskalasi hak (CRUD bocor ke kepala sekolah)
+
+- **Konteks:** issue #123 (PRD §9.5/§9.6). PRD §9.5 hanya memberi **Kepala Sekolah (Kepsek)** hak **baca** sebagian laporan; §9.6 menaruh "Kantin – Pengaturan & Titik Kasir → **Admin (CRUD)**". `AktorKantin` tidak punya peran `KEPSEK` tersendiri.
+- **Gejala:** `KlaimResolver.petakanPeran` baris lama `if (r.contains("ADMIN") || r.contains("KEPSEK") || r.contains("KEPALA_SEKOLAH")) return ADMIN_SEKOLAH;` — peran kepsek **dilebur** ke `ADMIN_SEKOLAH`.
+- **Dampak:** kepala sekolah **mewarisi hak CRUD** admin: ubah pengaturan kantin & titik kasir (§9.6), blokir/limit kartu, ubah kebijakan, bahkan cabut token — **eskalasi hak** (melanggar least-privilege & PRD §11.5). `LaporanController` juga mencatat keterbatasan ini (kepsek belum dipetakan → laporan dibuka untuk peran back-office).
+- **Perbaikan:** tambah `AktorKantin.KEPSEK`; cek `KEPSEK`/`KEPALA_SEKOLAH` **sebelum** cabang generik `contains("ADMIN")` → kembali ke `KEPSEK`. Terapkan **read-only**:
+  - `@PerluPeran` laporan §9.5 yang menyebut kepsek (penjualan/laba kotor, saldo mengendap, rekonsiliasi, kerugian stok) menyertakan `KEPSEK`; laporan **stok** tetap tanpa kepsek (§9.5 hanya Pengelola & Bendahara).
+  - `GET /api/laporan/ekspor` menegakkan batas per jenis → kepsek meminta `STOK`/`BARANG_MASUK` = **403**.
+  - `GET /api/saldo/refund/kandidat` (§9.6 "Refund & Koreksi — Kepsek read") menyertakan `KEPSEK`; endpoint tulis refund/pindah tetap tanpa kepsek.
+  - Seluruh endpoint tulis pengaturan/titik kasir/kebijakan/kontrol kartu/cabut token **tetap** tanpa `KEPSEK`.
+- **Keputusan arsitektur:** ADR-0012.
+- **Bukti:** `RbacKepsekGuardTest` (9) — pemetaan peran, kepsek → 403 pada aksi `@PerluPeran(ADMIN_SEKOLAH)`, anotasi endpoint tulis tak memuat `KEPSEK`, laporan berhak memuat `KEPSEK`, ekspor per-jenis menolak kepsek; `KlaimResolverPeranTest` diperluas (`KEPSEK`/`KEPALA_SEKOLAH` → `KEPSEK`).
+- **Catatan untuk FE:** `KonteksResponse.peran` untuk token kepsek kini bernilai `KEPSEK` (bukan `ADMIN_SEKOLAH`).
+
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:
