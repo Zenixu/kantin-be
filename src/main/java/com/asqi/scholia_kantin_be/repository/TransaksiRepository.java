@@ -98,4 +98,20 @@ public interface TransaksiRepository extends JpaRepository<Transaksi, Long> {
     List<Object[]> rekapPerStatusRentang(@Param("sekolahId") Long sekolahId,
                                          @Param("dari") OffsetDateTime dari,
                                          @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Transaksi yang di-<b>VOID</b> pada rentang waktu — laporan Pembatalan
+     * Kasir (PRD §9.5, issue #114). Diurut terbaru dulu agar jejak terakhir
+     * mudah dilihat. Tenant-scoped.
+     */
+    @Query("""
+            SELECT t FROM Transaksi t
+            WHERE t.sekolahId = :sekolahId
+              AND t.status = com.asqi.scholia_kantin_be.enums.StatusTransaksi.VOID
+              AND t.waktu >= :dari AND t.waktu < :sampai
+            ORDER BY t.voidAt DESC, t.id DESC
+            """)
+    List<Transaksi> pembatalanRentang(@Param("sekolahId") Long sekolahId,
+                                      @Param("dari") OffsetDateTime dari,
+                                      @Param("sampai") OffsetDateTime sampai);
 }

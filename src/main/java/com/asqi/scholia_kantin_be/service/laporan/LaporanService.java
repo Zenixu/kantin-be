@@ -1,6 +1,7 @@
 package com.asqi.scholia_kantin_be.service.laporan;
 
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
+import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
@@ -292,6 +293,26 @@ public class LaporanService {
     public List<MutasiStok> kartuStok(Long sekolahId, Long menuId, int batas) {
         int limit = (batas <= 0 || batas > 500) ? 200 : batas;
         return mutasiStokRepo.kartuStok(sekolahId, menuId, PageRequest.of(0, limit));
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Pembatalan kasir (PRD §9.5, issue #114)
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Laporan <b>Pembatalan kasir</b> (PRD §9.5): daftar transaksi yang
+     * dibatalkan (status {@code VOID}) pada periode, terbaru dulu. Mencakup
+     * alasan void, waktu, petugas, &amp; subjek — untuk audit sengketa
+     * "Kartu dipakai bukan pemiliknya".
+     */
+    @Transactional(readOnly = true)
+    public List<BarisPembatalanKasir> pembatalanKasir(Long sekolahId, LocalDate tanggal,
+                                                      OffsetDateTime dari, OffsetDateTime sampai) {
+        OffsetDateTime[] r = rentang(tanggal, dari, sampai);
+        return transaksiRepo.pembatalanRentang(sekolahId, r[0], r[1])
+                .stream()
+                .map(BarisPembatalanKasir::dari)
+                .toList();
     }
 
     /** Riwayat saldo satu subjek pada periode (laporan per siswa, PRD §9.5). */

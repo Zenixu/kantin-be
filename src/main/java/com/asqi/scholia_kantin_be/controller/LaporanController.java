@@ -1,6 +1,7 @@
 package com.asqi.scholia_kantin_be.controller;
 
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
+import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
@@ -117,6 +118,20 @@ public class LaporanController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
         return CommonResponse.data(
                 laporan.kerugianStok(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
+    }
+
+    /**
+     * Laporan <b>Pembatalan kasir</b> (PRD §9.5, issue #114): daftar transaksi
+     * yang di-void (tombol Batalkan) per subjek pada periode. RBAC Bendahara/Admin.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("pembatalan")
+    public ResponseEntity<Response<List<BarisPembatalanKasir>>> pembatalan(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
+        return CommonResponse.data(
+                laporan.pembatalanKasir(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
     }
 
     /**

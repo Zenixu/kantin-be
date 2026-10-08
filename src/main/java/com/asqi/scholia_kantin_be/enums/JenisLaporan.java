@@ -22,5 +22,7 @@ public enum JenisLaporan {
     /** Kerugian stok (opname keluar &amp; barang rusak). */
     KERUGIAN_STOK,
     /** Barang masuk per periode. */
-    BARANG_MASUK
+    BARANG_MASUK,
+    /** Pembatalan kasir — transaksi di-void per subjek (PRD §9.5). */
+    PEMBATALAN
 }

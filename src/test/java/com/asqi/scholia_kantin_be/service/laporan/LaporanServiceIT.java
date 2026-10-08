@@ -1,6 +1,7 @@
 package com.asqi.scholia_kantin_be.service.laporan;
 
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
+import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
@@ -280,5 +281,64 @@ class LaporanServiceIT {
         assertThat(laporan.saldoMengendap(SEKOLAH_LAIN).total()).isZero();
         assertThat(laporan.ringkasanPenjualan(SEKOLAH_LAIN, null, null, null).penjualanBruto()).isZero();
         assertThat(laporan.kerugianStok(SEKOLAH_LAIN, null, null, null)).isEmpty();
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // PEMBATALAN KASIR (PRD §9.5, issue #114)
+    // ────────────────────────────────────────────────────────────────
+
+    /** Seed satu transaksi VOID (wajib beralasan, PRD §6.3). */
+    private void transaksiVoid(long id, long subjekId, long total, String alasan) {
+        jdbc.update("INSERT INTO transaksi (id, idempotency_key, sekolah_id, sesi_kasir_id, "
+                + "titik_kasir_id, subjek_tipe, subjek_id, petugas_id, total, total_hpp, status, "
+                + "alasan_void, void_at, void_oleh, waktu, created_at, updated_at) "
+                + "VALUES (?, ?, ?, 1, 1, 'SISWA', ?, 5, ?, 0, 'VOID', ?, now(), 777, now(), now(), now())",
+                id, "trx-" + id, SEKOLAH, subjekId, total, alasan);
+    }
+
+    @Test
+    @DisplayName("#114: pembatalan kasir — hanya transaksi VOID, alasan & petugas ikut")
+    void pembatalanKasir() {
+        transaksi(1, SISWA, 8_000, 4_000); // SUKSES → tidak masuk laporan
+        transaksiVoid(2, SISWA, 16_000, "Kartu dipakai bukan pemiliknya");
+        transaksiVoid(3, SISWA2, 8_000, "salah input");
+
+        List<BarisPembatalanKasir> r = laporan.pembatalanKasir(SEKOLAH, null, null, null);
+
+        assertThat(r).hasSize(2);
+        assertThat(r).extracting(BarisPembatalanKasir::getTransaksiId)
+                .containsExactlyInAnyOrder(2L, 3L);
+        BarisPembatalanKasir b = r.stream()
+                .filter(x -> x.getTransaksiId().equals(2L)).findFirst().orElseThrow();
+        assertThat(b.getSubjekTipe()).isEqualTo(SubjekTipe.SISWA);
+        assertThat(b.getSubjekId()).isEqualTo(SISWA);
+        assertThat(b.getAlasanVoid()).isEqualTo("Kartu dipakai bukan pemiliknya");
+        assertThat(b.getVoidOleh()).isEqualTo(777L);
+        assertThat(b.getVoidAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("#114: pembatalan kasir — tenant scoping (sekolah lain kosong)")
+    void pembatalanKasirTenantScoping() {
+        transaksiVoid(2, SISWA, 16_000, "Kartu dipakai bukan pemiliknya");
+
+        assertThat(laporan.pembatalanKasir(SEKOLAH_LAIN, null, null, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#114: ekspor PEMBATALAN menghasilkan .xlsx valid")
+    void eksporPembatalan() throws Exception {
+        transaksiVoid(2, SISWA, 16_000, "Kartu dipakai bukan pemiliknya");
+
+        LaporanExportService.HasilEkspor hasil = exportService.ekspor(
+                SEKOLAH, JenisLaporan.PEMBATALAN, null, null, null);
+
+        assertThat(hasil.namaBerkas()).endsWith(".xlsx");
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(hasil.isi()))) {
+            var sheet = wb.getSheetAt(0);
+            assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Pembatalan");
+        }
     }
 }
