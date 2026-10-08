@@ -135,8 +135,9 @@ class BukuKasPostingServiceIT {
         assertThat(p.getKategori()).isEqualTo("Pendapatan Kantin");
         assertThat(p.getJumlah()).isEqualByComparingTo(new BigDecimal("8000"));
         assertThat(p.getRefId()).isEqualTo("KANTIN-SESI-" + sesiId);
-        // Mitigasi Q3: refModul = null sampai admin-be menambah case kantin.
-        assertThat(p.getRefModul()).isNull();
+        // Q3 TERJAWAB: refModul="KANTIN". Diverifikasi dari admin-be
+        // BukuKasService.migrateBukuKas() — "KANTIN" jatuh ke default → isOrphan=false.
+        assertThat(p.getRefModul()).isEqualTo("KANTIN");
 
         // Flag idempotency tersimpan + audit tercatat.
         assertThat(jdbc.queryForObject(

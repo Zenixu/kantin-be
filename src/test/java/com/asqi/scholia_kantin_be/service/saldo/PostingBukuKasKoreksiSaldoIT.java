@@ -93,8 +93,8 @@ class PostingBukuKasKoreksiSaldoIT {
         assertThat(p.getKategori()).isEqualTo("Penyesuaian Kantin");
         assertThat(p.getJumlah()).isEqualByComparingTo(new BigDecimal("20000"));
         assertThat(p.getRefId()).isEqualTo("KANTIN-KOR-BA-1");
-        // Mitigasi Q3: refModul = null sampai admin-be menambah case kantin.
-        assertThat(p.getRefModul()).isNull();
+        // Q3 TERJAWAB: refModul="KANTIN" (admin-be migrateBukuKas → default → isOrphan=false).
+        assertThat(p.getRefModul()).isEqualTo("KANTIN");
 
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM posting_buku_kas WHERE referensi_id = 'KANTIN-KOR-BA-1' "

@@ -4,12 +4,14 @@ import com.asqi.scholia_kantin_be.component.ratelimit.RateLimiterRedis;
 import com.asqi.scholia_kantin_be.support.EnabledIfDockerAvailable;
 import com.asqi.scholia_kantin_be.support.TestcontainersConfig;
 import jakarta.servlet.ServletContext;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.net.URI;
@@ -50,6 +52,25 @@ class FilterGandaIT {
     @MockitoSpyBean
     private RateLimiterRedis rateLimiter;
 
+    @Autowired
+    private StringRedisTemplate redis;
+
+    /**
+     * Bersihkan kunci rate-limit sebelum tiap test.
+     *
+     * <p>Test ini {@code @SpringBootTest} yang menyambung ke Redis nyata
+     * (localhost), jadi penghitung rate-limit <b>bertahan antar-jalankan</b>
+     * (TTL 60 dtk). Tanpa reset, kuota kategori sempit bisa habis karena run
+     * sebelumnya → 429 palsu (issue #137). Hapus hanya kunci {@code rl:*}.
+     */
+    @BeforeEach
+    void bersihkanKuota() {
+        Set<String> kunci = redis.keys("rl:*");
+        if (kunci != null && !kunci.isEmpty()) {
+            redis.delete(kunci);
+        }
+    }
+
     @Test
     @DisplayName("hanya springSecurityFilterChain terdaftar di servlet container")
     void filterTidakTerdaftarDiServletContainer() {
@@ -68,11 +89,16 @@ class FilterGandaIT {
     void satuRequestSatuKuota() throws Exception {
         reset(rateLimiter);
 
-        // Endpoint permitAll -> melewati SecurityFilterChain sampai tuntas,
-        // sehingga filter yang (mungkin) terdaftar ganda ikut dieksekusi.
+        // Jalur /api/** yang benar-benar dilewati RateLimitFilter.
+        // CATATAN (issue #137): dulu memakai /api/webhook/... karena permitAll,
+        // tapi WebhookSignatureFilter (B34) kini mencegat /api/webhook/** dan
+        // membalas 503 tanpa memanggil filterChain saat rahasia kosong — sehingga
+        // RateLimitFilter (posisi setelahnya) tak pernah jalan. Pakai /api/auth/me:
+        // tanpa token tetap 401, tetapi RateLimitFilter (kategori "auth") sudah
+        // dieksekusi lebih dulu. Bila filter terdaftar ganda, periksa() akan 2×.
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/api/webhook/probe-filter-ganda"))
+                .uri(URI.create("http://localhost:" + port + "/api/auth/me"))
                 .GET().build();
         client.send(req, HttpResponse.BodyHandlers.discarding());
 
