@@ -1,7 +1,12 @@
 package com.asqi.scholia_kantin_be.controller;
 
+ feat/laporan-penjualan-titik-petugas
+import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.component.exception.ForbiddenException;
+main
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
+import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
+import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
@@ -145,6 +150,58 @@ public class LaporanController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
         return CommonResponse.data(
                 laporan.kerugianStok(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
+    }
+
+    /**
+     * Laporan <b>Pembatalan kasir</b> (PRD §9.5, issue #114): daftar transaksi
+     * yang di-void (tombol Batalkan) per subjek pada periode. RBAC Bendahara/Admin.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("pembatalan")
+    public ResponseEntity<Response<List<BarisPembatalanKasir>>> pembatalan(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
+        return CommonResponse.data(
+                laporan.pembatalanKasir(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
+    }
+
+    /**
+     * Laporan <b>Kartu Tamu</b> (PRD §9.5, issue #115): daftar kartu + pemegang
+     * + saldo + status. Riwayat per kartu lewat {@code GET /api/kartu-tamu/{id}/riwayat}.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("kartu-tamu")
+    public ResponseEntity<Response<List<BarisKartuTamu>>> kartuTamu() {
+        return CommonResponse.data(laporan.laporanKartuTamu(TenantContext.sekolahIdWajib()));
+    }
+
+    /**
+     * Laporan <b>Penjualan per titik kasir</b> (PRD §9.5, issue #116): jumlah
+     * transaksi, nilai, HPP, laba kotor per titik. RBAC Bendahara/Admin.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("penjualan/titik")
+    public ResponseEntity<Response<List<BarisPenjualanDimensi>>> penjualanPerTitik(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
+        return CommonResponse.data(
+                laporan.penjualanPerTitik(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
+    }
+
+    /**
+     * Laporan <b>Penjualan per petugas</b> (PRD §9.5, issue #116): jumlah
+     * transaksi, nilai, HPP, laba kotor per petugas. RBAC Bendahara/Admin.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("penjualan/petugas")
+    public ResponseEntity<Response<List<BarisPenjualanDimensi>>> penjualanPerPetugas(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
+        return CommonResponse.data(
+                laporan.penjualanPerPetugas(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
     }
 
     /**

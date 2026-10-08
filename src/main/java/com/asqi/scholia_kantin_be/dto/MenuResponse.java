@@ -27,6 +27,13 @@ public class MenuResponse {
     /** Stok berjalan dari {@code stok_cache} (0 bila belum ada baris stok). */
     private int stokBerjalan;
 
+    /**
+     * Penanda eksplisit "Habis" (PRD §6.1/§7.5): {@code true} bila
+     * {@link #stokBerjalan} == 0. Dihitung backend agar FE tidak perlu menebak,
+     * dan agar item habis tampil konsisten di kasir maupun daftar menu ortu.
+     */
+    private boolean habis;
+
     private boolean aktif;
 
     /** Proyeksi entitas → DTO tanpa stok (stok dianggap 0). */
@@ -45,6 +52,7 @@ public class MenuResponse {
                 .fotoUrl(m.getFotoUrl())
                 .stokMinimum(m.getStokMinimum() == null ? 0 : m.getStokMinimum())
                 .stokBerjalan(stokBerjalan)
+                .habis(stokBerjalan <= 0)
                 .aktif(Boolean.TRUE.equals(m.getIsActive()))
                 .build();
     }

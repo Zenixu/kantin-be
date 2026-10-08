@@ -124,7 +124,28 @@ class StokControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.stok").value(20))
                 .andExpect(jsonPath("$.data.nilaiPersediaan").value(100000))
-                .andExpect(jsonPath("$.data.menipis").value(false));
+                .andExpect(jsonPath("$.data.menipis").value(false))
+                .andExpect(jsonPath("$.data.habis").value(false));
+    }
+
+    @Test
+    @DisplayName("#124: stok 0 → penanda habis true di GET /api/stok/{menuId}")
+    void lihatStokHabisSaatNol() throws Exception {
+        StokCache cache = StokCache.builder()
+                .menuId(11L)
+                .sekolahId(7L)
+                .stok(0)
+                .hpp(5_000L)
+                .stokMinimum(5)
+                .build();
+
+        when(operasi.lihat(7L, 11L)).thenReturn(cache);
+
+        mockMvc.perform(get("/api/stok/11"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stok").value(0))
+                .andExpect(jsonPath("$.data.menipis").value(true))
+                .andExpect(jsonPath("$.data.habis").value(true));
     }
 
     @Test

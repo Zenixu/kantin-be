@@ -138,7 +138,7 @@ class KatalogServiceIT {
     }
 
     @Test
-    @DisplayName("stokBerjalan batch: hanya menu tenant dengan baris stok yang terisi")
+    @DisplayName("stokBerjalan batch: hanya menu tenant yang terisi (baris stok dibuat otomatis)")
     void stokBerjalanBatch() {
         var menuA = katalog.buatMenu(SEKOLAH, null, "Nasi Goreng",
                 15_000L, SatuanMenu.PORSI, null, 5, 1L);
@@ -150,36 +150,61 @@ class KatalogServiceIT {
         var menuSekolahLain = katalog.buatMenu(SEKOLAH_LAIN, null, "Roti",
                 2_500L, SatuanMenu.PCS, null, 0, 1L);
 
-        jdbc.update("INSERT INTO stok_cache (menu_id, sekolah_id, stok, hpp, stok_minimum, updated_at) "
-                        + "VALUES (?, ?, ?, 0, 0, now()), (?, ?, ?, 0, 0, now()), (?, ?, ?, 0, 0, now())",
-                menuA.getId(), SEKOLAH, 12,
-                menuB.getId(), SEKOLAH, 4,
-                menuSekolahLain.getId(), SEKOLAH_LAIN, 99);
+        // Baris stok sudah dibuat otomatis saat buatMenu (#113) → cukup UPDATE.
+        jdbc.update("UPDATE stok_cache SET stok = ? WHERE menu_id = ?", 12, menuA.getId());
+        jdbc.update("UPDATE stok_cache SET stok = ? WHERE menu_id = ?", 4, menuB.getId());
+        jdbc.update("UPDATE stok_cache SET stok = ? WHERE menu_id = ?", 99, menuSekolahLain.getId());
 
         var stok = katalog.stokBerjalan(SEKOLAH,
                 java.util.List.of(menuA.getId(), menuB.getId(), menuC.getId()));
 
         assertThat(stok).containsEntry(menuA.getId(), 12);
         assertThat(stok).containsEntry(menuB.getId(), 4);
-        // Menu tanpa baris stok tidak disertakan (controller memakai getOrDefault 0).
-        assertThat(stok).doesNotContainKey(menuC.getId());
+        // Menu C punya baris stok (dibuat otomatis) dengan stok 0.
+        assertThat(stok).containsEntry(menuC.getId(), 0);
         assertThat(stok).doesNotContainKey(menuSekolahLain.getId());
     }
 
     @Test
-    @DisplayName("stokBerjalan satu menu: 0 bila belum ada baris, nilai benar bila ada")
+    @DisplayName("stokBerjalan satu menu: 0 saat baru dibuat, nilai benar setelah diisi")
     void stokBerjalanSatuMenu() {
         var menu = katalog.buatMenu(SEKOLAH, null, "Bakso",
                 10_000L, SatuanMenu.PORSI, null, 0, 1L);
 
         assertThat(katalog.stokBerjalan(SEKOLAH, menu.getId())).isZero();
 
-        jdbc.update("INSERT INTO stok_cache (menu_id, sekolah_id, stok, hpp, stok_minimum, updated_at) "
-                        + "VALUES (?, ?, ?, 0, 0, now())",
-                menu.getId(), SEKOLAH, 8);
+        jdbc.update("UPDATE stok_cache SET stok = ? WHERE menu_id = ?", 8, menu.getId());
 
         assertThat(katalog.stokBerjalan(SEKOLAH, menu.getId())).isEqualTo(8);
         // Sekolah lain tak melihat stok sekolah pemilik baris.
         assertThat(katalog.stokBerjalan(SEKOLAH_LAIN, menu.getId())).isZero();
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // #113 — sinkron stok_minimum menu → stok_cache
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("#113: buat menu → baris stok_cache dibuat dengan stok_minimum = menu.stok_minimum")
+    void buatMenuSinkronStokMinimum() {
+        var menu = katalog.buatMenu(SEKOLAH, null, "Nasi Uduk",
+                8_000L, SatuanMenu.PORSI, null, 7, 1L);
+
+        Integer min = jdbc.queryForObject(
+                "SELECT stok_minimum FROM stok_cache WHERE menu_id = ?", Integer.class, menu.getId());
+        assertThat(min).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("#113: ubah stok_minimum menu → stok_cache ikut tersinkron")
+    void ubahMenuSinkronStokMinimum() {
+        var menu = katalog.buatMenu(SEKOLAH, null, "Es Jeruk",
+                5_000L, SatuanMenu.BOTOL, null, 3, 1L);
+
+        katalog.ubahMenu(SEKOLAH, menu.getId(), null, null, null, null, null, 10, null, 1L);
+
+        Integer min = jdbc.queryForObject(
+                "SELECT stok_minimum FROM stok_cache WHERE menu_id = ?", Integer.class, menu.getId());
+        assertThat(min).isEqualTo(10);
     }
 }

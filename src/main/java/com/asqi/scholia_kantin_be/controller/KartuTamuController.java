@@ -1,6 +1,10 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.dto.HasilRefundResponse;
 import com.asqi.scholia_kantin_be.dto.KartuTamuRequest;
+import com.asqi.scholia_kantin_be.dto.PindahSaldoKartuTamuRequest;
+import com.asqi.scholia_kantin_be.dto.RefundKartuTamuRequest;
+import com.asqi.scholia_kantin_be.dto.RiwayatKartuTamuResponse;
 import com.asqi.scholia_kantin_be.enums.AktorKantin;
 import com.asqi.scholia_kantin_be.model.KartuTamu;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
@@ -9,6 +13,8 @@ import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.PerluPeran;
 import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.kartu.KartuTamuService;
+import com.asqi.scholia_kantin_be.service.kartu.RiwayatKartuTamuService;
+import com.asqi.scholia_kantin_be.service.saldo.RefundKartuTamuService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +44,8 @@ import java.util.List;
 public class KartuTamuController {
 
     private final KartuTamuService service;
+    private final RefundKartuTamuService refundService;
+    private final RiwayatKartuTamuService riwayatService;
 
     /**
      * Daftar semua kartu tamu milik sekolah.
@@ -65,7 +73,8 @@ public class KartuTamuController {
     }
 
     /**
-     * Buat kartu tamu baru.
+     * Buat kartu tamu baru (PRD §9.4).
+     * Nomor kartu <b>digenerate otomatis</b> (KT- + urutan) bila tidak diisi.
      * Hanya pengelola/TU/admin yang bisa buat.
      */
     @PerluPeran({AktorKantin.PENGELOLA_KANTIN, AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
@@ -79,13 +88,26 @@ public class KartuTamuController {
                 request.getNomorKartu(),
                 request.getRfidUid(),
                 request.getCatatan(),
+                request.getLabelPemegang(),
                 identitas.aktorIdWajib());
 
         return CommonResponse.data(kartu, "Kartu tamu berhasil dibuat");
     }
 
     /**
-     * Update kartu tamu (nomor, UID, catatan, status).
+     * Pratinjau nomor kartu berikutnya (PRD §9.4) — untuk ditampilkan di form
+     * sebelum kartu disimpan/dicetak. Tidak menyimpan apa pun.
+     */
+    @PerluPeran({AktorKantin.PENGELOLA_KANTIN, AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
+    @GetMapping("nomor-berikutnya")
+    public ResponseEntity<Response<String>> nomorBerikutnya() {
+        String nomor = service.generateNomorKartu(TenantContext.sekolahIdWajib());
+        return CommonResponse.data(nomor);
+    }
+
+    /**
+     * Update kartu tamu (nomor, UID, catatan, label pemegang, status).
+     * Kirim {@code labelPemegang} = "" untuk mengosongkan (mis. pengembalian).
      * Hanya pengelola/TU/admin yang bisa update.
      */
     @PerluPeran({AktorKantin.PENGELOLA_KANTIN, AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
@@ -101,6 +123,7 @@ public class KartuTamuController {
                 request.getNomorKartu(),
                 request.getRfidUid(),
                 request.getCatatan(),
+                request.getLabelPemegang(),
                 request.getAktif(),
                 identitas.aktorIdWajib());
 
@@ -123,5 +146,63 @@ public class KartuTamuController {
                 identitas.aktorIdWajib());
 
         return CommonResponse.data(kartu, "Kartu tamu berhasil dinonaktifkan");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // SALDO KHUSUS KARTU TAMU (PRD §9.4, issue #120)
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Refund sisa saldo saat <b>pengembalian kartu</b> (PRD §9.4): sisa saldo
+     * di-refund <b>tunai</b>, saldo → 0, label pemegang dikosongkan agar kartu
+     * dapat dipakai ulang. Idempoten lewat nomor bukti. RBAC TU/bendahara.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PostMapping("refund")
+    public ResponseEntity<Response<HasilRefundResponse>> refundKartu(
+            @Valid @RequestBody RefundKartuTamuRequest request,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        HasilRefundResponse hasil = refundService.refund(
+                TenantContext.sekolahIdWajib(), request.getKartuId(), request.getReferensiId(),
+                request.getCatatan(), identitas.aktorIdWajib());
+        return CommonResponse.data(hasil, "Refund saldo kartu tamu berhasil");
+    }
+
+    /**
+     * Pindahkan sisa saldo dari Kartu Tamu <b>hilang</b> ke Kartu Tamu baru
+     * (PRD §9.4): kartu lama diblokir (berlaku instan), saldo pindah. Idempoten
+     * lewat nomor berita acara. RBAC TU/bendahara.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PostMapping("pindah-saldo")
+    public ResponseEntity<Response<HasilRefundResponse>> pindahSaldoKartu(
+            @Valid @RequestBody PindahSaldoKartuTamuRequest request,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        HasilRefundResponse hasil = refundService.pindahKartuHilang(
+                TenantContext.sekolahIdWajib(), request.getKartuSumberId(),
+                request.getKartuTujuanId(), request.getReferensiId(),
+                request.getCatatan(), identitas.aktorIdWajib());
+        return CommonResponse.data(hasil, "Saldo kartu tamu berhasil dipindahkan");
+    }
+
+    /**
+     * Riwayat transaksi &amp; mutasi saldo satu Kartu Tamu (PRD §9.4/§9.5,
+     * issue #122) — dapat dilihat/dicetak TU atas permintaan pemegang.
+     * Transaksi terbaru dulu &amp; berhalaman; tenant-scoped.
+     */
+    @PerluPeran({AktorKantin.PETUGAS_KANTIN, AktorKantin.TU_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.ADMIN_SEKOLAH})
+    @GetMapping("{kartuId}/riwayat")
+    public ResponseEntity<Response<RiwayatKartuTamuResponse>> riwayatKartu(
+            @PathVariable Long kartuId,
+            @RequestParam(defaultValue = "20") int batasMutasi,
+            @RequestParam(defaultValue = "0") int halaman,
+            @RequestParam(defaultValue = "20") int ukuran) {
+
+        RiwayatKartuTamuResponse hasil = riwayatService.riwayat(
+                TenantContext.sekolahIdWajib(), kartuId, batasMutasi, halaman, ukuran);
+        return CommonResponse.data(hasil);
     }
 }

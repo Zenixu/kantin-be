@@ -2,6 +2,7 @@ package com.asqi.scholia_kantin_be.service.saldo;
 
 import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
+import com.asqi.scholia_kantin_be.dto.PengaturanKantinResponse;
 import com.asqi.scholia_kantin_be.enums.ArahMutasi;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
 import com.asqi.scholia_kantin_be.enums.JenisNotifikasi;
@@ -9,6 +10,7 @@ import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.service.kasir.HasilMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.kasir.LedgerSaldoService;
 import com.asqi.scholia_kantin_be.service.kasir.PerintahMutasiSaldo;
+import com.asqi.scholia_kantin_be.service.konfigurasi.PengaturanKantinService;
 import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import com.asqi.scholia_kantin_be.service.integrasi.NotifikasiService;
 import com.asqi.scholia_kantin_be.service.integrasi.PerintahNotifikasi;
@@ -44,6 +46,34 @@ public class SaldoTopUpService {
     private final AuditLogger auditLogger;
     private final BukuKasPostingService bukuKasPosting;
     private final NotifikasiService notifikasi;
+    private final PengaturanKantinService pengaturan;
+
+    /**
+     * Ambang batas saldo efektif untuk subjek: per siswa atau per Kartu Tamu
+     * (PRD §9.1/§9.4). {@code null} = tanpa batas (sekolah belum mengatur).
+     */
+    private Long batasSaldoMaksimum(Long sekolahId, SubjekTipe subjekTipe) {
+        PengaturanKantinResponse p = pengaturan.ambil(sekolahId);
+        return subjekTipe == SubjekTipe.KARTU_TAMU
+                ? p.getBatasSaldoKartuTamu()
+                : p.getBatasSaldoSiswa();
+    }
+
+    /**
+     * Tegakkan min/maks per top-up (PRD §8.2). Batas saldo maksimum ditegakkan
+     * di dalam seksi terkunci ledger (lihat {@link #batasSaldoMaksimum}).
+     */
+    private void tegakkanRentangTopUp(Long sekolahId, long nominal) {
+        PengaturanKantinResponse p = pengaturan.ambil(sekolahId);
+        if (p.getMinTopup() != null && nominal < p.getMinTopup()) {
+            throw new InvalidOperationException(
+                    "Nominal top-up kurang dari minimum Rp" + p.getMinTopup());
+        }
+        if (p.getMaksTopup() != null && nominal > p.getMaksTopup()) {
+            throw new InvalidOperationException(
+                    "Nominal top-up melebihi maksimum Rp" + p.getMaksTopup());
+        }
+    }
 
     /**
      * Top-up tunai di TU/bendahara.
@@ -62,6 +92,8 @@ public class SaldoTopUpService {
         if (referensiId == null || referensiId.isBlank()) {
             throw new InvalidOperationException("Nomor referensi/bukti wajib diisi");
         }
+        // PRD §8.2: tolak nominal di luar rentang min/maks per top-up.
+        tegakkanRentangTopUp(sekolahId, nominal);
 
         String keterangan = "Top-up tunai"
                 + (penyetor == null || penyetor.isBlank() ? "" : " oleh " + penyetor);
@@ -72,6 +104,7 @@ public class SaldoTopUpService {
                 .subjekId(subjekId)
                 .jenis(JenisMutasiSaldo.TOPUP_TUNAI)
                 .nominal(nominal)
+                .batasSaldoMaksimum(batasSaldoMaksimum(sekolahId, subjekTipe))
                 .idempotencyKey("TOPUP-TUNAI-" + referensiId)
                 .referensiTipe("TOPUP")
                 .referensiId(referensiId)
@@ -129,6 +162,9 @@ public class SaldoTopUpService {
         }
         String ref = refIdPg.trim();
 
+        // PRD §8.2: batas min/maks top-up juga berlaku untuk jalur online.
+        tegakkanRentangTopUp(sekolahId, nominal);
+
         String keterangan = "Top-up online"
                 + (kanal == null || kanal.isBlank() ? "" : " via " + kanal)
                 + (penyetor == null || penyetor.isBlank() ? "" : " oleh " + penyetor);
@@ -139,6 +175,7 @@ public class SaldoTopUpService {
                 .subjekId(subjekId)
                 .jenis(JenisMutasiSaldo.TOPUP_ONLINE)
                 .nominal(nominal)
+                .batasSaldoMaksimum(batasSaldoMaksimum(sekolahId, subjekTipe))
                 .idempotencyKey("TOPUP-ONLINE-" + ref)
                 .referensiTipe("TOPUP_ONLINE")
                 .referensiId(ref)

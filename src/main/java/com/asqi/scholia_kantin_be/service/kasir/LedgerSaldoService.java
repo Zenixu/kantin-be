@@ -173,6 +173,16 @@ public class LedgerSaldoService {
             throw new ConflictException("Saldo kurang Rp" + (-setelah));
         }
 
+        // 4b) Batas saldo maksimum (PRD §8.2/§9.1/§9.4, issue #112) — ditegakkan
+        //     DI DALAM seksi terkunci (FOR UPDATE) agar bebas race: dua top-up
+        //     bersamaan tak bisa melampaui plafon. Hanya relevan untuk KREDIT.
+        if (arah == ArahMutasi.KREDIT && perintah.getBatasSaldoMaksimum() != null
+                && setelah > perintah.getBatasSaldoMaksimum()) {
+            throw new ConflictException("Top-up ditolak: saldo akan melebihi batas maksimum Rp"
+                    + perintah.getBatasSaldoMaksimum()
+                    + " (saldo sekarang Rp" + sebelum + ")");
+        }
+
         // 5) Baris ledger baru (append-only).
         OffsetDateTime now = jam.sekarang();
         SaldoLedger mutasi = SaldoLedger.builder()

@@ -1,6 +1,9 @@
 package com.asqi.scholia_kantin_be.service.laporan;
 
+import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
+import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
+import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
@@ -58,6 +61,14 @@ public class LaporanExportService {
             case STOK -> eksporStok(sekolahId, label);
             case KERUGIAN_STOK -> eksporKerugianStok(sekolahId, tanggal, dari, sampai, label);
             case BARANG_MASUK -> eksporBarangMasuk(sekolahId, tanggal, dari, sampai, label);
+            case PEMBATALAN -> eksporPembatalan(sekolahId, tanggal, dari, sampai, label);
+            case KARTU_TAMU -> eksporKartuTamu(sekolahId, label);
+            case PENJUALAN_TITIK -> eksporPenjualanDimensi(sekolahId, tanggal, dari, sampai, label,
+                    "Penjualan per Titik Kasir", "Titik",
+                    laporan.penjualanPerTitik(sekolahId, tanggal, dari, sampai));
+            case PENJUALAN_PETUGAS -> eksporPenjualanDimensi(sekolahId, tanggal, dari, sampai, label,
+                    "Penjualan per Petugas", "Petugas",
+                    laporan.penjualanPerPetugas(sekolahId, tanggal, dari, sampai));
         };
     }
 
@@ -156,6 +167,50 @@ public class LaporanExportService {
                     nvl(m.getReferensiId()), nvl(m.getAlasan())));
         }
         return berkas("Barang Masuk", label, header, baris);
+    }
+
+    private HasilEkspor eksporPembatalan(Long sekolahId, LocalDate tgl, OffsetDateTime dari,
+                                         OffsetDateTime sampai, String label) {
+        List<BarisPembatalanKasir> data = laporan.pembatalanKasir(sekolahId, tgl, dari, sampai);
+        List<String> header = List.of("Transaksi ID", "Subjek", "Subjek ID", "Total",
+                "Alasan Void", "Void Oleh", "Void At", "Petugas", "Titik Kasir", "Waktu");
+        List<List<Object>> baris = new ArrayList<>();
+        for (BarisPembatalanKasir b : data) {
+            baris.add(List.of(
+                    nvl(b.getTransaksiId()),
+                    b.getSubjekTipe() == null ? "" : b.getSubjekTipe().name(),
+                    nvl(b.getSubjekId()), b.getTotal(), nvl(b.getAlasanVoid()),
+                    nvl(b.getVoidOleh()),
+                    b.getVoidAt() == null ? "" : FMT.format(b.getVoidAt()),
+                    nvl(b.getPetugasId()), nvl(b.getTitikKasirId()),
+                    b.getWaktu() == null ? "" : FMT.format(b.getWaktu())));
+        }
+        return berkas("Pembatalan Kasir", label, header, baris);
+    }
+
+    private HasilEkspor eksporKartuTamu(Long sekolahId, String label) {
+        List<BarisKartuTamu> data = laporan.laporanKartuTamu(sekolahId);
+        List<String> header = List.of("Kartu ID", "Nomor Kartu", "Pemegang", "RFID UID",
+                "Aktif", "Saldo");
+        List<List<Object>> baris = new ArrayList<>();
+        for (BarisKartuTamu b : data) {
+            baris.add(List.of(nvl(b.getKartuId()), nvl(b.getNomorKartu()),
+                    nvl(b.getLabelPemegang()), nvl(b.getRfidUid()),
+                    b.isAktif() ? "YA" : "TIDAK", b.getSaldo()));
+        }
+        return berkas("Laporan Kartu Tamu", label, header, baris);
+    }
+
+    private HasilEkspor eksporPenjualanDimensi(Long sekolahId, LocalDate tgl, OffsetDateTime dari,
+                                               OffsetDateTime sampai, String label, String judul,
+                                               String kolomNama, List<BarisPenjualanDimensi> data) {
+        List<String> header = List.of("ID", kolomNama, "Jumlah Transaksi", "Nilai", "HPP", "Laba Kotor");
+        List<List<Object>> baris = new ArrayList<>();
+        for (BarisPenjualanDimensi b : data) {
+            baris.add(List.of(nvl(b.kunciId()), nvl(b.nama()), b.jumlahTransaksi(),
+                    b.nilai(), b.hpp(), b.labaKotor()));
+        }
+        return berkas(judul, label, header, baris);
     }
 
     // ────────────────────────────────────────────────────────────────

@@ -52,6 +52,10 @@ application-local.properties
 .DS_Store
 Thumbs.db
 
+### Helper lokal (bukan bagian produk) ###
+.issues/
+build.sh
+
 ### Keypair JWT DUMMY (dev/test — JANGAN commit) ###
 .dev-jwt/
 *.pem

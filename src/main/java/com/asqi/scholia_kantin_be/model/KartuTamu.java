@@ -66,6 +66,13 @@ public class KartuTamu {
     @Column(columnDefinition = "TEXT")
     private String catatan;
 
+    /**
+     * Label pemegang kartu (PRD §9.4) — nama guru/staf, atau "Tamu".
+     * Opsional; <b>dikosongkan</b> saat kartu dikembalikan (siap dipakai ulang).
+     */
+    @Column(name = "label_pemegang", length = 150)
+    private String labelPemegang;
+
     // ────────────────────────────────────────────────────────────────
     // AUDIT
     // ────────────────────────────────────────────────────────────────

@@ -71,7 +71,7 @@ class VoidServiceIT {
         // VoidService/SesiKasirService memakai SekolahGuard → butuh TenantContext.
         TenantContext.set(IdentitasKantin.builder().userId("555").sekolahId(SEKOLAH).build());
         jdbc.execute("TRUNCATE TABLE transaksi_item, transaksi, sesi_kasir, titik_kasir, "
-                + "saldo_ledger, saldo_cache, mutasi_stok, stok_cache CASCADE");
+                + "saldo_ledger, saldo_cache, mutasi_stok, stok_cache, audit_log CASCADE");
         jdbc.update("INSERT INTO titik_kasir (id, sekolah_id, nama, is_active, created_at, updated_at) "
                 + "VALUES (?, ?, 'Kasir 1', true, now(), now())", TITIK, SEKOLAH);
 
@@ -157,6 +157,97 @@ class VoidServiceIT {
     void voidTenantLain404() {
         TapResponse tap = tap("tap-5", 1);
         assertThatThrownBy(() -> voidService.voidTransaksi(999L, tap.getTransaksiId(), 555L, "salah"))
+                .isInstanceOf(com.asqi.scholia_kantin_be.component.exception.NotFoundEntity.class);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // KOREKSI TRANSAKSI SESI TERTUTUP OLEH BENDAHARA (#119, PRD §6.3/§9.2)
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("#119: koreksi sesi tertutup mengembalikan saldo & stok via mutasi pembalik")
+    void koreksiSesiTertutupMengembalikan() {
+        TapResponse tap = tap("tap-kor1", 2); // 2 × 8000 = 16.000
+        Long sesiId = jdbc.queryForObject(
+                "SELECT sesi_kasir_id FROM transaksi WHERE id = ?", Long.class, tap.getTransaksiId());
+        sesiKasir.tutupSesi(SEKOLAH, sesiId, 555L, false);
+
+        // Void petugas ditolak pada sesi tertutup.
+        assertThatThrownBy(() -> voidService.voidTransaksi(SEKOLAH, tap.getTransaksiId(), 555L, "salah"))
+                .hasMessageContaining("sudah ditutup");
+
+        // Bendahara mengoreksi → saldo & stok kembali.
+        var trx = voidService.koreksiTransaksiSesiTertutup(
+                SEKOLAH, tap.getTransaksiId(), 777L, "Transaksi salah input pada sesi tertutup");
+
+        assertThat(trx.getStatus()).isEqualTo(StatusTransaksi.VOID);
+        assertThat(trx.getAlasanVoid()).isEqualTo("Transaksi salah input pada sesi tertutup");
+        assertThat(trx.getVoidOleh()).isEqualTo(777L);
+        assertThat(ledgerSaldo.saldo(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(50_000L);
+        assertThat(ledgerStok.stok(SEKOLAH, MENU_NASI)).isEqualTo(20);
+
+        // Baris asli tetap ada (append-only); kompensasi = baris KOREKSI baru.
+        Integer debitAsli = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM saldo_ledger WHERE arah = 'DEBIT' AND jenis = 'PENJUALAN'", Integer.class);
+        Integer kreditKoreksi = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM saldo_ledger WHERE arah = 'KREDIT' AND jenis = 'KOREKSI'", Integer.class);
+        assertThat(debitAsli).isEqualTo(1);
+        assertThat(kreditKoreksi).isEqualTo(1);
+        assertThat(ledgerSaldo.hitungUlangDariLedger(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(50_000L);
+
+        // Audit tercatat dengan aksi khusus koreksi.
+        Integer audit = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_log WHERE aksi = 'KOREKSI_TRANSAKSI_SESI_TERTUTUP'", Integer.class);
+        assertThat(audit).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#119: koreksi tanpa alasan ditolak")
+    void koreksiTanpaAlasanDitolak() {
+        TapResponse tap = tap("tap-kor2", 1);
+        Long sesiId = jdbc.queryForObject(
+                "SELECT sesi_kasir_id FROM transaksi WHERE id = ?", Long.class, tap.getTransaksiId());
+        sesiKasir.tutupSesi(SEKOLAH, sesiId, 555L, false);
+
+        assertThatThrownBy(() -> voidService.koreksiTransaksiSesiTertutup(
+                SEKOLAH, tap.getTransaksiId(), 777L, "  "))
+                .hasMessageContaining("Alasan koreksi wajib");
+    }
+
+    @Test
+    @DisplayName("#119: koreksi pada sesi yang masih terbuka ditolak (pakai void biasa)")
+    void koreksiSesiTerbukaDitolak() {
+        TapResponse tap = tap("tap-kor3", 1);
+
+        assertThatThrownBy(() -> voidService.koreksiTransaksiSesiTertutup(
+                SEKOLAH, tap.getTransaksiId(), 777L, "salah"))
+                .hasMessageContaining("masih terbuka");
+    }
+
+    @Test
+    @DisplayName("#119: koreksi dua kali ditolak (sudah di-void)")
+    void koreksiDuaKaliDitolak() {
+        TapResponse tap = tap("tap-kor4", 1);
+        Long sesiId = jdbc.queryForObject(
+                "SELECT sesi_kasir_id FROM transaksi WHERE id = ?", Long.class, tap.getTransaksiId());
+        sesiKasir.tutupSesi(SEKOLAH, sesiId, 555L, false);
+
+        voidService.koreksiTransaksiSesiTertutup(SEKOLAH, tap.getTransaksiId(), 777L, "salah input");
+        assertThatThrownBy(() -> voidService.koreksiTransaksiSesiTertutup(
+                SEKOLAH, tap.getTransaksiId(), 777L, "lagi"))
+                .hasMessageContaining("sudah di-void");
+    }
+
+    @Test
+    @DisplayName("#119: koreksi transaksi sekolah lain → 404")
+    void koreksiTenantLain404() {
+        TapResponse tap = tap("tap-kor5", 1);
+        Long sesiId = jdbc.queryForObject(
+                "SELECT sesi_kasir_id FROM transaksi WHERE id = ?", Long.class, tap.getTransaksiId());
+        sesiKasir.tutupSesi(SEKOLAH, sesiId, 555L, false);
+
+        assertThatThrownBy(() -> voidService.koreksiTransaksiSesiTertutup(
+                999L, tap.getTransaksiId(), 777L, "salah"))
                 .isInstanceOf(com.asqi.scholia_kantin_be.component.exception.NotFoundEntity.class);
     }
 }

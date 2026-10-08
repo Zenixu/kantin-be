@@ -98,4 +98,56 @@ public interface TransaksiRepository extends JpaRepository<Transaksi, Long> {
     List<Object[]> rekapPerStatusRentang(@Param("sekolahId") Long sekolahId,
                                          @Param("dari") OffsetDateTime dari,
                                          @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Transaksi yang di-<b>VOID</b> pada rentang waktu — laporan Pembatalan
+     * Kasir (PRD §9.5, issue #114). Diurut terbaru dulu agar jejak terakhir
+     * mudah dilihat. Tenant-scoped.
+     */
+    @Query("""
+            SELECT t FROM Transaksi t
+            WHERE t.sekolahId = :sekolahId
+              AND t.status = com.asqi.scholia_kantin_be.enums.StatusTransaksi.VOID
+              AND t.waktu >= :dari AND t.waktu < :sampai
+            ORDER BY t.voidAt DESC, t.id DESC
+            """)
+    List<Transaksi> pembatalanRentang(@Param("sekolahId") Long sekolahId,
+                                      @Param("dari") OffsetDateTime dari,
+                                      @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Penjualan per <b>titik kasir</b> pada rentang (PRD §9.5, issue #116).
+     * Mengembalikan baris {@code [titikKasirId, jumlahTransaksi, Σ total, Σ hpp]},
+     * hanya transaksi SUKSES. Diurut nilai menurun.
+     */
+    @Query("""
+            SELECT t.titikKasirId, COUNT(t), COALESCE(SUM(t.total), 0), COALESCE(SUM(t.totalHpp), 0)
+            FROM Transaksi t
+            WHERE t.sekolahId = :sekolahId
+              AND t.status = com.asqi.scholia_kantin_be.enums.StatusTransaksi.SUKSES
+              AND t.waktu >= :dari AND t.waktu < :sampai
+            GROUP BY t.titikKasirId
+            ORDER BY SUM(t.total) DESC
+            """)
+    List<Object[]> penjualanPerTitikRentang(@Param("sekolahId") Long sekolahId,
+                                            @Param("dari") OffsetDateTime dari,
+                                            @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Penjualan per <b>petugas</b> pada rentang (PRD §9.5, issue #116).
+     * Mengembalikan baris {@code [petugasId, jumlahTransaksi, Σ total, Σ hpp]},
+     * hanya transaksi SUKSES. Diurut nilai menurun.
+     */
+    @Query("""
+            SELECT t.petugasId, COUNT(t), COALESCE(SUM(t.total), 0), COALESCE(SUM(t.totalHpp), 0)
+            FROM Transaksi t
+            WHERE t.sekolahId = :sekolahId
+              AND t.status = com.asqi.scholia_kantin_be.enums.StatusTransaksi.SUKSES
+              AND t.waktu >= :dari AND t.waktu < :sampai
+            GROUP BY t.petugasId
+            ORDER BY SUM(t.total) DESC
+            """)
+    List<Object[]> penjualanPerPetugasRentang(@Param("sekolahId") Long sekolahId,
+                                              @Param("dari") OffsetDateTime dari,
+                                              @Param("sampai") OffsetDateTime sampai);
 }
