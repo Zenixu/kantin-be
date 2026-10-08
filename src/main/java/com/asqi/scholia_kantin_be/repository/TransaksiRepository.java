@@ -150,4 +150,22 @@ public interface TransaksiRepository extends JpaRepository<Transaksi, Long> {
     List<Object[]> penjualanPerPetugasRentang(@Param("sekolahId") Long sekolahId,
                                               @Param("dari") OffsetDateTime dari,
                                               @Param("sampai") OffsetDateTime sampai);
+
+    /**
+     * Semua transaksi satu subjek pada rentang (laporan per siswa, PRD §9.5,
+     * issue #117), urut waktu menaik. Tenant-scoped.
+     */
+    @Query("""
+            SELECT t FROM Transaksi t
+            WHERE t.sekolahId = :sekolahId
+              AND t.subjekTipe = :subjekTipe
+              AND t.subjekId = :subjekId
+              AND t.waktu >= :dari AND t.waktu < :sampai
+            ORDER BY t.waktu ASC
+            """)
+    List<Transaksi> transaksiSubjekRentang(@Param("sekolahId") Long sekolahId,
+                                           @Param("subjekTipe") com.asqi.scholia_kantin_be.enums.SubjekTipe subjekTipe,
+                                           @Param("subjekId") Long subjekId,
+                                           @Param("dari") OffsetDateTime dari,
+                                           @Param("sampai") OffsetDateTime sampai);
 }

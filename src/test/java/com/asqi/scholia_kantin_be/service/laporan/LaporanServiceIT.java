@@ -6,6 +6,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
+import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
@@ -502,5 +503,61 @@ class LaporanServiceIT {
                 assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Penjualan per");
             }
         }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // PER SISWA (PRD §9.5, issue #117)
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("#117: per siswa — ringkasan + transaksi + mutasi saldo satu subjek")
+    void laporanPerSiswa() {
+        topup(SISWA, SubjekTipe.SISWA, 50_000, JenisMutasiSaldo.TOPUP_TUNAI);
+        transaksi(1, SISWA, 21_000, 10_000);
+        transaksi(2, SISWA, 8_000, 4_000);
+        transaksiVoid(3, SISWA, 16_000, "Kartu dipakai bukan pemiliknya");
+        // Subjek lain — harus TIDAK ikut
+        transaksi(4, SISWA2, 30_000, 12_000);
+
+        LaporanPerSiswa r = laporan.laporanPerSiswa(SEKOLAH, SubjekTipe.SISWA, SISWA, null, null, null);
+
+        assertThat(r.subjekTipe()).isEqualTo(SubjekTipe.SISWA);
+        assertThat(r.subjekId()).isEqualTo(SISWA);
+        assertThat(r.saldo()).isEqualTo(50_000L);
+        assertThat(r.transaksi()).hasSize(3);
+        assertThat(r.ringkasan().jumlahTransaksiSukses()).isEqualTo(2);
+        assertThat(r.ringkasan().nilaiBelanjaSukses()).isEqualTo(29_000);
+        assertThat(r.ringkasan().totalHpp()).isEqualTo(14_000);
+        assertThat(r.ringkasan().jumlahTransaksiVoid()).isEqualTo(1);
+        assertThat(r.ringkasan().nilaiVoid()).isEqualTo(16_000);
+        assertThat(r.ringkasan().totalTopup()).isEqualTo(50_000);
+        assertThat(r.mutasiSaldo()).hasSize(1);
+        assertThat(r.mutasiSaldo().get(0).jenis()).isEqualTo(JenisMutasiSaldo.TOPUP_TUNAI);
+        assertThat(r.mutasiSaldo().get(0).nominal()).isEqualTo(50_000);
+    }
+
+    @Test
+    @DisplayName("#117: per siswa — siswa tanpa data → ringkasan nol, daftar kosong")
+    void laporanPerSiswaKosong() {
+        LaporanPerSiswa r = laporan.laporanPerSiswa(SEKOLAH, SubjekTipe.SISWA, 999L, null, null, null);
+
+        assertThat(r.saldo()).isZero();
+        assertThat(r.transaksi()).isEmpty();
+        assertThat(r.mutasiSaldo()).isEmpty();
+        assertThat(r.ringkasan().jumlahTransaksiSukses()).isZero();
+        assertThat(r.ringkasan().totalTopup()).isZero();
+    }
+
+    @Test
+    @DisplayName("#117: per siswa — tenant scoping (sekolah lain kosong)")
+    void laporanPerSiswaTenantScoping() {
+        topup(SISWA, SubjekTipe.SISWA, 50_000, JenisMutasiSaldo.TOPUP_TUNAI);
+        transaksi(1, SISWA, 21_000, 10_000);
+
+        LaporanPerSiswa r = laporan.laporanPerSiswa(SEKOLAH_LAIN, SubjekTipe.SISWA, SISWA, null, null, null);
+
+        assertThat(r.transaksi()).isEmpty();
+        assertThat(r.mutasiSaldo()).isEmpty();
+        assertThat(r.saldo()).isZero();
     }
 }

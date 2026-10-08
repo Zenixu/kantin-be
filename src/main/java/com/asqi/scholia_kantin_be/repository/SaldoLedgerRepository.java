@@ -152,6 +152,24 @@ public interface SaldoLedgerRepository extends JpaRepository<SaldoLedger, Long> 
                                   @Param("sampai") OffsetDateTime sampai);
 
     /**
+     * Mutasi saldo <b>satu subjek</b> pada rentang waktu (laporan per siswa,
+     * PRD §9.5, issue #117), urut waktu menaik. Tenant-scoped.
+     */
+    @Query("""
+            SELECT l FROM SaldoLedger l
+            WHERE l.sekolahId = :sekolahId
+              AND l.subjekTipe = :subjekTipe
+              AND l.subjekId = :subjekId
+              AND l.waktu >= :dari AND l.waktu < :sampai
+            ORDER BY l.id ASC
+            """)
+    List<SaldoLedger> padaRentangSubjek(@Param("sekolahId") Long sekolahId,
+                                        @Param("subjekTipe") SubjekTipe subjekTipe,
+                                        @Param("subjekId") Long subjekId,
+                                        @Param("dari") OffsetDateTime dari,
+                                        @Param("sampai") OffsetDateTime sampai);
+
+    /**
      * Rekap top-up tunai satu petugas pada rentang waktu (PRD §9.2, issue #39).
      *
      * <p>Dasar "setoran kas TU harian": Σ nominal top-up tunai
