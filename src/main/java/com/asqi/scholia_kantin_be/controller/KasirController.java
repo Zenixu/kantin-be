@@ -125,6 +125,24 @@ public class KasirController {
     }
 
     /**
+     * Koreksi transaksi pada <b>sesi yang sudah ditutup</b> oleh bendahara
+     * (PRD §6.3, §9.2). Bukan void petugas: dijalankan sebagai <b>mutasi
+     * pembalik</b> beralasan — saldo &amp; stok dikembalikan, transaksi ditandai
+     * VOID, dan jejaknya dicatat di audit log. Wajib alasan.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PostMapping("transaksi/{transaksiId}/koreksi")
+    public ResponseEntity<Response<Transaksi>> koreksiTransaksiSesiTertutup(
+            @PathVariable Long transaksiId,
+            @Valid @RequestBody VoidRequest request,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        Transaksi trx = voidService.koreksiTransaksiSesiTertutup(
+                TenantContext.sekolahIdWajib(), transaksiId, identitas.aktorIdWajib(), request.getAlasan());
+        return CommonResponse.data(trx, "Transaksi sesi tertutup berhasil dikoreksi");
+    }
+
+    /**
      * Ambil sesi kasir terbuka hari ini untuk titik kasir, atau buka sesi baru
      * (PRD §6.4). Idempoten per (sekolah, titik, hari) — aman dipanggil
      * berkali-kali oleh klien kasir saat mulai shift.
