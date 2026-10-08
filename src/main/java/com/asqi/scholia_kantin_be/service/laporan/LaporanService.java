@@ -3,6 +3,7 @@ package com.asqi.scholia_kantin_be.service.laporan;
 import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
 import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
+import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
@@ -70,6 +71,7 @@ public class LaporanService {
     private final MenuRepository menuRepo;
     private final KategoriMenuRepository kategoriRepo;
     private final com.asqi.scholia_kantin_be.repository.KartuTamuRepository kartuTamuRepo;
+    private final com.asqi.scholia_kantin_be.repository.TitikKasirRepository titikKasirRepo;
     private final HppService hppService;
     private final JamKantin jam;
 
@@ -346,6 +348,48 @@ public class LaporanService {
                         .saldo(saldoByKartu.getOrDefault(k.getId(), 0L))
                         .build())
                 .toList();
+    }
+
+    /**
+     * Penjualan per <b>titik kasir</b> pada periode (PRD §9.5, issue #116).
+     * Nama titik diresolusi dari katalog titik kasir.
+     */
+    @Transactional(readOnly = true)
+    public List<BarisPenjualanDimensi> penjualanPerTitik(Long sekolahId, LocalDate tanggal,
+                                                         OffsetDateTime dari, OffsetDateTime sampai) {
+        OffsetDateTime[] r = rentang(tanggal, dari, sampai);
+        Map<Long, String> namaTitik = new HashMap<>();
+        titikKasirRepo.findBySekolahId(sekolahId)
+                .forEach(t -> namaTitik.put(t.getId(), t.getNama()));
+
+        List<BarisPenjualanDimensi> hasil = new ArrayList<>();
+        for (Object[] b : transaksiRepo.penjualanPerTitikRentang(sekolahId, r[0], r[1])) {
+            Long id = (Long) b[0];
+            long jumlah = ((Number) b[1]).longValue();
+            long nilai = ((Number) b[2]).longValue();
+            long hpp = ((Number) b[3]).longValue();
+            hasil.add(new BarisPenjualanDimensi(id, namaTitik.get(id), jumlah, nilai, hpp, nilai - hpp));
+        }
+        return hasil;
+    }
+
+    /**
+     * Penjualan per <b>petugas</b> pada periode (PRD §9.5, issue #116).
+     * Nama petugas tidak tersedia di kantin-be (ada di admin-be) → {@code null}.
+     */
+    @Transactional(readOnly = true)
+    public List<BarisPenjualanDimensi> penjualanPerPetugas(Long sekolahId, LocalDate tanggal,
+                                                           OffsetDateTime dari, OffsetDateTime sampai) {
+        OffsetDateTime[] r = rentang(tanggal, dari, sampai);
+        List<BarisPenjualanDimensi> hasil = new ArrayList<>();
+        for (Object[] b : transaksiRepo.penjualanPerPetugasRentang(sekolahId, r[0], r[1])) {
+            Long id = (Long) b[0];
+            long jumlah = ((Number) b[1]).longValue();
+            long nilai = ((Number) b[2]).longValue();
+            long hpp = ((Number) b[3]).longValue();
+            hasil.add(new BarisPenjualanDimensi(id, null, jumlah, nilai, hpp, nilai - hpp));
+        }
+        return hasil;
     }
 
     private static long nolJikaNull(Long nilai) {

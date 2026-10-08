@@ -3,6 +3,7 @@ package com.asqi.scholia_kantin_be.service.laporan;
 import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
 import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
+import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
@@ -62,6 +63,12 @@ public class LaporanExportService {
             case BARANG_MASUK -> eksporBarangMasuk(sekolahId, tanggal, dari, sampai, label);
             case PEMBATALAN -> eksporPembatalan(sekolahId, tanggal, dari, sampai, label);
             case KARTU_TAMU -> eksporKartuTamu(sekolahId, label);
+            case PENJUALAN_TITIK -> eksporPenjualanDimensi(sekolahId, tanggal, dari, sampai, label,
+                    "Penjualan per Titik Kasir", "Titik",
+                    laporan.penjualanPerTitik(sekolahId, tanggal, dari, sampai));
+            case PENJUALAN_PETUGAS -> eksporPenjualanDimensi(sekolahId, tanggal, dari, sampai, label,
+                    "Penjualan per Petugas", "Petugas",
+                    laporan.penjualanPerPetugas(sekolahId, tanggal, dari, sampai));
         };
     }
 
@@ -192,6 +199,18 @@ public class LaporanExportService {
                     b.isAktif() ? "YA" : "TIDAK", b.getSaldo()));
         }
         return berkas("Laporan Kartu Tamu", label, header, baris);
+    }
+
+    private HasilEkspor eksporPenjualanDimensi(Long sekolahId, LocalDate tgl, OffsetDateTime dari,
+                                               OffsetDateTime sampai, String label, String judul,
+                                               String kolomNama, List<BarisPenjualanDimensi> data) {
+        List<String> header = List.of("ID", kolomNama, "Jumlah Transaksi", "Nilai", "HPP", "Laba Kotor");
+        List<List<Object>> baris = new ArrayList<>();
+        for (BarisPenjualanDimensi b : data) {
+            baris.add(List.of(nvl(b.kunciId()), nvl(b.nama()), b.jumlahTransaksi(),
+                    b.nilai(), b.hpp(), b.labaKotor()));
+        }
+        return berkas(judul, label, header, baris);
     }
 
     // ────────────────────────────────────────────────────────────────

@@ -26,5 +26,9 @@ public enum JenisLaporan {
     /** Pembatalan kasir — transaksi di-void per subjek (PRD §9.5). */
     PEMBATALAN,
     /** Kartu Tamu — daftar kartu, pemegang, saldo, status (PRD §9.5). */
-    KARTU_TAMU
+    KARTU_TAMU,
+    /** Penjualan per titik kasir (PRD §9.5). */
+    PENJUALAN_TITIK,
+    /** Penjualan per petugas (PRD §9.5). */
+    PENJUALAN_PETUGAS
 }
