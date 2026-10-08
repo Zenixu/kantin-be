@@ -1,6 +1,9 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.dto.HasilRefundResponse;
 import com.asqi.scholia_kantin_be.dto.KartuTamuRequest;
+import com.asqi.scholia_kantin_be.dto.PindahSaldoKartuTamuRequest;
+import com.asqi.scholia_kantin_be.dto.RefundKartuTamuRequest;
 import com.asqi.scholia_kantin_be.enums.AktorKantin;
 import com.asqi.scholia_kantin_be.model.KartuTamu;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
@@ -9,6 +12,7 @@ import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.PerluPeran;
 import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.kartu.KartuTamuService;
+import com.asqi.scholia_kantin_be.service.saldo.RefundKartuTamuService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +42,7 @@ import java.util.List;
 public class KartuTamuController {
 
     private final KartuTamuService service;
+    private final RefundKartuTamuService refundService;
 
     /**
      * Daftar semua kartu tamu milik sekolah.
@@ -138,5 +143,44 @@ public class KartuTamuController {
                 identitas.aktorIdWajib());
 
         return CommonResponse.data(kartu, "Kartu tamu berhasil dinonaktifkan");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // SALDO KHUSUS KARTU TAMU (PRD §9.4, issue #120)
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Refund sisa saldo saat <b>pengembalian kartu</b> (PRD §9.4): sisa saldo
+     * di-refund <b>tunai</b>, saldo → 0, label pemegang dikosongkan agar kartu
+     * dapat dipakai ulang. Idempoten lewat nomor bukti. RBAC TU/bendahara.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PostMapping("refund")
+    public ResponseEntity<Response<HasilRefundResponse>> refundKartu(
+            @Valid @RequestBody RefundKartuTamuRequest request,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        HasilRefundResponse hasil = refundService.refund(
+                TenantContext.sekolahIdWajib(), request.getKartuId(), request.getReferensiId(),
+                request.getCatatan(), identitas.aktorIdWajib());
+        return CommonResponse.data(hasil, "Refund saldo kartu tamu berhasil");
+    }
+
+    /**
+     * Pindahkan sisa saldo dari Kartu Tamu <b>hilang</b> ke Kartu Tamu baru
+     * (PRD §9.4): kartu lama diblokir (berlaku instan), saldo pindah. Idempoten
+     * lewat nomor berita acara. RBAC TU/bendahara.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PostMapping("pindah-saldo")
+    public ResponseEntity<Response<HasilRefundResponse>> pindahSaldoKartu(
+            @Valid @RequestBody PindahSaldoKartuTamuRequest request,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        HasilRefundResponse hasil = refundService.pindahKartuHilang(
+                TenantContext.sekolahIdWajib(), request.getKartuSumberId(),
+                request.getKartuTujuanId(), request.getReferensiId(),
+                request.getCatatan(), identitas.aktorIdWajib());
+        return CommonResponse.data(hasil, "Saldo kartu tamu berhasil dipindahkan");
     }
 }
