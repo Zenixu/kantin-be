@@ -85,7 +85,15 @@ public class KlaimResolver {
         if (r.contains("BENDAHARA") || r.contains("TATA_USAHA") || r.equals("TU")) {
             return AktorKantin.TU_SEKOLAH;
         }
-        if (r.contains("ADMIN") || r.contains("KEPSEK") || r.contains("KEPALA_SEKOLAH")) {
+        // URUTAN PENTING: cek KEPSEK/KEPALA_SEKOLAH SEBELUM cabang generik
+        // `contains("ADMIN")`. Sebelumnya keduanya dilebur ke ADMIN_SEKOLAH →
+        // kepala sekolah mewarisi hak CRUD (pengaturan & titik kasir, blokir)
+        // padahal PRD §9.5/§9.6 hanya memberinya hak BACA sebagian laporan —
+        // ESKALASI HAK. Dipisah ke KEPSEK (issue #123, ADR-0012).
+        if (r.contains("KEPSEK") || r.contains("KEPALA_SEKOLAH")) {
+            return AktorKantin.KEPSEK;
+        }
+        if (r.contains("ADMIN")) {
             return AktorKantin.ADMIN_SEKOLAH;
         }
         if (r.contains("ORANG_TUA") || r.contains("ORTU") || r.contains("PARENT")) {

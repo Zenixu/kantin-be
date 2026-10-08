@@ -1,5 +1,6 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.component.exception.ForbiddenException;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
@@ -10,6 +11,7 @@ import com.asqi.scholia_kantin_be.enums.AktorKantin;
 import com.asqi.scholia_kantin_be.enums.JenisLaporan;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
 import com.asqi.scholia_kantin_be.payload.response.Response;
+import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.PerluPeran;
 import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.laporan.LaporanExportService;
@@ -27,7 +29,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Endpoint laporan &amp; ekspor Excel (PRD §9.5).
@@ -36,20 +40,36 @@ import java.util.List;
  * <b>atau</b> rentang {@code dari}/{@code sampai} (ISO date-time). Bila keduanya
  * kosong → hari ini. Semua laporan tenant-scoped dari token.
  *
- * <p>Akses mengikuti PRD §9.5 (bendahara/TU, admin, pengelola, kepsek). Karena
- * kepsek belum dipetakan sebagai {@link AktorKantin}, laporan dibuka untuk
- * peran back-office yang berhak (TU, admin, pengelola).
+ * <p>Akses mengikuti PRD §9.5 per kolom <i>Akses</i>. Peran {@link AktorKantin#KEPSEK}
+ * (kepala sekolah) bersifat <b>read-only</b> dan hanya pada laporan yang
+ * menyebutnya — penjualan/laba kotor, saldo mengendap, rekonsiliasi, kerugian
+ * stok. Laporan <b>stok</b> &amp; <b>barang masuk</b> tidak dibuka untuk kepsek
+ * (PRD §9.5: hanya Pengelola &amp; Bendahara). Lihat ADR-0012 &amp; issue #123.
  */
 @RestController
 @RequestMapping("api/laporan")
 @RequiredArgsConstructor
 public class LaporanController {
 
+    /**
+     * Jenis laporan yang boleh <b>diekspor</b> oleh kepsek (PRD §9.5 — hanya
+     * laporan yang kolom aksesnya menyebut Kepsek). Dipakai untuk menegakkan
+     * batas read-only pada endpoint ekspor yang melayani semua jenis.
+     */
+    private static final java.util.Set<JenisLaporan> JENIS_EKSPOR_KEPSEK = java.util.EnumSet.of(
+            JenisLaporan.PENJUALAN,
+            JenisLaporan.PENJUALAN_ITEM,
+            JenisLaporan.PENJUALAN_KATEGORI,
+            JenisLaporan.SALDO_MENGENDAP,
+            JenisLaporan.REKONSILIASI,
+            JenisLaporan.KERUGIAN_STOK);
+
     private final LaporanService laporan;
     private final LaporanExportService exportService;
 
     /** Ringkasan penjualan &amp; laba kotor (PRD §9.5). */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("penjualan")
     public ResponseEntity<Response<RingkasanPenjualan>> penjualan(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
@@ -60,7 +80,8 @@ public class LaporanController {
     }
 
     /** Penjualan per item (PRD §9.5). */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("penjualan/item")
     public ResponseEntity<Response<List<BarisPenjualan>>> penjualanItem(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
@@ -71,7 +92,8 @@ public class LaporanController {
     }
 
     /** Penjualan per kategori (PRD §9.5). */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("penjualan/kategori")
     public ResponseEntity<Response<List<BarisPenjualan>>> penjualanKategori(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
@@ -82,14 +104,16 @@ public class LaporanController {
     }
 
     /** Saldo mengendap — dana titipan (PRD §9.5). */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("saldo-mengendap")
     public ResponseEntity<Response<RingkasanSaldoMengendap>> saldoMengendap() {
         return CommonResponse.data(laporan.saldoMengendap(TenantContext.sekolahIdWajib()));
     }
 
     /** Rekonsiliasi harian + pemeriksaan invariant (PRD §9.5, §5). */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("rekonsiliasi")
     public ResponseEntity<Response<RingkasanRekonsiliasi>> rekonsiliasi(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
@@ -99,7 +123,10 @@ public class LaporanController {
                 laporan.rekonsiliasi(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
     }
 
-    /** Laporan stok + nilai persediaan (PRD §9.5). */
+    /**
+     * Laporan stok + nilai persediaan (PRD §9.5). <b>Tanpa kepsek</b> — kolom
+     * akses §9.5 hanya Pengelola &amp; Bendahara.
+     */
     @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
     @GetMapping("stok")
     public ResponseEntity<Response<List<BarisStok>>> stok(
@@ -109,7 +136,8 @@ public class LaporanController {
     }
 
     /** Kerugian stok (opname keluar &amp; barang rusak) (PRD §9.5). */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("kerugian-stok")
     public ResponseEntity<Response<List<BarisKerugianStok>>> kerugianStok(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
@@ -122,14 +150,25 @@ public class LaporanController {
     /**
      * Ekspor laporan ke Excel (.xlsx) — PRD §9.5 "semua laporan dapat diekspor".
      * Mengembalikan berkas unduhan langsung (bukan JSON).
+     *
+     * <p>Kepsek boleh mengekspor <b>hanya</b> jenis laporan yang boleh dibacanya
+     * (§9.5); jenis lain → 403 meski anotasi mengizinkan peran tersebut.
      */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("ekspor")
     public ResponseEntity<ByteArrayResource> ekspor(
             @RequestParam JenisLaporan jenis,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
+
+        IdentitasKantin identitas = TenantContext.get();
+        if (identitas != null && identitas.getPeran() == AktorKantin.KEPSEK
+                && !JENIS_EKSPOR_KEPSEK.contains(jenis)) {
+            throw new ForbiddenException(
+                    "Kepsek tidak berhak mengekspor laporan " + jenis + " (PRD §9.5)");
+        }
 
         LaporanExportService.HasilEkspor hasil = exportService.ekspor(
                 TenantContext.sekolahIdWajib(), jenis, tanggal, dari, sampai);

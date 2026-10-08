@@ -37,7 +37,7 @@
 | `POST` | `/api/saldo/koreksi` | TU, admin, pengelola | Koreksi saldo (arah KREDIT/DEBIT, alasan + berita acara wajib) |
 | `GET` | `/api/saldo?subjekTipe=&subjekId=&batasMutasi=` | petugas, TU, pengelola, admin | Saldo berjalan + belanja hari ini + mutasi terbaru |
 | `GET` | `/api/saldo/rekonsiliasi?subjekTipe=&subjekId=` | TU, admin, pengelola | Hitung ulang saldo dari ledger |
-| `GET` | `/api/saldo/refund/kandidat?hanyaTidakAktif=` | TU, admin, pengelola | Daftar siswa bersisa saldo (kandidat refund/pindah); filter siswa nonaktif |
+| `GET` | `/api/saldo/refund/kandidat?hanyaTidakAktif=` | TU, admin, pengelola, kepsek (read) | Daftar siswa bersisa saldo (kandidat refund/pindah); filter siswa nonaktif. Kepsek **hanya baca** (§9.6), tidak boleh eksekusi |
 | `POST` | `/api/saldo/refund` | TU, admin, pengelola | Refund **seluruh** sisa saldo siswa keluar ke ortu; saldo → 0 & kartu diblokir |
 | `POST` | `/api/saldo/pindah-saldo` | TU, admin, pengelola | Pindah **seluruh** sisa saldo ke saudara kandung (aktif, sekolah sama); saldo sumber → 0 |
 | `GET` | `/api/saldo/setoran-tu/rekap?tanggal=` | TU, admin, pengelola | Rekap top-up tunai per petugas per hari + selisih (kosong = hari ini) |
@@ -152,19 +152,20 @@
 
 > Semua laporan **tenant-scoped** dari token. Periode: kirim `tanggal`
 > (YYYY-MM-DD, default hari ini zona kantin) **atau** rentang `dari`/`sampai`
-> (ISO date-time). Keduanya kosong ⇒ hari ini. Peran: TU, admin, pengelola
-> (PRD §9.5).
+> (ISO date-time). Keduanya kosong ⇒ hari ini. Peran: TU, admin, pengelola,
+> **kepsek** (PRD §9.5 — kepsek **read-only**, hanya laporan yang menyebutnya;
+> lihat ADR-0012 & issue #123).
 
 | Method | Path | Peran | Keterangan |
 |---|---|---|---|
-| `GET` | `/api/laporan/penjualan` | TU, admin, pengelola | Ringkasan: jumlah transaksi, bruto, HPP, **laba kotor**, void |
-| `GET` | `/api/laporan/penjualan/item` | TU, admin, pengelola | Penjualan per item (terlaris dulu): qty & nilai |
-| `GET` | `/api/laporan/penjualan/kategori` | TU, admin, pengelola | Penjualan per kategori |
-| `GET` | `/api/laporan/saldo-mengendap` | TU, admin, pengelola | Dana titipan: Σ saldo siswa + Kartu Tamu (kewajiban sekolah) |
-| `GET` | `/api/laporan/rekonsiliasi` | TU, admin, pengelola | Arus kas per jenis + cek invariant `seimbang`/`selisih` (PRD §5) |
-| `GET` | `/api/laporan/stok?hanyaMenipis=` | TU, admin, pengelola | Stok + nilai persediaan (stok × HPP); `menipis` dari `menu.stok_minimum`. **Ringkasan semua menu dalam 1 panggilan** (anti-N+1) — field `namaMenu`/`stokBerjalan` (alias dari `nama`/`stok`) untuk FE Laporan Inventaris (issue #98) |
-| `GET` | `/api/laporan/kerugian-stok` | TU, admin, pengelola | Opname keluar & barang rusak: qty + nilai kerugian |
-| `GET` | `/api/laporan/ekspor?jenis=&tanggal=&dari=&sampai=` | TU, admin, pengelola | Unduh **Excel `.xlsx`** (bukan JSON); `jenis` ∈ `JenisLaporan` |
+| `GET` | `/api/laporan/penjualan` | TU, admin, pengelola, kepsek | Ringkasan: jumlah transaksi, bruto, HPP, **laba kotor**, void |
+| `GET` | `/api/laporan/penjualan/item` | TU, admin, pengelola, kepsek | Penjualan per item (terlaris dulu): qty & nilai |
+| `GET` | `/api/laporan/penjualan/kategori` | TU, admin, pengelola, kepsek | Penjualan per kategori |
+| `GET` | `/api/laporan/saldo-mengendap` | TU, admin, pengelola, kepsek | Dana titipan: Σ saldo siswa + Kartu Tamu (kewajiban sekolah) |
+| `GET` | `/api/laporan/rekonsiliasi` | TU, admin, pengelola, kepsek | Arus kas per jenis + cek invariant `seimbang`/`selisih` (PRD §5) |
+| `GET` | `/api/laporan/stok?hanyaMenipis=` | TU, admin, pengelola | Stok + nilai persediaan (stok × HPP); `menipis` dari `menu.stok_minimum`. **Ringkasan semua menu dalam 1 panggilan** (anti-N+1) — field `namaMenu`/`stokBerjalan` (alias dari `nama`/`stok`) untuk FE Laporan Inventaris (issue #98). **Tanpa kepsek** (§9.5: hanya Pengelola & Bendahara) |
+| `GET` | `/api/laporan/kerugian-stok` | TU, admin, pengelola, kepsek | Opname keluar & barang rusak: qty + nilai kerugian |
+| `GET` | `/api/laporan/ekspor?jenis=&tanggal=&dari=&sampai=` | TU, admin, pengelola, kepsek* | Unduh **Excel `.xlsx`** (bukan JSON); `jenis` ∈ `JenisLaporan`. *Kepsek hanya boleh jenis yang boleh dibacanya — `STOK`/`BARANG_MASUK` → **403** |
 
 > **Invariant rekonsiliasi (PRD §5).** `selisih = (Σ KREDIT − Σ DEBIT) − saldo
 > mengendap` **harus 0**; `seimbang=false` menandakan ledger & cache tidak
