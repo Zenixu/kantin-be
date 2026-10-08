@@ -73,8 +73,8 @@ class PostingBukuKasStokIT {
         assertThat(p.getKategori()).isEqualTo("Belanja Stok Kantin");
         assertThat(p.getJumlah()).isEqualByComparingTo(new BigDecimal("50000"));
         assertThat(p.getRefId()).isEqualTo("KANTIN-BM-BM-1-10");
-        // Mitigasi Q3: refModul = null sampai admin-be menambah case kantin.
-        assertThat(p.getRefModul()).isNull();
+        // Q3 TERJAWAB: refModul="KANTIN" (admin-be migrateBukuKas → default → isOrphan=false).
+        assertThat(p.getRefModul()).isEqualTo("KANTIN");
 
         // Penanda idempotency tersimpan + audit tercatat.
         assertThat(jdbc.queryForObject(
