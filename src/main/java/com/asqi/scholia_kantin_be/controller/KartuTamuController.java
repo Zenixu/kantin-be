@@ -4,6 +4,7 @@ import com.asqi.scholia_kantin_be.dto.HasilRefundResponse;
 import com.asqi.scholia_kantin_be.dto.KartuTamuRequest;
 import com.asqi.scholia_kantin_be.dto.PindahSaldoKartuTamuRequest;
 import com.asqi.scholia_kantin_be.dto.RefundKartuTamuRequest;
+import com.asqi.scholia_kantin_be.dto.RiwayatKartuTamuResponse;
 import com.asqi.scholia_kantin_be.enums.AktorKantin;
 import com.asqi.scholia_kantin_be.model.KartuTamu;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
@@ -12,6 +13,7 @@ import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.PerluPeran;
 import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.kartu.KartuTamuService;
+import com.asqi.scholia_kantin_be.service.kartu.RiwayatKartuTamuService;
 import com.asqi.scholia_kantin_be.service.saldo.RefundKartuTamuService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class KartuTamuController {
 
     private final KartuTamuService service;
     private final RefundKartuTamuService refundService;
+    private final RiwayatKartuTamuService riwayatService;
 
     /**
      * Daftar semua kartu tamu milik sekolah.
@@ -182,5 +185,24 @@ public class KartuTamuController {
                 request.getKartuTujuanId(), request.getReferensiId(),
                 request.getCatatan(), identitas.aktorIdWajib());
         return CommonResponse.data(hasil, "Saldo kartu tamu berhasil dipindahkan");
+    }
+
+    /**
+     * Riwayat transaksi &amp; mutasi saldo satu Kartu Tamu (PRD §9.4/§9.5,
+     * issue #122) — dapat dilihat/dicetak TU atas permintaan pemegang.
+     * Transaksi terbaru dulu &amp; berhalaman; tenant-scoped.
+     */
+    @PerluPeran({AktorKantin.PETUGAS_KANTIN, AktorKantin.TU_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.ADMIN_SEKOLAH})
+    @GetMapping("{kartuId}/riwayat")
+    public ResponseEntity<Response<RiwayatKartuTamuResponse>> riwayatKartu(
+            @PathVariable Long kartuId,
+            @RequestParam(defaultValue = "20") int batasMutasi,
+            @RequestParam(defaultValue = "0") int halaman,
+            @RequestParam(defaultValue = "20") int ukuran) {
+
+        RiwayatKartuTamuResponse hasil = riwayatService.riwayat(
+                TenantContext.sekolahIdWajib(), kartuId, batasMutasi, halaman, ukuran);
+        return CommonResponse.data(hasil);
     }
 }
