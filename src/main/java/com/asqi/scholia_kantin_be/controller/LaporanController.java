@@ -7,6 +7,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
+import com.asqi.scholia_kantin_be.dto.KartuStokItem;
 import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
@@ -226,6 +227,25 @@ public class LaporanController {
     }
 
     /**
+     * Laporan <b>Kartu stok per item</b> (PRD §9.5, issue #118): riwayat mutasi
+     * satu menu (masuk, terjual, void, penyesuaian) + saldo stok berjalan.
+     * RBAC Pengelola/Bendahara.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("kartu-stok/{menuId}")
+    public ResponseEntity<Response<KartuStokItem>> kartuStok(
+            @org.springframework.web.bind.annotation.PathVariable Long menuId,
+            @RequestParam(required = false) Integer batas) {
+        KartuStokItem kartu = laporan.kartuStokItem(TenantContext.sekolahIdWajib(), menuId,
+                batas == null ? 0 : batas);
+        if (kartu == null) {
+            throw new com.asqi.scholia_kantin_be.component.exception.NotFoundEntity(
+                    "Menu tidak ditemukan");
+        }
+        return CommonResponse.data(kartu);
+    }
+
+    /**
      * Ekspor laporan ke Excel (.xlsx) — PRD §9.5 "semua laporan dapat diekspor".
      * Mengembalikan berkas unduhan langsung (bukan JSON).
      *
@@ -239,7 +259,8 @@ public class LaporanController {
             @RequestParam JenisLaporan jenis,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai,
+            @RequestParam(required = false) Long menuId) {
 
         IdentitasKantin identitas = TenantContext.get();
         if (identitas != null && identitas.getPeran() == AktorKantin.KEPSEK
@@ -249,7 +270,7 @@ public class LaporanController {
         }
 
         LaporanExportService.HasilEkspor hasil = exportService.ekspor(
-                TenantContext.sekolahIdWajib(), jenis, tanggal, dari, sampai);
+                TenantContext.sekolahIdWajib(), jenis, tanggal, dari, sampai, menuId);
 
         MediaType xlsx = MediaType.parseMediaType(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

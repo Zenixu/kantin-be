@@ -30,5 +30,7 @@ public enum JenisLaporan {
     /** Penjualan per titik kasir (PRD §9.5). */
     PENJUALAN_TITIK,
     /** Penjualan per petugas (PRD §9.5). */
-    PENJUALAN_PETUGAS
+    PENJUALAN_PETUGAS,
+    /** Kartu stok per item — riwayat mutasi satu menu + saldo berjalan (PRD §9.5). */
+    KARTU_STOK
 }
