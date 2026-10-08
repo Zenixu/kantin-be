@@ -114,6 +114,10 @@ public class TapValidator {
 
             // ── Tahap 4: stok cukup ─────────────────────────────────
             int stok = ledgerStok.stok(sekolahId, menu.getMenuId());
+            if (stok <= 0) {
+                // Stok 0 = "Habis" (PRD §6.1/§7.5) — item tak dapat ditambahkan.
+                return gagal(4, menu.getNama() + " habis (stok 0)", null, 0);
+            }
             if (stok < item.getQty()) {
                 return gagal(4, "Stok " + menu.getNama() + " tidak cukup (sisa " + stok + ")", null, 0);
             }

@@ -169,6 +169,7 @@ public class StokController {
                 .hpp(c.getHpp())
                 .nilaiPersediaan(hppService.nilaiPersediaan(c.getStok(), c.getHpp()))
                 .menipis(c.getStok() <= c.getStokMinimum())
+                .habis(c.getStok() <= 0)
                 .build();
     }
 }

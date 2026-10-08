@@ -18,4 +18,11 @@ public class StokResponse {
 
     /** true bila stok ≤ stokMinimum (perlu restock). */
     private boolean menipis;
+
+    /**
+     * Penanda eksplisit "Habis" (PRD §6.1/§7.5): {@code true} bila
+     * {@link #stok} == 0. Berbeda dari {@link #menipis} (stok ≤ minimum) —
+     * item habis tidak dapat ditambahkan ke transaksi.
+     */
+    private boolean habis;
 }

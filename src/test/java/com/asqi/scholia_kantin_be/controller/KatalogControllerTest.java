@@ -126,7 +126,23 @@ class KatalogControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(99))
                 .andExpect(jsonPath("$.data[0].stokMinimum").value(5))
-                .andExpect(jsonPath("$.data[0].stokBerjalan").value(12));
+                .andExpect(jsonPath("$.data[0].stokBerjalan").value(12))
+                .andExpect(jsonPath("$.data[0].habis").value(false));
+    }
+
+    @Test
+    @DisplayName("#124: menu stok 0 → penanda habis true di daftarMenu")
+    void daftarMenuStokNolHabis() throws Exception {
+        Menu menu = Menu.builder().id(99L).sekolahId(7L).nama("Kue")
+                .hargaJual(2_000L).satuan(SatuanMenu.PCS).stokMinimum(0).isActive(true).build();
+        when(katalog.daftarMenu(eq(7L), eq(null), eq(false))).thenReturn(java.util.List.of(menu));
+        when(katalog.stokBerjalan(eq(7L), eq(java.util.List.of(99L))))
+                .thenReturn(java.util.Map.of());
+
+        mockMvc.perform(get("/api/katalog/menu"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].stokBerjalan").value(0))
+                .andExpect(jsonPath("$.data[0].habis").value(true));
     }
 
     @Test

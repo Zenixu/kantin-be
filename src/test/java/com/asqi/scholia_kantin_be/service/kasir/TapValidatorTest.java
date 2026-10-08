@@ -127,6 +127,16 @@ class TapValidatorTest {
     }
 
     @Test
+    @DisplayName("#124: tahap 4 — stok 0 → item ditolak sebagai 'habis'")
+    void stokHabisDitolak() {
+        when(ledgerStok.stok(anyLong(), anyLong())).thenReturn(0);
+        InfoKartu kartu = kartuSiswa(1_000_000, Set.of(), Set.of());
+        var hasil = validator.validasi(SEKOLAH, request(1, 0), kartu, 999_999, 0, lookup());
+        assertThat(hasil.getValidasi().getTahapGagal()).isEqualTo(4);
+        assertThat(hasil.getValidasi().getPesan()).contains("Nasi Uduk habis");
+    }
+
+    @Test
     @DisplayName("tahap 5 — melebihi limit harian (sisa ditampilkan)")
     void melebihiLimitHarian() {
         // total = 8000 + 5000 = 13000; limit 10000; sudah belanja 5000 → sisa 5000
