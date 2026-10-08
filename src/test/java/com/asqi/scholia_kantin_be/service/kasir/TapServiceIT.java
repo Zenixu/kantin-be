@@ -9,6 +9,8 @@ import com.asqi.scholia_kantin_be.service.integrasi.InfoKartu;
 import com.asqi.scholia_kantin_be.service.integrasi.InfoMenu;
 import com.asqi.scholia_kantin_be.service.integrasi.KartuLookupPort;
 import com.asqi.scholia_kantin_be.service.integrasi.MenuLookupPort;
+import com.asqi.scholia_kantin_be.dto.PengaturanKantinRequest;
+import com.asqi.scholia_kantin_be.service.konfigurasi.PengaturanKantinService;
 import com.asqi.scholia_kantin_be.service.stok.LedgerStokService;
 import com.asqi.scholia_kantin_be.support.EnabledIfDockerAvailable;
 import com.asqi.scholia_kantin_be.support.TestcontainersConfig;
@@ -59,6 +61,9 @@ class TapServiceIT {
     private LedgerStokService ledgerStok;
 
     @Autowired
+    private PengaturanKantinService pengaturan;
+
+    @Autowired
     private TransactionTemplate tx;
 
     @Autowired
@@ -69,8 +74,9 @@ class TapServiceIT {
 
     @BeforeEach
     void bersihkan() {
-        jdbc.execute("TRUNCATE TABLE transaksi_item, transaksi, sesi_kasir, titik_kasir, "
-                + "saldo_ledger, saldo_cache, mutasi_stok, stok_cache CASCADE");
+        jdbc.execute("TRUNCATE TABLE transaksi_menunggu_konfirmasi, transaksi_item, transaksi, "
+                + "sesi_kasir, titik_kasir, saldo_ledger, saldo_cache, mutasi_stok, stok_cache, "
+                + "sekolah_kantin_config CASCADE");
         jdbc.update("INSERT INTO titik_kasir (id, sekolah_id, nama, is_active, created_at, updated_at) "
                 + "VALUES (?, ?, 'Kasir 1', true, now(), now())", TITIK, SEKOLAH);
 
@@ -162,6 +168,106 @@ class TapServiceIT {
         assertThat(ledgerSaldo.saldo(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(50_000L);
         Integer trx = jdbc.queryForObject("SELECT COUNT(*) FROM transaksi", Integer.class);
         assertThat(trx).isZero();
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // KONFIRMASI MANUAL (#111, PRD §6.1/§9.1)
+    // ────────────────────────────────────────────────────────────────
+
+    private void aktifkanKonfirmasiManual() {
+        PengaturanKantinRequest req = new PengaturanKantinRequest();
+        req.setKonfirmasiManual(true);
+        pengaturan.ubah(SEKOLAH, req, 900L);
+    }
+
+    @Test
+    @DisplayName("#111: konfirmasi manual aktif → tap TIDAK langsung memotong saldo/stok")
+    void konfirmasiManualTidakLangsungPotong() {
+        aktifkanKonfirmasiManual();
+
+        TapResponse resp = tapService.tap(SEKOLAH, petugas, request("tap-konf", 2, 1));
+
+        assertThat(resp.isMenungguKonfirmasi()).isTrue();
+        assertThat(resp.getTransaksiId()).isNull();
+        assertThat(resp.getPendingId()).isNotNull();
+        assertThat(resp.getTotal()).isEqualTo(21_000L);
+
+        // Belum ada perubahan apa pun di ledger.
+        assertThat(ledgerSaldo.saldo(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(50_000L);
+        assertThat(ledgerStok.stok(SEKOLAH, MENU_NASI)).isEqualTo(20);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM transaksi", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM transaksi_menunggu_konfirmasi WHERE status = 'MENUNGGU'",
+                Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#111: konfirmasi tap pending → barulah saldo/stok terpotong")
+    void konfirmasiMemotongSaldoStok() {
+        aktifkanKonfirmasiManual();
+        TapResponse pending = tapService.tap(SEKOLAH, petugas, request("tap-konf2", 1, 0));
+
+        TapResponse resp = tapService.konfirmasi(SEKOLAH, pending.getPendingId(), petugas);
+
+        assertThat(resp.isMenungguKonfirmasi()).isFalse();
+        assertThat(resp.getTransaksiId()).isNotNull();
+        assertThat(resp.getSaldoSisa()).isEqualTo(42_000L);
+        assertThat(ledgerSaldo.saldo(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(42_000L);
+        assertThat(ledgerStok.stok(SEKOLAH, MENU_NASI)).isEqualTo(19);
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM transaksi_menunggu_konfirmasi WHERE id = ?",
+                String.class, pending.getPendingId())).isEqualTo("DIKONFIRMASI");
+    }
+
+    @Test
+    @DisplayName("#111: konfirmasi ganda idempoten — hanya sekali potong")
+    void konfirmasiGandaIdempoten() {
+        aktifkanKonfirmasiManual();
+        TapResponse pending = tapService.tap(SEKOLAH, petugas, request("tap-konf3", 1, 0));
+
+        TapResponse a = tapService.konfirmasi(SEKOLAH, pending.getPendingId(), petugas);
+        TapResponse b = tapService.konfirmasi(SEKOLAH, pending.getPendingId(), petugas);
+
+        assertThat(b.getTransaksiId()).isEqualTo(a.getTransaksiId());
+        assertThat(ledgerSaldo.saldo(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(42_000L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM transaksi", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#111: tap ulang dengan key sama saat pending → tidak buat pending kedua")
+    void tapUlangSaatPendingIdempoten() {
+        aktifkanKonfirmasiManual();
+        TapResponse a = tapService.tap(SEKOLAH, petugas, request("tap-konf4", 1, 0));
+        TapResponse b = tapService.tap(SEKOLAH, petugas, request("tap-konf4", 1, 0));
+
+        assertThat(b.getPendingId()).isEqualTo(a.getPendingId());
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM transaksi_menunggu_konfirmasi", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#111: batalkan tap pending → tidak jadi transaksi, saldo utuh")
+    void batalPendingTidakJadiTransaksi() {
+        aktifkanKonfirmasiManual();
+        TapResponse pending = tapService.tap(SEKOLAH, petugas, request("tap-konf5", 1, 0));
+
+        tapService.batal(SEKOLAH, pending.getPendingId(), petugas);
+
+        assertThat(ledgerSaldo.saldo(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(50_000L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM transaksi", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM transaksi_menunggu_konfirmasi WHERE id = ?",
+                String.class, pending.getPendingId())).isEqualTo("DIBATALKAN");
+    }
+
+    @Test
+    @DisplayName("#111: default nonaktif → tap langsung tercatat (perilaku lama)")
+    void defaultNonaktifLangsungTercatat() {
+        TapResponse resp = tapService.tap(SEKOLAH, petugas, request("tap-default", 1, 0));
+
+        assertThat(resp.isMenungguKonfirmasi()).isFalse();
+        assertThat(resp.getTransaksiId()).isNotNull();
+        assertThat(ledgerSaldo.saldo(SEKOLAH, SubjekTipe.SISWA, SISWA)).isEqualTo(42_000L);
     }
 
     /** Fake port: kartu siswa "Budi" & katalog dua menu. */

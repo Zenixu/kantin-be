@@ -43,4 +43,14 @@ public class TapResponse {
 
     /** Cara identitas dikenali (UID / nomor kartu). */
     private MetodeRequestKartu metode;
+
+    /**
+     * {@code true} bila sekolah mengaktifkan konfirmasi manual dan tap ini
+     * <b>belum</b> memotong saldo/stok — petugas harus mengonfirmasi (PRD §6.1).
+     */
+    @Builder.Default
+    private boolean menungguKonfirmasi = false;
+
+    /** ID baris pending yang harus dikonfirmasi (diisi bila {@link #menungguKonfirmasi}). */
+    private Long pendingId;
 }

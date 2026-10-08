@@ -63,7 +63,49 @@ public class KasirController {
             @AuthenticationPrincipal IdentitasKantin identitas) {
 
         TapResponse hasil = tapService.tap(TenantContext.sekolahIdWajib(), identitas, request);
-        return CommonResponse.data(hasil, "Transaksi berhasil");
+        String pesan = hasil.isMenungguKonfirmasi()
+                ? "Tap menunggu konfirmasi petugas"
+                : "Transaksi berhasil";
+        return CommonResponse.data(hasil, pesan);
+    }
+
+    /**
+     * Konfirmasi tap yang menunggu (PRD §6.1) — di sini barulah saldo/stok
+     * dipotong. Idempoten: konfirmasi ganda mengembalikan transaksi yang sama.
+     */
+    @PerluPeran({AktorKantin.PETUGAS_KANTIN, AktorKantin.PENGELOLA_KANTIN, AktorKantin.ADMIN_SEKOLAH})
+    @PostMapping("tap/{pendingId}/konfirmasi")
+    public ResponseEntity<Response<TapResponse>> konfirmasiTap(
+            @PathVariable Long pendingId,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        TapResponse hasil = tapService.konfirmasi(
+                TenantContext.sekolahIdWajib(), pendingId, identitas);
+        return CommonResponse.data(hasil, "Transaksi dikonfirmasi");
+    }
+
+    /**
+     * Batalkan tap yang menunggu konfirmasi (PRD §6.1) — tidak jadi transaksi.
+     * Idempoten: pembatalan ganda tetap sukses.
+     */
+    @PerluPeran({AktorKantin.PETUGAS_KANTIN, AktorKantin.PENGELOLA_KANTIN, AktorKantin.ADMIN_SEKOLAH})
+    @PostMapping("tap/{pendingId}/batal")
+    public ResponseEntity<Response<Void>> batalTap(
+            @PathVariable Long pendingId,
+            @AuthenticationPrincipal IdentitasKantin identitas) {
+
+        tapService.batal(TenantContext.sekolahIdWajib(), pendingId, identitas);
+        return CommonResponse.data(null, "Permintaan konfirmasi dibatalkan");
+    }
+
+    /** Daftar tap yang masih menunggu konfirmasi untuk sekolah ini (PRD §6.1). */
+    @PerluPeran({AktorKantin.PETUGAS_KANTIN, AktorKantin.PENGELOLA_KANTIN, AktorKantin.ADMIN_SEKOLAH})
+    @GetMapping("tap/menunggu")
+    public ResponseEntity<Response<java.util.List<TapResponse>>> daftarTapMenunggu() {
+        var daftar = tapService.daftarPending(TenantContext.sekolahIdWajib()).stream()
+                .map(tapService::keResponse)
+                .toList();
+        return CommonResponse.data(daftar);
     }
 
     /**
