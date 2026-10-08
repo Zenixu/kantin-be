@@ -65,7 +65,8 @@ public class KartuTamuController {
     }
 
     /**
-     * Buat kartu tamu baru.
+     * Buat kartu tamu baru (PRD §9.4).
+     * Nomor kartu <b>digenerate otomatis</b> (KT- + urutan) bila tidak diisi.
      * Hanya pengelola/TU/admin yang bisa buat.
      */
     @PerluPeran({AktorKantin.PENGELOLA_KANTIN, AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
@@ -79,13 +80,26 @@ public class KartuTamuController {
                 request.getNomorKartu(),
                 request.getRfidUid(),
                 request.getCatatan(),
+                request.getLabelPemegang(),
                 identitas.aktorIdWajib());
 
         return CommonResponse.data(kartu, "Kartu tamu berhasil dibuat");
     }
 
     /**
-     * Update kartu tamu (nomor, UID, catatan, status).
+     * Pratinjau nomor kartu berikutnya (PRD §9.4) — untuk ditampilkan di form
+     * sebelum kartu disimpan/dicetak. Tidak menyimpan apa pun.
+     */
+    @PerluPeran({AktorKantin.PENGELOLA_KANTIN, AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
+    @GetMapping("nomor-berikutnya")
+    public ResponseEntity<Response<String>> nomorBerikutnya() {
+        String nomor = service.generateNomorKartu(TenantContext.sekolahIdWajib());
+        return CommonResponse.data(nomor);
+    }
+
+    /**
+     * Update kartu tamu (nomor, UID, catatan, label pemegang, status).
+     * Kirim {@code labelPemegang} = "" untuk mengosongkan (mis. pengembalian).
      * Hanya pengelola/TU/admin yang bisa update.
      */
     @PerluPeran({AktorKantin.PENGELOLA_KANTIN, AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH})
@@ -101,6 +115,7 @@ public class KartuTamuController {
                 request.getNomorKartu(),
                 request.getRfidUid(),
                 request.getCatatan(),
+                request.getLabelPemegang(),
                 request.getAktif(),
                 identitas.aktorIdWajib());
 

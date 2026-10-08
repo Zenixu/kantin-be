@@ -40,23 +40,45 @@ public class KartuTamuService {
     private final IdGenerator idGenerator;
     private final UidSiswaPort uidSiswaPort;
 
+    /** Prefix nomor kartu tamu (PRD §9.4: mis. KT-012). */
+    public static final String PREFIX_NOMOR = "KT-";
+
     /**
-     * Buat kartu tamu baru.
+     * Generate nomor kartu berikutnya untuk sekolah (PRD §9.4, issue #121):
+     * {@code KT-} + urutan numerik (minimal 3 digit, mis. {@code KT-001},
+     * {@code KT-012}, {@code KT-1000}). Nomor unik per sekolah.
+     */
+    @Transactional(readOnly = true)
+    public String generateNomorKartu(Long sekolahId) {
+        int berikutnya = repo.nomorUrutTerakhir(sekolahId) + 1;
+        return PREFIX_NOMOR + String.format("%03d", berikutnya);
+    }
+
+    /**
+     * Buat kartu tamu baru (PRD §9.4).
      *
-     * @param sekolahId   tenant
-     * @param nomorKartu  nomor kartu human-readable (KT-001, dll)
-     * @param rfidUid     UID RFID (nullable jika belum di-bind)
-     * @param catatan     catatan bebas (nullable)
-     * @param dibuatOleh  user ID pembuat
+     * <p><b>Nomor kartu digenerate otomatis</b> bila {@code nomorKartu} kosong
+     * (KT- + urutan per sekolah); isi manual untuk override.
+     *
+     * @param sekolahId     tenant
+     * @param nomorKartu    nomor kartu human-readable; {@code null}/blank = generate
+     * @param rfidUid       UID RFID (nullable jika belum di-bind)
+     * @param catatan       catatan bebas (nullable)
+     * @param labelPemegang label pemegang opsional (nama guru/staf, "Tamu")
+     * @param dibuatOleh    user ID pembuat
      * @return kartu yang baru dibuat
      * @throws ConflictException jika nomor kartu sudah ada atau UID bentrok
      */
     @Transactional
     public KartuTamu buatKartu(Long sekolahId, String nomorKartu, String rfidUid,
-                               String catatan, Long dibuatOleh) {
+                               String catatan, String labelPemegang, Long dibuatOleh) {
+        String nomor = (nomorKartu == null || nomorKartu.isBlank())
+                ? generateNomorKartu(sekolahId)
+                : nomorKartu.trim();
+
         // Validasi: nomor kartu sudah ada?
-        if (repo.findBySekolahIdAndNomorKartu(sekolahId, nomorKartu).isPresent()) {
-            throw new ConflictException("Nomor kartu " + nomorKartu + " sudah digunakan");
+        if (repo.findBySekolahIdAndNomorKartu(sekolahId, nomor).isPresent()) {
+            throw new ConflictException("Nomor kartu " + nomor + " sudah digunakan");
         }
 
         // Validasi: UID bentrok dengan kartu lain?
@@ -70,10 +92,11 @@ public class KartuTamuService {
         KartuTamu kartu = KartuTamu.builder()
                 .id(idGenerator.berikutnya())
                 .sekolahId(sekolahId)
-                .nomorKartu(nomorKartu)
+                .nomorKartu(nomor)
                 .rfidUid(rfidUid != null && !rfidUid.isBlank() ? rfidUid : null)
                 .aktif(true)
                 .catatan(catatan)
+                .labelPemegang(bersih(labelPemegang))
                 .dibuatOleh(dibuatOleh)
                 .dibuatPada(Instant.now())
                 .build();
@@ -82,23 +105,36 @@ public class KartuTamuService {
     }
 
     /**
-     * Update kartu tamu (nomor, UID, catatan, status aktif).
+     * Overload kompatibilitas: buat kartu tanpa label pemegang.
      *
-     * @param sekolahId    tenant
-     * @param kartuId      ID kartu yang mau diupdate
-     * @param nomorKartu   nomor baru (nullable = tidak diubah)
-     * @param rfidUid      UID baru (nullable = tidak diubah, "" = hapus binding)
-     * @param catatan      catatan baru (nullable = tidak diubah)
-     * @param aktif        status aktif (nullable = tidak diubah)
-     * @param diubahOleh   user ID pengubah
+     * @see #buatKartu(Long, String, String, String, String, Long)
+     */
+    @Transactional
+    public KartuTamu buatKartu(Long sekolahId, String nomorKartu, String rfidUid,
+                               String catatan, Long dibuatOleh) {
+        return buatKartu(sekolahId, nomorKartu, rfidUid, catatan, null, dibuatOleh);
+    }
+
+    /**
+     * Update kartu tamu (nomor, UID, catatan, label pemegang, status aktif).
+     *
+     * @param sekolahId     tenant
+     * @param kartuId       ID kartu yang mau diupdate
+     * @param nomorKartu    nomor baru (nullable = tidak diubah)
+     * @param rfidUid       UID baru (nullable = tidak diubah, "" = hapus binding)
+     * @param catatan       catatan baru (nullable = tidak diubah)
+     * @param labelPemegang label pemegang baru (nullable = tidak diubah,
+     *                      "" = <b>kosongkan</b>, mis. saat pengembalian kartu)
+     * @param aktif         status aktif (nullable = tidak diubah)
+     * @param diubahOleh    user ID pengubah
      * @return kartu yang sudah diupdate
      * @throws NotFoundEntity    jika kartu tidak ada atau beda sekolah
      * @throws ConflictException jika nomor/UID bentrok
      */
     @Transactional
     public KartuTamu updateKartu(Long sekolahId, Long kartuId, String nomorKartu,
-                                 String rfidUid, String catatan, Boolean aktif,
-                                 Long diubahOleh) {
+                                 String rfidUid, String catatan, String labelPemegang,
+                                 Boolean aktif, Long diubahOleh) {
         KartuTamu kartu = repo.findById(kartuId)
                 .orElseThrow(() -> new NotFoundEntity("Kartu tamu tidak ditemukan"));
 
@@ -136,6 +172,12 @@ public class KartuTamuService {
             kartu.setCatatan(catatan);
         }
 
+        // Update label pemegang (jika ada). String kosong/blank = kosongkan
+        // (PRD §9.4: label dikosongkan saat kartu dikembalikan).
+        if (labelPemegang != null) {
+            kartu.setLabelPemegang(bersih(labelPemegang));
+        }
+
         // Update status aktif (jika ada)
         if (aktif != null) {
             kartu.setAktif(aktif);
@@ -145,6 +187,27 @@ public class KartuTamuService {
         kartu.setDiubahPada(Instant.now());
 
         return repo.save(kartu);
+    }
+
+    /** Normalisasi label: trim; blank → {@code null} (dikosongkan). */
+    private static String bersih(String teks) {
+        if (teks == null) {
+            return null;
+        }
+        String t = teks.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /**
+     * Overload kompatibilitas: update kartu tanpa menyentuh label pemegang.
+     *
+     * @see #updateKartu(Long, Long, String, String, String, String, Boolean, Long)
+     */
+    @Transactional
+    public KartuTamu updateKartu(Long sekolahId, Long kartuId, String nomorKartu,
+                                 String rfidUid, String catatan, Boolean aktif,
+                                 Long diubahOleh) {
+        return updateKartu(sekolahId, kartuId, nomorKartu, rfidUid, catatan, null, aktif, diubahOleh);
     }
 
     /**

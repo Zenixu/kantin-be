@@ -1,6 +1,5 @@
 package com.asqi.scholia_kantin_be.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,9 +19,11 @@ public class KartuTamuRequest {
 
     /**
      * Nomor kartu human-readable (KT-001, KT-002, dll).
-     * Wajib saat create, opsional saat update (null = tidak diubah).
+     *
+     * <p><b>Opsional saat create</b> (PRD §9.4): bila kosong, sistem
+     * <b>menggenerate</b> nomor berikutnya (KT- + urutan per sekolah). Boleh
+     * diisi manual untuk override. Saat update, {@code null} = tidak diubah.
      */
-    @NotBlank(message = "Nomor kartu wajib diisi")
     @Size(max = 20, message = "Nomor kartu maksimal 20 karakter")
     private String nomorKartu;
 
@@ -38,6 +39,14 @@ public class KartuTamuRequest {
      * Opsional.
      */
     private String catatan;
+
+    /**
+     * Label pemegang kartu (PRD §9.4) — nama guru/staf, atau "Tamu".
+     * Opsional. Saat update, kirim string kosong untuk <b>mengosongkan</b>
+     * (mis. saat pengembalian kartu).
+     */
+    @Size(max = 150, message = "Label pemegang maksimal 150 karakter")
+    private String labelPemegang;
 
     /**
      * Status aktif kartu.
