@@ -121,8 +121,13 @@ public class SaldoController {
      * Daftar kandidat refund/pindah: siswa nonaktif bersisa saldo (PRD §9.3).
      * {@code hanyaTidakAktif=true} menyaring yang <b>diketahui</b> nonaktif
      * (integrasi Q7 siap); default semua siswa bersisa saldo.
+     *
+     * <p>Kepsek ikut boleh <b>membaca</b> (PRD §9.6: "Refund &amp; Koreksi —
+     * Kepsek (read)"), tetapi <b>tidak</b> boleh mengeksekusi refund/pindah
+     * (endpoint tulis di bawah sengaja tanpa {@code KEPSEK}).
      */
-    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
     @GetMapping("refund/kandidat")
     public ResponseEntity<Response<List<KandidatRefundItem>>> kandidatRefund(
             @RequestParam(defaultValue = "false") boolean hanyaTidakAktif) {

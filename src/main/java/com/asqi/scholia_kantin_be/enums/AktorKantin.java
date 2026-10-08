@@ -19,6 +19,12 @@ public enum AktorKantin {
     TU_SEKOLAH,
     /** Admin sekolah: konfigurasi kantin, titik kasir, blokir. */
     ADMIN_SEKOLAH,
+    /**
+     * Kepala sekolah: <b>hanya baca</b> sebagian laporan (PRD §9.5). Sengaja
+     * dipisah dari {@link #ADMIN_SEKOLAH} agar tidak mewarisi hak CRUD
+     * (pengaturan &amp; titik kasir, blokir) — lihat ADR-0012 &amp; issue #123.
+     */
+    KEPSEK,
     /** Orang tua (dari mobile-be): hanya lihat riwayat anak, atur limit/blokir item. */
     ORANG_TUA,
     /** Fallback untuk peran SKOOLIA yang belum dipetakan. */

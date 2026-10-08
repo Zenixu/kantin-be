@@ -19,5 +19,6 @@
 | [0009](./0009-postur-regulasi-dana-titipan-closed-loop.md) | Postur regulasi: dana titipan closed-loop (bukan uang elektronik) | Diusulkan | 2026-10-07 |
 | [0010](./0010-topologi-postgresql-db-terpisah-server-sama.md) | Topologi PostgreSQL: DB terpisah, server boleh sama untuk MVP | Diterima | 2026-10-07 |
 | [0011](./0011-rfid-usb-bridge-keyboard-wedge-mvp.md) | RFID USB bridge: keyboard-wedge untuk MVP, WebHID/agent menuju produksi | Diterima | 2026-10-07 |
+| [0012](./0012-peran-kepsek-terpisah-admin-sekolah.md) | Peran KEPSEK dipisah dari ADMIN_SEKOLAH (read-only laporan) | Diterima | 2026-10-08 |
 
 > Status: `Diusulkan` → `Diterima` → (`Ditolak` / `Digantikan oleh NNNN`).
