@@ -1,5 +1,6 @@
 package com.asqi.scholia_kantin_be.service.laporan;
 
+import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
 import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
@@ -73,7 +74,8 @@ class LaporanServiceIT {
     @BeforeEach
     void bersihkan() {
         jdbc.execute("TRUNCATE TABLE transaksi_item, transaksi, sesi_kasir, titik_kasir, "
-                + "saldo_ledger, saldo_cache, mutasi_stok, stok_cache, kategori_menu, menu CASCADE");
+                + "saldo_ledger, saldo_cache, mutasi_stok, stok_cache, kategori_menu, menu, "
+                + "kartu_tamu CASCADE");
         jdbc.update("INSERT INTO titik_kasir (id, sekolah_id, nama, is_active, created_at, updated_at) "
                 + "VALUES (1, ?, 'Kasir 1', true, now(), now())", SEKOLAH);
         jdbc.update("INSERT INTO sesi_kasir (id, sekolah_id, titik_kasir_id, tanggal, status, "
@@ -339,6 +341,64 @@ class LaporanServiceIT {
             var sheet = wb.getSheetAt(0);
             assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
             assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Pembatalan");
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // KARTU TAMU (PRD §9.5, issue #115)
+    // ────────────────────────────────────────────────────────────────
+
+    private void kartuTamu(long id, String nomor, String pemegang, boolean aktif) {
+        jdbc.update("INSERT INTO kartu_tamu (id, sekolah_id, nomor_kartu, rfid_uid, aktif, "
+                + "label_pemegang, dibuat_oleh, dibuat_pada) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 1, now())",
+                id, SEKOLAH, nomor, "UID-" + id, aktif, pemegang);
+    }
+
+    @Test
+    @DisplayName("#115: laporan kartu tamu — daftar kartu + pemegang + saldo + status")
+    void laporanKartuTamu() {
+        kartuTamu(500, "KT-001", "Bu Sari", true);
+        kartuTamu(501, "KT-002", "Tamu", false);
+        topup(500, SubjekTipe.KARTU_TAMU, 30_000, JenisMutasiSaldo.TOPUP_TUNAI);
+
+        List<BarisKartuTamu> r = laporan.laporanKartuTamu(SEKOLAH);
+
+        assertThat(r).hasSize(2);
+        BarisKartuTamu k1 = r.stream().filter(x -> x.getKartuId().equals(500L)).findFirst().orElseThrow();
+        assertThat(k1.getNomorKartu()).isEqualTo("KT-001");
+        assertThat(k1.getLabelPemegang()).isEqualTo("Bu Sari");
+        assertThat(k1.getSaldo()).isEqualTo(30_000L);
+        assertThat(k1.isAktif()).isTrue();
+
+        BarisKartuTamu k2 = r.stream().filter(x -> x.getKartuId().equals(501L)).findFirst().orElseThrow();
+        assertThat(k2.getSaldo()).isZero();
+        assertThat(k2.isAktif()).isFalse();
+    }
+
+    @Test
+    @DisplayName("#115: laporan kartu tamu — tenant scoping (sekolah lain kosong)")
+    void laporanKartuTamuTenantScoping() {
+        kartuTamu(500, "KT-001", "Bu Sari", true);
+
+        assertThat(laporan.laporanKartuTamu(SEKOLAH_LAIN)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#115: ekspor KARTU_TAMU menghasilkan .xlsx valid")
+    void eksporKartuTamu() throws Exception {
+        kartuTamu(500, "KT-001", "Bu Sari", true);
+        topup(500, SubjekTipe.KARTU_TAMU, 30_000, JenisMutasiSaldo.TOPUP_TUNAI);
+
+        LaporanExportService.HasilEkspor hasil = exportService.ekspor(
+                SEKOLAH, JenisLaporan.KARTU_TAMU, null, null, null);
+
+        assertThat(hasil.namaBerkas()).endsWith(".xlsx");
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(hasil.isi()))) {
+            var sheet = wb.getSheetAt(0);
+            assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Kartu Tamu");
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.asqi.scholia_kantin_be.service.laporan;
 
+import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
 import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
@@ -68,6 +69,7 @@ public class LaporanService {
     private final StokCacheRepository stokCacheRepo;
     private final MenuRepository menuRepo;
     private final KategoriMenuRepository kategoriRepo;
+    private final com.asqi.scholia_kantin_be.repository.KartuTamuRepository kartuTamuRepo;
     private final HppService hppService;
     private final JamKantin jam;
 
@@ -321,6 +323,29 @@ public class LaporanService {
                                                 OffsetDateTime dari, OffsetDateTime sampai) {
         OffsetDateTime[] r = rentang(tanggal, dari, sampai);
         return saldoLedgerRepo.padaRentang(sekolahId, r[0], r[1]);
+    }
+
+    /**
+     * Laporan <b>Kartu Tamu</b> (PRD §9.5, issue #115): daftar kartu +
+     * label pemegang + saldo + status. Riwayat per kartu disediakan terpisah
+     * ({@code GET /api/kartu-tamu/{kartuId}/riwayat}). Tenant-scoped.
+     */
+    @Transactional(readOnly = true)
+    public List<BarisKartuTamu> laporanKartuTamu(Long sekolahId) {
+        Map<Long, Long> saldoByKartu = new HashMap<>();
+        for (var c : saldoCacheRepo.findBySekolahIdAndSubjekTipe(sekolahId, SubjekTipe.KARTU_TAMU)) {
+            saldoByKartu.put(c.getSubjekId(), c.getSaldo() == null ? 0L : c.getSaldo());
+        }
+        return kartuTamuRepo.findAllBySekolah(sekolahId, false).stream()
+                .map(k -> BarisKartuTamu.builder()
+                        .kartuId(k.getId())
+                        .nomorKartu(k.getNomorKartu())
+                        .labelPemegang(k.getLabelPemegang())
+                        .rfidUid(k.getRfidUid())
+                        .aktif(Boolean.TRUE.equals(k.getAktif()))
+                        .saldo(saldoByKartu.getOrDefault(k.getId(), 0L))
+                        .build())
+                .toList();
     }
 
     private static long nolJikaNull(Long nilai) {

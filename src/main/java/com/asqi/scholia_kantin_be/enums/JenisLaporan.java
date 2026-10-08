@@ -24,5 +24,7 @@ public enum JenisLaporan {
     /** Barang masuk per periode. */
     BARANG_MASUK,
     /** Pembatalan kasir — transaksi di-void per subjek (PRD §9.5). */
-    PEMBATALAN
+    PEMBATALAN,
+    /** Kartu Tamu — daftar kartu, pemegang, saldo, status (PRD §9.5). */
+    KARTU_TAMU
 }

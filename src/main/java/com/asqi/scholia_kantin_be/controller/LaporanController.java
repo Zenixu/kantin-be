@@ -1,5 +1,6 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
 import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
@@ -132,6 +133,16 @@ public class LaporanController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
         return CommonResponse.data(
                 laporan.pembatalanKasir(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
+    }
+
+    /**
+     * Laporan <b>Kartu Tamu</b> (PRD §9.5, issue #115): daftar kartu + pemegang
+     * + saldo + status. Riwayat per kartu lewat {@code GET /api/kartu-tamu/{id}/riwayat}.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("kartu-tamu")
+    public ResponseEntity<Response<List<BarisKartuTamu>>> kartuTamu() {
+        return CommonResponse.data(laporan.laporanKartuTamu(TenantContext.sekolahIdWajib()));
     }
 
     /**

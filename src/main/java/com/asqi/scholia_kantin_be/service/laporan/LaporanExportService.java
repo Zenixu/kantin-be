@@ -1,5 +1,6 @@
 package com.asqi.scholia_kantin_be.service.laporan;
 
+import com.asqi.scholia_kantin_be.dto.BarisKartuTamu;
 import com.asqi.scholia_kantin_be.dto.BarisKerugianStok;
 import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
@@ -60,6 +61,7 @@ public class LaporanExportService {
             case KERUGIAN_STOK -> eksporKerugianStok(sekolahId, tanggal, dari, sampai, label);
             case BARANG_MASUK -> eksporBarangMasuk(sekolahId, tanggal, dari, sampai, label);
             case PEMBATALAN -> eksporPembatalan(sekolahId, tanggal, dari, sampai, label);
+            case KARTU_TAMU -> eksporKartuTamu(sekolahId, label);
         };
     }
 
@@ -177,6 +179,19 @@ public class LaporanExportService {
                     b.getWaktu() == null ? "" : FMT.format(b.getWaktu())));
         }
         return berkas("Pembatalan Kasir", label, header, baris);
+    }
+
+    private HasilEkspor eksporKartuTamu(Long sekolahId, String label) {
+        List<BarisKartuTamu> data = laporan.laporanKartuTamu(sekolahId);
+        List<String> header = List.of("Kartu ID", "Nomor Kartu", "Pemegang", "RFID UID",
+                "Aktif", "Saldo");
+        List<List<Object>> baris = new ArrayList<>();
+        for (BarisKartuTamu b : data) {
+            baris.add(List.of(nvl(b.getKartuId()), nvl(b.getNomorKartu()),
+                    nvl(b.getLabelPemegang()), nvl(b.getRfidUid()),
+                    b.isAktif() ? "YA" : "TIDAK", b.getSaldo()));
+        }
+        return berkas("Laporan Kartu Tamu", label, header, baris);
     }
 
     // ────────────────────────────────────────────────────────────────
