@@ -6,6 +6,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
+import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
@@ -18,6 +19,7 @@ import com.asqi.scholia_kantin_be.helper.JamKantin;
 import com.asqi.scholia_kantin_be.model.MutasiStok;
 import com.asqi.scholia_kantin_be.model.SaldoLedger;
 import com.asqi.scholia_kantin_be.model.StokCache;
+import com.asqi.scholia_kantin_be.model.Transaksi;
 import com.asqi.scholia_kantin_be.repository.KategoriMenuRepository;
 import com.asqi.scholia_kantin_be.repository.MenuRepository;
 import com.asqi.scholia_kantin_be.repository.MutasiStokRepository;
@@ -34,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -390,6 +393,51 @@ public class LaporanService {
             hasil.add(new BarisPenjualanDimensi(id, null, jumlah, nilai, hpp, nilai - hpp));
         }
         return hasil;
+    }
+
+    /**
+     * Laporan <b>Per siswa</b> (PRD §9.5, issue #117): riwayat lengkap satu
+     * subjek (SISWA/KARTU_TAMU) pada periode — ringkasan + daftar transaksi +
+     * mutasi saldo. Untuk menjawab komplain orang tua. Tenant-scoped.
+     */
+    @Transactional(readOnly = true)
+    public LaporanPerSiswa laporanPerSiswa(Long sekolahId, SubjekTipe subjekTipe, Long subjekId,
+                                           LocalDate tanggal, OffsetDateTime dari, OffsetDateTime sampai) {
+        OffsetDateTime[] r = rentang(tanggal, dari, sampai);
+        List<Transaksi> trx = transaksiRepo.transaksiSubjekRentang(sekolahId, subjekTipe, subjekId, r[0], r[1]);
+        List<SaldoLedger> mutasi = saldoLedgerRepo.padaRentangSubjek(sekolahId, subjekTipe, subjekId, r[0], r[1]);
+
+        long jmlSukses = 0, nilaiSukses = 0, jmlVoid = 0, nilaiVoid = 0, totalHpp = 0, totalTopup = 0;
+        for (Transaksi t : trx) {
+            if (t.getStatus() == StatusTransaksi.SUKSES) {
+                jmlSukses++;
+                nilaiSukses += nolJikaNull(t.getTotal());
+                totalHpp += nolJikaNull(t.getTotalHpp());
+            } else if (t.getStatus() == StatusTransaksi.VOID) {
+                jmlVoid++;
+                nilaiVoid += nolJikaNull(t.getTotal());
+            }
+        }
+        for (SaldoLedger l : mutasi) {
+            if (l.getJenis() == JenisMutasiSaldo.TOPUP_TUNAI) {
+                totalTopup += nolJikaNull(l.getNominal());
+            }
+        }
+
+        long saldo = saldoCacheRepo.findBySubjekTipeAndSubjekId(subjekTipe, subjekId)
+                .filter(c -> c.getSekolahId().equals(sekolahId))
+                .map(c -> c.getSaldo() == null ? 0L : c.getSaldo())
+                .orElse(0L);
+
+        return new LaporanPerSiswa(subjekTipe, subjekId, saldo, label(r),
+                new LaporanPerSiswa.Ringkasan(jmlSukses, nilaiSukses, jmlVoid, nilaiVoid, totalTopup, totalHpp),
+                trx.stream().map(LaporanPerSiswa.BarisTransaksi::dari).toList(),
+                mutasi.stream().map(LaporanPerSiswa.BarisMutasi::dari).toList());
+    }
+
+    private String label(OffsetDateTime[] r) {
+        DateTimeFormatter f = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        return f.format(r[0]) + " s/d " + f.format(r[1]);
     }
 
     private static long nolJikaNull(Long nilai) {

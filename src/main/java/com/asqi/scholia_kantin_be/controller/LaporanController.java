@@ -7,11 +7,13 @@ import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
+import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
 import com.asqi.scholia_kantin_be.enums.AktorKantin;
 import com.asqi.scholia_kantin_be.enums.JenisLaporan;
+import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
 import com.asqi.scholia_kantin_be.payload.response.Response;
 import com.asqi.scholia_kantin_be.security.IdentitasKantin;
@@ -200,6 +202,27 @@ public class LaporanController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
         return CommonResponse.data(
                 laporan.penjualanPerPetugas(TenantContext.sekolahIdWajib(), tanggal, dari, sampai));
+    }
+
+    /**
+     * Laporan <b>Per siswa</b> (PRD §9.5, issue #117): riwayat lengkap satu
+     * subjek (SISWA/KARTU_TAMU) pada periode — ringkasan + daftar transaksi +
+     * mutasi saldo. Untuk menjawab komplain orang tua. RBAC Bendahara/Admin.
+     *
+     * @param subjekTipe SISWA (default) atau KARTU_TAMU
+     * @param subjekId   id siswa/kartu tamu
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("per-siswa")
+    public ResponseEntity<Response<LaporanPerSiswa>> perSiswa(
+            @RequestParam(defaultValue = "SISWA") SubjekTipe subjekTipe,
+            @RequestParam Long subjekId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai) {
+        return CommonResponse.data(
+                laporan.laporanPerSiswa(TenantContext.sekolahIdWajib(), subjekTipe, subjekId,
+                        tanggal, dari, sampai));
     }
 
     /**
