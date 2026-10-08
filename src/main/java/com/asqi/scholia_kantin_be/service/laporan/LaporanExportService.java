@@ -6,6 +6,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
+import com.asqi.scholia_kantin_be.dto.KartuStokItem;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
@@ -47,6 +48,16 @@ public class LaporanExportService {
     @Transactional(readOnly = true)
     public HasilEkspor ekspor(Long sekolahId, JenisLaporan jenis, LocalDate tanggal,
                               OffsetDateTime dari, OffsetDateTime sampai) {
+        return ekspor(sekolahId, jenis, tanggal, dari, sampai, null);
+    }
+
+    /**
+     * Ekspor laporan. {@code menuId} hanya dipakai laporan yang butuh satu item
+     * (mis. {@link JenisLaporan#KARTU_STOK}); laporan lain mengabaikannya.
+     */
+    @Transactional(readOnly = true)
+    public HasilEkspor ekspor(Long sekolahId, JenisLaporan jenis, LocalDate tanggal,
+                              OffsetDateTime dari, OffsetDateTime sampai, Long menuId) {
         String label = labelPeriode(tanggal, dari, sampai);
         return switch (jenis) {
             case PENJUALAN -> eksporPenjualan(sekolahId, tanggal, dari, sampai, label);
@@ -69,6 +80,7 @@ public class LaporanExportService {
             case PENJUALAN_PETUGAS -> eksporPenjualanDimensi(sekolahId, tanggal, dari, sampai, label,
                     "Penjualan per Petugas", "Petugas",
                     laporan.penjualanPerPetugas(sekolahId, tanggal, dari, sampai));
+            case KARTU_STOK -> eksporKartuStok(sekolahId, menuId, label);
         };
     }
 
@@ -167,6 +179,29 @@ public class LaporanExportService {
                     nvl(m.getReferensiId()), nvl(m.getAlasan())));
         }
         return berkas("Barang Masuk", label, header, baris);
+    }
+
+    private HasilEkspor eksporKartuStok(Long sekolahId, Long menuId, String label) {
+        List<String> header = List.of("Waktu", "Jenis", "Arah", "Qty", "Stok Setelah",
+                "HPP Snapshot", "Harga Beli/Unit", "Referensi", "Alasan", "Aktor");
+        List<List<Object>> baris = new ArrayList<>();
+        String judul = "Kartu Stok";
+        if (menuId != null) {
+            KartuStokItem kartu = laporan.kartuStokItem(sekolahId, menuId, 500);
+            if (kartu != null) {
+                judul = "Kartu Stok - " + kartu.namaMenu();
+                for (KartuStokItem.BarisMutasi m : kartu.mutasi()) {
+                    baris.add(List.of(
+                            m.waktu() == null ? "" : FMT.format(m.waktu()),
+                            m.jenis() == null ? "" : m.jenis().name(),
+                            m.arah() == null ? "" : m.arah().name(),
+                            m.qty(), m.stokSetelah(), nvl(m.hppSnapshot()),
+                            nvl(m.hargaBeliSatuan()), nvl(m.referensiId()),
+                            nvl(m.alasan()), nvl(m.aktorNama())));
+                }
+            }
+        }
+        return berkas(judul, label, header, baris);
     }
 
     private HasilEkspor eksporPembatalan(Long sekolahId, LocalDate tgl, OffsetDateTime dari,

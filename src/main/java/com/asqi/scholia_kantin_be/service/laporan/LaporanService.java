@@ -6,6 +6,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
+import com.asqi.scholia_kantin_be.dto.KartuStokItem;
 import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
@@ -300,6 +301,29 @@ public class LaporanService {
     public List<MutasiStok> kartuStok(Long sekolahId, Long menuId, int batas) {
         int limit = (batas <= 0 || batas > 500) ? 200 : batas;
         return mutasiStokRepo.kartuStok(sekolahId, menuId, PageRequest.of(0, limit));
+    }
+
+    /**
+     * Laporan <b>Kartu stok per item</b> (PRD §9.5, issue #118): riwayat mutasi
+     * satu menu + saldo stok berjalan. Menu divalidasi tenant-scoped — bila menu
+     * bukan milik sekolah, kembalikan {@code null} (handler → 404).
+     */
+    @Transactional(readOnly = true)
+    public KartuStokItem kartuStokItem(Long sekolahId, Long menuId, int batas) {
+        var menu = menuRepo.findByIdAndSekolahId(menuId, sekolahId).orElse(null);
+        if (menu == null) {
+            return null;
+        }
+        int limit = (batas <= 0 || batas > 500) ? 200 : batas;
+        List<MutasiStok> mutasi = mutasiStokRepo.kartuStok(sekolahId, menuId, PageRequest.of(0, limit));
+        int stokSekarang = stokCacheRepo.findByMenuId(menuId)
+                .filter(s -> s.getSekolahId().equals(sekolahId))
+                .map(s -> s.getStok() == null ? 0 : s.getStok())
+                .orElse(0);
+        return new KartuStokItem(menuId, menu.getNama(),
+                menu.getSatuan() == null ? null : menu.getSatuan().name(),
+                stokSekarang,
+                mutasi.stream().map(KartuStokItem.BarisMutasi::dari).toList());
     }
 
     // ────────────────────────────────────────────────────────────────

@@ -6,12 +6,14 @@ import com.asqi.scholia_kantin_be.dto.BarisPembatalanKasir;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
+import com.asqi.scholia_kantin_be.dto.KartuStokItem;
 import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
 import com.asqi.scholia_kantin_be.enums.JenisLaporan;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
+import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.service.kasir.LedgerSaldoService;
 import com.asqi.scholia_kantin_be.service.kasir.PerintahMutasiSaldo;
@@ -559,5 +561,56 @@ class LaporanServiceIT {
         assertThat(r.transaksi()).isEmpty();
         assertThat(r.mutasiSaldo()).isEmpty();
         assertThat(r.saldo()).isZero();
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // KARTU STOK PER ITEM (PRD §9.5, issue #118)
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("#118: kartu stok per item — riwayat mutasi + saldo berjalan")
+    void kartuStokItem() {
+        tx.executeWithoutResult(s -> ledgerStok.masukBarang(SEKOLAH, MENU_A, 20, 4_000, "BM-1", "BM-1", 1L));
+        tx.executeWithoutResult(s -> ledgerStok.sesuaikanOpname(SEKOLAH, MENU_A, 17, "opname harian", "OP-1", 1L));
+
+        KartuStokItem kartu = laporan.kartuStokItem(SEKOLAH, MENU_A, 100);
+
+        assertThat(kartu).isNotNull();
+        assertThat(kartu.menuId()).isEqualTo(MENU_A);
+        assertThat(kartu.namaMenu()).isEqualTo("Nasi Uduk");
+        assertThat(kartu.stokSekarang()).isEqualTo(17);
+        assertThat(kartu.mutasi()).hasSize(2);
+        // terbaru dulu (id DESC)
+        assertThat(kartu.mutasi().get(0).jenis()).isEqualTo(JenisMutasiStok.OPNAME_KELUAR);
+        assertThat(kartu.mutasi().get(0).stokSetelah()).isEqualTo(17);
+        assertThat(kartu.mutasi().get(1).jenis()).isEqualTo(JenisMutasiStok.BARANG_MASUK);
+        assertThat(kartu.mutasi().get(1).qty()).isEqualTo(20);
+        assertThat(kartu.mutasi().get(1).stokSetelah()).isEqualTo(20);
+    }
+
+    @Test
+    @DisplayName("#118: kartu stok — menu sekolah lain / tak ada → null (→404)")
+    void kartuStokItemTenantScoping() {
+        tx.executeWithoutResult(s -> ledgerStok.masukBarang(SEKOLAH, MENU_A, 20, 4_000, "BM-1", "BM-1", 1L));
+
+        assertThat(laporan.kartuStokItem(SEKOLAH_LAIN, MENU_A, 100)).isNull();
+        assertThat(laporan.kartuStokItem(SEKOLAH, 999_999L, 100)).isNull();
+    }
+
+    @Test
+    @DisplayName("#118: ekspor KARTU_STOK menghasilkan .xlsx valid")
+    void eksporKartuStok() throws Exception {
+        tx.executeWithoutResult(s -> ledgerStok.masukBarang(SEKOLAH, MENU_A, 20, 4_000, "BM-1", "BM-1", 1L));
+
+        LaporanExportService.HasilEkspor hasil = exportService.ekspor(
+                SEKOLAH, JenisLaporan.KARTU_STOK, null, null, null, MENU_A);
+
+        assertThat(hasil.namaBerkas()).endsWith(".xlsx");
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(hasil.isi()))) {
+            var sheet = wb.getSheetAt(0);
+            assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Kartu Stok");
+        }
     }
 }
