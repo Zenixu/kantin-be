@@ -67,6 +67,18 @@
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
+		<!-- ============================================================ -->
+		<!-- API DOCS: springdoc-openapi (OpenAPI 3 + Swagger UI) — #149   -->
+		<!-- ============================================================ -->
+		<!-- Dokumen API tergenerasi dari kode → mengurangi risiko         -->
+		<!-- API-ENDPOINTS.md basi (audit #149). Endpoint: /v3/api-docs &  -->
+		<!-- /swagger-ui.html. Versi 3.x WAJIB untuk Spring Boot 4         -->
+		<!-- (2.x hanya untuk Boot 3).                                     -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.1.1</version>
+		</dependency>
 		<!-- AOP: dipakai RBAC berbasis anotasi @PerluPeran (security/PeranAspect).
 		     ⚠️ Spring Boot 4: artifact lama spring-boot-starter-aop DIHAPUS,
 		     diganti spring-boot-starter-aspectj. Jangan pakai nama lama. -->

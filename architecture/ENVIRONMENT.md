@@ -180,6 +180,10 @@ cp src/main/resources/application-local.properties.example \
    src/main/resources/application-local.properties
 ```
 
+> Untuk konfigurasi berbasis **environment variable** (container/`docker compose`),
+> tersedia juga `.env.example` di root (issue #149) — `cp .env.example .env` lalu isi
+> nilai `<GANTI_...>`. `.env` sudah di-`.gitignore`.
+
 ---
 
 ## 8. Masalah Umum & Solusinya

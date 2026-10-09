@@ -99,6 +99,15 @@ public class WebSecurityConfig {
     @Value("${kantin.metrics.public:true}")
     private boolean metricsPublic;
 
+    /**
+     * Bila {@code true}, dokumentasi OpenAPI (springdoc) dapat diakses tanpa
+     * token: {@code /v3/api-docs/**}, {@code /swagger-ui/**} (#149). Default
+     * {@code true} agar dokumen API mudah ditelusuri; set {@code false} untuk
+     * menutupnya di balik JWT (mis. di produksi).
+     */
+    @Value("${kantin.openapi.public:true}")
+    private boolean openApiPublic;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            CorsConfigurationSource corsConfigurationSource) throws Exception {
@@ -115,6 +124,13 @@ public class WebSecurityConfig {
         // hanya bila KANTIN_METRICS_PUBLIC=false).
         if (metricsPublic) {
             publik.add("/actuator/prometheus");
+        }
+        // Dokumentasi OpenAPI (springdoc, #149) — publik bila diaktifkan agar
+        // mudah ditelusuri; set KANTIN_OPENAPI_PUBLIC=false untuk menutupnya.
+        if (openApiPublic) {
+            publik.add("/v3/api-docs/**");
+            publik.add("/swagger-ui/**");
+            publik.add("/swagger-ui.html");
         }
 
         http.authorizeHttpRequests(auth -> auth

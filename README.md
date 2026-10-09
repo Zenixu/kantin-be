@@ -64,6 +64,10 @@ cp src/main/resources/application-local.properties.example \
 # isi nilai <GANTI_...> ; file ini sudah di-.gitignore — JANGAN commit kredensial
 ```
 
+> Alternatif berbasis **environment variable** (untuk `docker compose`/container):
+> `cp .env.example .env` lalu isi nilai `<GANTI_...>` (issue #149). Daftar lengkap
+> variabel ada di `.env.example`.
+
 ### 3. Jalankan aplikasi
 
 ```bash
@@ -110,6 +114,14 @@ karena MSYS mengubah path. Pakai salah satu:
 - Metrik Prometheus di `GET /actuator/prometheus` (Micrometer). SLO tap p95 ≤ 1 dtk
   (PRD §12) diukur lewat timer `kantin_tap_duration_seconds`. Detail & contoh query/alert:
   [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md).
+- **Uji beban** (k6) untuk memverifikasi SLO tap p95 ≤ 1 dtk: [`docs/uji-beban-tap.md`](docs/uji-beban-tap.md)
+  (skrip di `load/`, wiring CI nightly).
+
+### Dokumentasi API (OpenAPI)
+
+- **Swagger UI**: `GET /swagger-ui.html` · **spesifikasi**: `GET /v3/api-docs`
+  (springdoc-openapi, tergenerasi dari kode — issue #149). Publik bila
+  `KANTIN_OPENAPI_PUBLIC=true` (default); set `false` untuk menutupnya di balik JWT.
 
 ---
 

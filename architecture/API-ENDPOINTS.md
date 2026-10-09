@@ -298,3 +298,20 @@
 | Top-up online | (dari callback-be) | Q4 — handler webhook sudah siap |
 
 > Lihat `MODULE-MAP.md` §1 untuk urutan fase & `OPEN-QUESTIONS.md` untuk Q1–Q7.
+
+---
+
+## Dokumentasi OpenAPI (tergenerasi)
+
+Sejak **#149**, dokumen API juga **tergenerasi dari kode** (springdoc-openapi),
+sehingga daftar di atas tidak lagi satu-satunya sumber yang bisa basi:
+
+| Endpoint | Isi |
+|---|---|
+| `GET /v3/api-docs` | Spesifikasi OpenAPI 3 (JSON) |
+| `GET /swagger-ui.html` | Swagger UI interaktif (tombol *Authorize* untuk Bearer JWT) |
+
+- Publik bila `KANTIN_OPENAPI_PUBLIC=true` (default); set `false` untuk menutupnya
+  di balik JWT (lihat `WebSecurityConfig` & `OpenApiConfig`).
+- Uji: `OpenApiDocIT` memverifikasi `/v3/api-docs` & Swagger UI dapat diakses.
+- Dokumen ini tetap dijaga `ApiEndpointsDocTest` (paritas endpoint kode ↔ tabel).
