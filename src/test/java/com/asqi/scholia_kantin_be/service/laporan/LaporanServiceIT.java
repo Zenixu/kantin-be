@@ -8,6 +8,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.KartuStokItem;
 import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
+import com.asqi.scholia_kantin_be.dto.RekapSetoranTuItem;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
@@ -15,6 +16,7 @@ import com.asqi.scholia_kantin_be.enums.JenisLaporan;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.enums.SubjekTipe;
+import com.asqi.scholia_kantin_be.helper.JamKantin;
 import com.asqi.scholia_kantin_be.service.kasir.LedgerSaldoService;
 import com.asqi.scholia_kantin_be.service.kasir.PerintahMutasiSaldo;
 import com.asqi.scholia_kantin_be.service.stok.LedgerStokService;
@@ -75,11 +77,17 @@ class LaporanServiceIT {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private JamKantin jam;
+
+    @Autowired
+    private com.asqi.scholia_kantin_be.service.saldo.SetoranTuService setoranService;
+
     @BeforeEach
     void bersihkan() {
         jdbc.execute("TRUNCATE TABLE transaksi_item, transaksi, sesi_kasir, titik_kasir, "
                 + "saldo_ledger, saldo_cache, mutasi_stok, stok_cache, kategori_menu, menu, "
-                + "kartu_tamu CASCADE");
+                + "kartu_tamu, setoran_tu, audit_log CASCADE");
         jdbc.update("INSERT INTO titik_kasir (id, sekolah_id, nama, is_active, created_at, updated_at) "
                 + "VALUES (1, ?, 'Kasir 1', true, now(), now())", SEKOLAH);
         jdbc.update("INSERT INTO sesi_kasir (id, sekolah_id, titik_kasir_id, tanggal, status, "
@@ -611,6 +619,78 @@ class LaporanServiceIT {
             var sheet = wb.getSheetAt(0);
             assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
             assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Kartu Stok");
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // SETORAN KAS TU (PRD §9.2 & §9.5, issue #143)
+    // ────────────────────────────────────────────────────────────────
+
+    /** Catat top-up tunai oleh petugas tertentu (aktor_id = petugasId). */
+    private void topupTunaiPetugas(long petugasId, long nominal) {
+        long subjek = 50_000L + Math.abs(System.nanoTime() % 10_000);
+        tx.executeWithoutResult(s -> ledgerSaldo.kredit(PerintahMutasiSaldo.builder()
+                .sekolahId(SEKOLAH).subjekTipe(SubjekTipe.SISWA).subjekId(subjek)
+                .jenis(JenisMutasiSaldo.TOPUP_TUNAI).nominal(nominal)
+                .referensiTipe("TOPUP").aktorId(petugasId)
+                .idempotencyKey("setoran-" + petugasId + "-" + System.nanoTime()).build()));
+    }
+
+    @Test
+    @DisplayName("#143: laporan setoran TU — rekap per petugas + selisih (belum disetor)")
+    void laporanSetoranTu() {
+        topupTunaiPetugas(555L, 50_000);
+        topupTunaiPetugas(555L, 30_000);
+        topupTunaiPetugas(777L, 20_000);
+
+        List<RekapSetoranTuItem> r = laporan.laporanSetoranTu(SEKOLAH, jam.hariIni());
+
+        assertThat(r).hasSize(2);
+        RekapSetoranTuItem a = r.stream().filter(x -> x.getPetugasId().equals(555L))
+                .findFirst().orElseThrow();
+        assertThat(a.getTotalTopup()).isEqualTo(80_000);
+        assertThat(a.getJumlahDisetor()).isZero();
+        assertThat(a.getSelisih()).isEqualTo(80_000);
+        assertThat(a.getTanggal()).isEqualTo(jam.hariIni());
+    }
+
+    @Test
+    @DisplayName("#143: laporan setoran TU — selisih benar setelah konfirmasi setoran")
+    void laporanSetoranTuSetelahKonfirmasi() {
+        topupTunaiPetugas(555L, 80_000);
+        // Kurang setor Rp5.000 → selisih = 5.000 (dicatat, bukan dihapus).
+        setoranService.konfirmasi(SEKOLAH, jam.hariIni(), 555L, 75_000, "BA-143-1",
+                "kurang Rp5.000", 999L);
+
+        RekapSetoranTuItem a = laporan.laporanSetoranTu(SEKOLAH, jam.hariIni()).stream()
+                .filter(x -> x.getPetugasId().equals(555L)).findFirst().orElseThrow();
+        assertThat(a.getJumlahDisetor()).isEqualTo(75_000);
+        assertThat(a.getSelisih()).isEqualTo(5_000);
+        assertThat(a.getReferensiId()).isEqualTo("BA-143-1");
+    }
+
+    @Test
+    @DisplayName("#143: laporan setoran TU — tenant scoping (sekolah lain kosong)")
+    void laporanSetoranTuTenantScoping() {
+        topupTunaiPetugas(555L, 80_000);
+
+        assertThat(laporan.laporanSetoranTu(SEKOLAH_LAIN, jam.hariIni())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("#143: ekspor SETORAN_TU menghasilkan .xlsx valid + berisi baris rekap")
+    void eksporSetoranTu() throws Exception {
+        topupTunaiPetugas(555L, 80_000);
+
+        LaporanExportService.HasilEkspor hasil = exportService.ekspor(
+                SEKOLAH, JenisLaporan.SETORAN_TU, jam.hariIni(), null, null);
+
+        assertThat(hasil.namaBerkas()).endsWith(".xlsx");
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(hasil.isi()))) {
+            var sheet = wb.getSheetAt(0);
+            assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Setoran");
         }
     }
 }

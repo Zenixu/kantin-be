@@ -7,6 +7,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.KartuStokItem;
+import com.asqi.scholia_kantin_be.dto.RekapSetoranTuItem;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
@@ -81,6 +82,7 @@ public class LaporanExportService {
                     "Penjualan per Petugas", "Petugas",
                     laporan.penjualanPerPetugas(sekolahId, tanggal, dari, sampai));
             case KARTU_STOK -> eksporKartuStok(sekolahId, menuId, label);
+            case SETORAN_TU -> eksporSetoranTu(sekolahId, tanggal, label);
         };
     }
 
@@ -246,6 +248,25 @@ public class LaporanExportService {
                     b.nilai(), b.hpp(), b.labaKotor()));
         }
         return berkas(judul, label, header, baris);
+    }
+
+    /**
+     * Ekspor <b>Setoran kas TU</b> (PRD §9.5, issue #143): rekap top-up tunai per
+     * petugas pada tanggal laporan + uang disetor + <b>selisih</b> (positif =
+     * kurang setor). Rekap sama dengan endpoint {@code GET /api/laporan/setoran-tu}.
+     */
+    private HasilEkspor eksporSetoranTu(Long sekolahId, LocalDate tgl, String label) {
+        List<RekapSetoranTuItem> data = laporan.laporanSetoranTu(sekolahId, tgl);
+        List<String> header = List.of("Tanggal", "Petugas ID", "Total Top-up Tunai",
+                "Jumlah Disetor", "Selisih", "Berita Acara");
+        List<List<Object>> baris = new ArrayList<>();
+        for (RekapSetoranTuItem b : data) {
+            baris.add(List.of(
+                    b.getTanggal() == null ? "" : b.getTanggal().toString(),
+                    nvl(b.getPetugasId()), b.getTotalTopup(), b.getJumlahDisetor(),
+                    b.getSelisih(), nvl(b.getReferensiId())));
+        }
+        return berkas("Laporan Setoran TU", label, header, baris);
     }
 
     // ────────────────────────────────────────────────────────────────
