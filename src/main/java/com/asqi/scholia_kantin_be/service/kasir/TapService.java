@@ -3,6 +3,7 @@ package com.asqi.scholia_kantin_be.service.kasir;
 import com.asqi.scholia_kantin_be.component.exception.ConflictException;
 import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
+import com.asqi.scholia_kantin_be.component.metrics.MetrikTap;
 import com.asqi.scholia_kantin_be.dto.TapRequest;
 import com.asqi.scholia_kantin_be.dto.TapResponse;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiSaldo;
@@ -36,6 +37,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +82,7 @@ public class TapService {
     private final NotifikasiService notifikasi;
     private final KontrolKartuService kontrolKartu;
     private final PengaturanKantinService pengaturan;
+    private final MetrikTap metrikTap;
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 
     /**
@@ -91,6 +94,22 @@ public class TapService {
      * @return hasil tap untuk ditampilkan di layar kasir
      */
     public TapResponse tap(Long sekolahId, IdentitasKantin identitas, TapRequest request) {
+        long mulai = System.nanoTime();
+        try {
+            TapResponse hasil = jalankanTap(sekolahId, identitas, request);
+            metrikTap.catat(Duration.ofNanos(System.nanoTime() - mulai),
+                    hasil.isMenungguKonfirmasi() ? MetrikTap.OUTCOME_MENUNGGU : MetrikTap.OUTCOME_SUKSES);
+            return hasil;
+        } catch (RuntimeException e) {
+            // Gagal validasi/konflik → tetap dicatat agar rasio error & latensi
+            // jalur gagal terlihat (SLO tap diukur pada jalur sukses).
+            metrikTap.catat(Duration.ofNanos(System.nanoTime() - mulai), MetrikTap.OUTCOME_GAGAL);
+            throw e;
+        }
+    }
+
+    /** Isi alur tap (dipisah agar pengukuran durasi membungkus seluruh jalur). */
+    private TapResponse jalankanTap(Long sekolahId, IdentitasKantin identitas, TapRequest request) {
         String key = request.getIdempotencyKey();
 
         // Idempotency jalur cepat: transaksi sudah pernah dibuat → kembalikan hasil lama.
