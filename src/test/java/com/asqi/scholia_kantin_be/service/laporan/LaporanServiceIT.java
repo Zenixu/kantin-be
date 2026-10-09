@@ -34,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Uji integrasi modul laporan &amp; ekspor Excel (PRD §9.5, issue #41) dengan
@@ -691,6 +692,65 @@ class LaporanServiceIT {
             var sheet = wb.getSheetAt(0);
             assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
             assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Setoran");
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // EKSPOR PER SISWA (PRD §9.5, issue #144)
+    // ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("#144: ekspor PER_SISWA — 3 bagian (ringkasan, transaksi, mutasi) .xlsx valid")
+    void eksporPerSiswa() throws Exception {
+        topup(SISWA, SubjekTipe.SISWA, 50_000, JenisMutasiSaldo.TOPUP_TUNAI);
+        transaksi(1, SISWA, 21_000, 10_000);
+        transaksi(2, SISWA, 8_000, 4_000);
+
+        LaporanExportService.HasilEkspor hasil = exportService.ekspor(
+                SEKOLAH, JenisLaporan.PER_SISWA, null, null, null, null,
+                SubjekTipe.SISWA, SISWA);
+
+        assertThat(hasil.namaBerkas()).endsWith(".xlsx");
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(hasil.isi()))) {
+            var sheet = wb.getSheetAt(0);
+            assertThat(sheet.getPhysicalNumberOfRows()).isGreaterThan(0);
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).contains("Per Siswa");
+            // Isi memuat judul + ketiga bagian (ringkasan/transaksi/mutasi).
+            StringBuilder semua = new StringBuilder();
+            for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+                var row = sheet.getRow(i);
+                if (row == null) continue;
+                for (int c = 0; c < row.getLastCellNum(); c++) {
+                    var cell = row.getCell(c);
+                    if (cell != null) semua.append(cell.toString()).append(" ");
+                }
+            }
+            assertThat(semua.toString()).contains("Subjek").contains("Transaksi ID")
+                    .contains("Mutasi ID");
+        }
+    }
+
+    @Test
+    @DisplayName("#144: ekspor PER_SISWA tanpa subjekId → ditolak (validasi wajib)")
+    void eksporPerSiswaTanpaSubjekDitolak() {
+        assertThatThrownBy(() -> exportService.ekspor(
+                SEKOLAH, JenisLaporan.PER_SISWA, null, null, null, null, null, null))
+                .isInstanceOf(com.asqi.scholia_kantin_be.component.exception.InvalidOperationException.class)
+                .hasMessageContaining("subjekId");
+    }
+
+    @Test
+    @DisplayName("#144: ekspor PER_SISWA subjek tanpa data → tetap .xlsx valid (bagian kosong)")
+    void eksporPerSiswaKosong() throws Exception {
+        LaporanExportService.HasilEkspor hasil = exportService.ekspor(
+                SEKOLAH, JenisLaporan.PER_SISWA, null, null, null, null,
+                SubjekTipe.SISWA, 999_999L);
+
+        assertThat(hasil.namaBerkas()).endsWith(".xlsx");
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(hasil.isi()))) {
+            assertThat(wb.getSheetAt(0).getPhysicalNumberOfRows()).isGreaterThan(0);
         }
     }
 }
