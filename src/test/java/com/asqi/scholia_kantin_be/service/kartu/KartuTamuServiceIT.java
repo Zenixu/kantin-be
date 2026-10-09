@@ -70,7 +70,7 @@ class KartuTamuServiceIT {
     void bersihkan() {
         // TRUNCATE aman: trigger append-only hanya menolak DELETE/UPDATE baris,
         // bukan TRUNCATE (lihat LedgerSaldoServiceIT).
-        jdbc.execute("TRUNCATE TABLE kartu_tamu, saldo_ledger, saldo_cache CASCADE");
+        jdbc.execute("TRUNCATE TABLE kartu_tamu, saldo_ledger, saldo_cache, audit_log CASCADE");
     }
 
     // ────────────────────────────── CREATE ──────────────────────────────
@@ -413,5 +413,62 @@ class KartuTamuServiceIT {
 
         assertThat(diubah.getLabelPemegang()).isEqualTo("Tamu");
         assertThat(diubah.getCatatan()).isEqualTo("catatan baru");
+    }
+
+    // ──────────────── #148: jejak audit nonaktifkan & ubah kartu ────────────────
+
+    @Test
+    @DisplayName("#148: nonaktifkanKartu menulis audit NONAKTIFKAN_KARTU (aktor, entitas, id)")
+    void nonaktifkanKartuMenulisAudit() {
+        KartuTamu k = kartu.buatKartu(SEKOLAH, "KT-001", "04:A1", null, AKTOR);
+
+        kartu.nonaktifkanKartu(SEKOLAH, k.getId(), AKTOR);
+
+        Integer baris = jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE aksi = 'NONAKTIFKAN_KARTU' "
+                        + "AND entitas = 'KartuTamu' AND entitas_id = ? AND aktor_id = ? AND sekolah_id = ?",
+                Integer.class, String.valueOf(k.getId()), AKTOR, SEKOLAH);
+        assertThat(baris).isEqualTo(1);
+
+        String nilaiBaru = jdbc.queryForObject(
+                "SELECT nilai_baru FROM audit_log WHERE aksi = 'NONAKTIFKAN_KARTU' AND entitas_id = ?",
+                String.class, String.valueOf(k.getId()));
+        assertThat(nilaiBaru).contains("aktif=false");
+    }
+
+    @Test
+    @DisplayName("#148: rebind RFID menulis audit UBAH_KARTU dengan UID lama → baru")
+    void rebindUidMenulisAudit() {
+        KartuTamu k = kartu.buatKartu(SEKOLAH, "KT-001", "04:LAMA", null, AKTOR);
+
+        kartu.updateKartu(SEKOLAH, k.getId(), null, "04:BARU", null, null, AKTOR);
+
+        Integer baris = jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE aksi = 'UBAH_KARTU' AND entitas = 'KartuTamu' "
+                        + "AND entitas_id = ? AND aktor_id = ?",
+                Integer.class, String.valueOf(k.getId()), AKTOR);
+        assertThat(baris).isEqualTo(1);
+
+        String nilaiLama = jdbc.queryForObject(
+                "SELECT nilai_lama FROM audit_log WHERE aksi = 'UBAH_KARTU' AND entitas_id = ?",
+                String.class, String.valueOf(k.getId()));
+        String nilaiBaru = jdbc.queryForObject(
+                "SELECT nilai_baru FROM audit_log WHERE aksi = 'UBAH_KARTU' AND entitas_id = ?",
+                String.class, String.valueOf(k.getId()));
+        assertThat(nilaiLama).contains("rfidUid=04:LAMA");
+        assertThat(nilaiBaru).contains("rfidUid=04:BARU");
+    }
+
+    @Test
+    @DisplayName("#148: update tanpa perubahan berarti tidak menulis audit (hindari noise)")
+    void updateTanpaPerubahanTidakMenulisAudit() {
+        KartuTamu k = kartu.buatKartu(SEKOLAH, "KT-001", "04:A1", "catatan", AKTOR);
+
+        // Semua null = tidak ada field diubah.
+        kartu.updateKartu(SEKOLAH, k.getId(), null, null, null, null, AKTOR);
+
+        Integer baris = jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE aksi = 'UBAH_KARTU'", Integer.class);
+        assertThat(baris).isZero();
     }
 }

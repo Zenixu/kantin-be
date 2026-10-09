@@ -4,9 +4,12 @@ Backend modul **kantin sekolah cashless** untuk platform SKOOLIA. 100% non-tunai
 pembeli membayar dengan **tap kartu RFID**, saldo didebit dari ledger append-only,
 stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
-> **Status:** MVP fitur (PRD §4–§11) ≈ **90%** selesai · 88 endpoint · 215 unit test hijau ·
+> **Status:** MVP fitur (PRD §4–§11) ≈ **90%** selesai · 86 endpoint · unit test hijau ·
 > 22 migrasi Flyway. Sisa pekerjaan: integrasi eksternal (masih `*Fallback`) & hardening
 > — lihat [Peta Sisa Pekerjaan](#-peta-sisa-pekerjaan).
+>
+> Daftar endpoint lengkap & tersinkron: [`architecture/API-ENDPOINTS.md`](architecture/API-ENDPOINTS.md)
+> (dijaga otomatis oleh `ApiEndpointsDocTest`).
 
 ---
 
