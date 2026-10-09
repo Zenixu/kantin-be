@@ -3,6 +3,7 @@ package com.asqi.scholia_kantin_be.service.kartu;
 import com.asqi.scholia_kantin_be.helper.IdGenerator;
 import com.asqi.scholia_kantin_be.component.exception.ConflictException;
 import com.asqi.scholia_kantin_be.component.exception.NotFoundEntity;
+import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
 import com.asqi.scholia_kantin_be.model.KartuTamu;
 import com.asqi.scholia_kantin_be.repository.KartuTamuRepository;
 import com.asqi.scholia_kantin_be.service.integrasi.UidSiswaPort;
@@ -11,7 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Service untuk CRUD {@link KartuTamu}.
@@ -31,6 +34,12 @@ import java.util.List;
  *       endpoint internal {@code GET /api/internal/kartu-tamu/cek-uid} agar
  *       {@code SiswaService} menolak UID yang sudah dipakai Kartu Tamu.</li>
  * </ul>
+ *
+ * <p><b>Jejak audit (PRD §11.7, issue #148):</b> perubahan kartu tamu berdampak
+ * pada uang (saldo) dan identitas pemegang, jadi wajib diaudit. {@link #updateKartu}
+ * menulis aksi {@code UBAH_KARTU} (termasuk rebind/lepas {@code rfidUid} — UID
+ * lama → baru dicatat) dan {@link #nonaktifkanKartu} menulis
+ * {@code NONAKTIFKAN_KARTU}, lewat {@link AuditLogger}.
  */
 @Service
 @RequiredArgsConstructor
@@ -39,9 +48,13 @@ public class KartuTamuService {
     private final KartuTamuRepository repo;
     private final IdGenerator idGenerator;
     private final UidSiswaPort uidSiswaPort;
+    private final AuditLogger auditLogger;
 
     /** Prefix nomor kartu tamu (PRD §9.4: mis. KT-012). */
     public static final String PREFIX_NOMOR = "KT-";
+
+    /** Nama entitas pada jejak audit (PRD §11.7). */
+    private static final String ENTITAS = "KartuTamu";
 
     /**
      * Generate nomor kartu berikutnya untuk sekolah (PRD §9.4, issue #121):
@@ -118,6 +131,10 @@ public class KartuTamuService {
     /**
      * Update kartu tamu (nomor, UID, catatan, label pemegang, status aktif).
      *
+     * <p>Menulis jejak audit {@code UBAH_KARTU} (PRD §11.7, issue #148) berisi
+     * field yang berubah; khusus perubahan {@code rfidUid} dicatat UID lama → baru
+     * (rebind/lepas binding) agar dapat ditelusuri saat sengketa.
+     *
      * @param sekolahId     tenant
      * @param kartuId       ID kartu yang mau diupdate
      * @param nomorKartu    nomor baru (nullable = tidak diubah)
@@ -135,13 +152,14 @@ public class KartuTamuService {
     public KartuTamu updateKartu(Long sekolahId, Long kartuId, String nomorKartu,
                                  String rfidUid, String catatan, String labelPemegang,
                                  Boolean aktif, Long diubahOleh) {
-        KartuTamu kartu = repo.findById(kartuId)
-                .orElseThrow(() -> new NotFoundEntity("Kartu tamu tidak ditemukan"));
+        KartuTamu kartu = ambilTerproteksi(sekolahId, kartuId);
 
-        // Guard tenant
-        if (!kartu.getSekolahId().equals(sekolahId)) {
-            throw new NotFoundEntity("Kartu tamu tidak ditemukan");
-        }
+        // Snapshot nilai lama (untuk jejak audit) sebelum mutasi.
+        String nomorLama = kartu.getNomorKartu();
+        String uidLama = kartu.getRfidUid();
+        String catatanLama = kartu.getCatatan();
+        String labelLama = kartu.getLabelPemegang();
+        boolean aktifLama = Boolean.TRUE.equals(kartu.getAktif());
 
         // Update nomor kartu (jika ada)
         if (nomorKartu != null && !nomorKartu.equals(kartu.getNomorKartu())) {
@@ -186,16 +204,16 @@ public class KartuTamuService {
         kartu.setDiubahOleh(diubahOleh);
         kartu.setDiubahPada(Instant.now());
 
-        return repo.save(kartu);
-    }
+        KartuTamu tersimpan = repo.save(kartu);
 
-    /** Normalisasi label: trim; blank → {@code null} (dikosongkan). */
-    private static String bersih(String teks) {
-        if (teks == null) {
-            return null;
-        }
-        String t = teks.trim();
-        return t.isEmpty() ? null : t;
+        catatUbahKartu(sekolahId, kartuId, diubahOleh,
+                nomorLama, tersimpan.getNomorKartu(),
+                uidLama, tersimpan.getRfidUid(),
+                catatanLama, tersimpan.getCatatan(),
+                labelLama, tersimpan.getLabelPemegang(),
+                aktifLama, Boolean.TRUE.equals(tersimpan.getAktif()));
+
+        return tersimpan;
     }
 
     /**
@@ -213,6 +231,9 @@ public class KartuTamuService {
     /**
      * Nonaktifkan kartu (soft delete).
      *
+     * <p>Menulis jejak audit {@code NONAKTIFKAN_KARTU} (PRD §11.7, issue #148) —
+     * kartu nonaktif tak bisa dipakai tap, jadi perubahan status ini sensitif.
+     *
      * @param sekolahId  tenant
      * @param kartuId    ID kartu
      * @param diubahOleh user ID pengubah
@@ -221,7 +242,20 @@ public class KartuTamuService {
      */
     @Transactional
     public KartuTamu nonaktifkanKartu(Long sekolahId, Long kartuId, Long diubahOleh) {
-        return updateKartu(sekolahId, kartuId, null, null, null, false, diubahOleh);
+        KartuTamu kartu = ambilTerproteksi(sekolahId, kartuId);
+        boolean aktifLama = Boolean.TRUE.equals(kartu.getAktif());
+
+        kartu.setAktif(false);
+        kartu.setDiubahOleh(diubahOleh);
+        kartu.setDiubahPada(Instant.now());
+
+        KartuTamu tersimpan = repo.save(kartu);
+
+        auditLogger.catat(diubahOleh, sekolahId, "NONAKTIFKAN_KARTU", ENTITAS,
+                String.valueOf(kartuId), null,
+                "aktif=" + aktifLama, "aktif=false");
+
+        return tersimpan;
     }
 
     /**
@@ -271,6 +305,75 @@ public class KartuTamuService {
         return rfidUid != null && !rfidUid.isBlank() && repo.existsByRfidUid(rfidUid);
     }
 
+    // ────────────────────────── internal ──────────────────────────
+
+    /** Ambil kartu + guard tenant (404 bila tak ada / beda sekolah, PRD §11.4). */
+    private KartuTamu ambilTerproteksi(Long sekolahId, Long kartuId) {
+        KartuTamu kartu = repo.findById(kartuId)
+                .orElseThrow(() -> new NotFoundEntity("Kartu tamu tidak ditemukan"));
+        if (!kartu.getSekolahId().equals(sekolahId)) {
+            throw new NotFoundEntity("Kartu tamu tidak ditemukan");
+        }
+        return kartu;
+    }
+
+    /**
+     * Tulis jejak audit {@code UBAH_KARTU} — hanya field yang benar-benar
+     * berubah yang dicatat. UID RFID (lama → baru) jadi perhatian utama karena
+     * mengubah identitas fisik pemegang kartu (issue #148).
+     */
+    private void catatUbahKartu(Long sekolahId, Long kartuId, Long aktorId,
+                                String nomorLama, String nomorBaru,
+                                String uidLama, String uidBaru,
+                                String catatanLama, String catatanBaru,
+                                String labelLama, String labelBaru,
+                                boolean aktifLama, boolean aktifBaru) {
+        List<String> lama = new ArrayList<>();
+        List<String> baru = new ArrayList<>();
+        List<String> bidang = new ArrayList<>();
+
+        if (!Objects.equals(nomorLama, nomorBaru)) {
+            bidang.add("nomorKartu");
+            lama.add("nomorKartu=" + tampil(nomorLama));
+            baru.add("nomorKartu=" + tampil(nomorBaru));
+        }
+        if (!Objects.equals(uidLama, uidBaru)) {
+            bidang.add("rfidUid");
+            lama.add("rfidUid=" + tampil(uidLama));
+            baru.add("rfidUid=" + tampil(uidBaru));
+        }
+        if (!Objects.equals(catatanLama, catatanBaru)) {
+            bidang.add("catatan");
+            lama.add("catatan=" + tampil(catatanLama));
+            baru.add("catatan=" + tampil(catatanBaru));
+        }
+        if (!Objects.equals(labelLama, labelBaru)) {
+            bidang.add("labelPemegang");
+            lama.add("labelPemegang=" + tampil(labelLama));
+            baru.add("labelPemegang=" + tampil(labelBaru));
+        }
+        if (aktifLama != aktifBaru) {
+            bidang.add("aktif");
+            lama.add("aktif=" + aktifLama);
+            baru.add("aktif=" + aktifBaru);
+        }
+
+        if (bidang.isEmpty()) {
+            // Tidak ada field berubah — tak ada jejak berarti untuk ditulis.
+            return;
+        }
+
+        auditLogger.catat(aktorId, sekolahId, "UBAH_KARTU", ENTITAS,
+                String.valueOf(kartuId),
+                "Ubah field: " + String.join(", ", bidang),
+                String.join("; ", lama), String.join("; ", baru));
+    }
+
+    /** Tampilkan nilai audit: {@code null}/blank → {@code (kosong)}. */
+    private static String tampil(String nilai) {
+        return (nilai == null || nilai.isBlank()) ? "(kosong)" : nilai;
+    }
+
     /**
      * Tolak bila UID sudah dipakai siswa di admin-be (anti-tabrakan, issue #29).
      *
@@ -296,5 +399,14 @@ public class KartuTamuService {
     public KartuTamu cariByRfidUid(String rfidUid) {
         return repo.findByRfidUid(rfidUid)
                 .orElseThrow(() -> new NotFoundEntity("Kartu dengan UID " + rfidUid + " tidak ditemukan"));
+    }
+
+    /** Normalisasi label: trim; blank → {@code null} (dikosongkan). */
+    private static String bersih(String teks) {
+        if (teks == null) {
+            return null;
+        }
+        String t = teks.trim();
+        return t.isEmpty() ? null : t;
     }
 }
