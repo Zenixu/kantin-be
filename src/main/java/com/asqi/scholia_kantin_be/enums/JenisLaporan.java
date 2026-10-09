@@ -34,5 +34,7 @@ public enum JenisLaporan {
     /** Kartu stok per item — riwayat mutasi satu menu + saldo berjalan (PRD §9.5). */
     KARTU_STOK,
     /** Setoran kas TU — rekap top-up tunai per petugas per hari + selisih (PRD §9.5). */
-    SETORAN_TU
+    SETORAN_TU,
+    /** Per siswa — riwayat lengkap satu subjek (SISWA/KARTU_TAMU) (PRD §9.5). */
+    PER_SISWA
 }

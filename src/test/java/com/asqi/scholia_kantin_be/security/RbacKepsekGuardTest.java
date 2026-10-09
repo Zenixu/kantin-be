@@ -194,9 +194,9 @@ class RbacKepsekGuardTest {
         TenantContext.set(IdentitasKantin.builder()
                 .userId("9").sekolahId(1L).peran(AktorKantin.KEPSEK).build());
 
-        assertThatThrownBy(() -> controller.ekspor(JenisLaporan.STOK, null, null, null, null))
+        assertThatThrownBy(() -> controller.ekspor(JenisLaporan.STOK, null, null, null, null, null, null))
                 .isInstanceOf(ForbiddenException.class);
-        assertThatThrownBy(() -> controller.ekspor(JenisLaporan.BARANG_MASUK, null, null, null, null))
+        assertThatThrownBy(() -> controller.ekspor(JenisLaporan.BARANG_MASUK, null, null, null, null, null, null))
                 .isInstanceOf(ForbiddenException.class);
     }
 }

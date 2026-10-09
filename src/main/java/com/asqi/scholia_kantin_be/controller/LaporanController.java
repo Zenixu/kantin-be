@@ -274,7 +274,9 @@ public class LaporanController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dari,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime sampai,
-            @RequestParam(required = false) Long menuId) {
+            @RequestParam(required = false) Long menuId,
+            @RequestParam(required = false) SubjekTipe subjekTipe,
+            @RequestParam(required = false) Long subjekId) {
 
         IdentitasKantin identitas = TenantContext.get();
         if (identitas != null && identitas.getPeran() == AktorKantin.KEPSEK
@@ -284,7 +286,8 @@ public class LaporanController {
         }
 
         LaporanExportService.HasilEkspor hasil = exportService.ekspor(
-                TenantContext.sekolahIdWajib(), jenis, tanggal, dari, sampai, menuId);
+                TenantContext.sekolahIdWajib(), jenis, tanggal, dari, sampai, menuId,
+                subjekTipe, subjekId);
 
         MediaType xlsx = MediaType.parseMediaType(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
