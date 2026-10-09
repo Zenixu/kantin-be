@@ -7,11 +7,14 @@ import com.asqi.scholia_kantin_be.dto.BarisPenjualanDimensi;
 import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.KartuStokItem;
+import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
 import com.asqi.scholia_kantin_be.dto.RekapSetoranTuItem;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
+import com.asqi.scholia_kantin_be.component.exception.InvalidOperationException;
 import com.asqi.scholia_kantin_be.enums.JenisLaporan;
+import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.helper.JamKantin;
 import com.asqi.scholia_kantin_be.model.MutasiStok;
 import lombok.RequiredArgsConstructor;
@@ -49,16 +52,29 @@ public class LaporanExportService {
     @Transactional(readOnly = true)
     public HasilEkspor ekspor(Long sekolahId, JenisLaporan jenis, LocalDate tanggal,
                               OffsetDateTime dari, OffsetDateTime sampai) {
-        return ekspor(sekolahId, jenis, tanggal, dari, sampai, null);
+        return ekspor(sekolahId, jenis, tanggal, dari, sampai, null, null, null);
     }
 
     /**
      * Ekspor laporan. {@code menuId} hanya dipakai laporan yang butuh satu item
-     * (mis. {@link JenisLaporan#KARTU_STOK}); laporan lain mengabaikannya.
+     * (mis. {@link JenisLaporan#KARTU_STOK}); {@code subjekTipe}/{@code subjekId}
+     * hanya untuk {@link JenisLaporan#PER_SISWA}. Laporan lain mengabaikannya.
      */
     @Transactional(readOnly = true)
     public HasilEkspor ekspor(Long sekolahId, JenisLaporan jenis, LocalDate tanggal,
                               OffsetDateTime dari, OffsetDateTime sampai, Long menuId) {
+        return ekspor(sekolahId, jenis, tanggal, dari, sampai, menuId, null, null);
+    }
+
+    /**
+     * Ekspor laporan (bentuk lengkap). {@code menuId} untuk {@link JenisLaporan#KARTU_STOK};
+     * {@code subjekTipe}/{@code subjekId} wajib untuk {@link JenisLaporan#PER_SISWA}
+     * (divalidasi di sini → 400 bila kosong).
+     */
+    @Transactional(readOnly = true)
+    public HasilEkspor ekspor(Long sekolahId, JenisLaporan jenis, LocalDate tanggal,
+                              OffsetDateTime dari, OffsetDateTime sampai, Long menuId,
+                              SubjekTipe subjekTipe, Long subjekId) {
         String label = labelPeriode(tanggal, dari, sampai);
         return switch (jenis) {
             case PENJUALAN -> eksporPenjualan(sekolahId, tanggal, dari, sampai, label);
@@ -83,6 +99,7 @@ public class LaporanExportService {
                     laporan.penjualanPerPetugas(sekolahId, tanggal, dari, sampai));
             case KARTU_STOK -> eksporKartuStok(sekolahId, menuId, label);
             case SETORAN_TU -> eksporSetoranTu(sekolahId, tanggal, label);
+            case PER_SISWA -> eksporPerSiswa(sekolahId, subjekTipe, subjekId, tanggal, dari, sampai, label);
         };
     }
 
@@ -267,6 +284,70 @@ public class LaporanExportService {
                     b.getSelisih(), nvl(b.getReferensiId())));
         }
         return berkas("Laporan Setoran TU", label, header, baris);
+    }
+
+    /**
+     * Ekspor <b>Per siswa</b> (PRD §9.5, issue #144): riwayat lengkap satu subjek
+     * (SISWA/KARTU_TAMU) pada periode — <b>ringkasan</b> + daftar <b>transaksi</b>
+     * + <b>mutasi saldo</b> dalam satu sheet (tiga bagian). Menutup celah "semua
+     * laporan dapat diekspor" (§9.5) karena laporan ini sebelumnya tak terdaftar
+     * di {@link JenisLaporan}/{@link LaporanExportService}.
+     *
+     * <p>{@code subjekId} <b>wajib</b> untuk jenis ini → 400 bila kosong.
+     * {@code subjekTipe} default {@code SISWA}.
+     */
+    private HasilEkspor eksporPerSiswa(Long sekolahId, SubjekTipe subjekTipe, Long subjekId,
+                                       LocalDate tgl, OffsetDateTime dari, OffsetDateTime sampai,
+                                       String label) {
+        if (subjekId == null) {
+            throw new InvalidOperationException(
+                    "Ekspor laporan PER_SISWA membutuhkan parameter subjekId (PRD §9.5)");
+        }
+        SubjekTipe tipe = (subjekTipe != null) ? subjekTipe : SubjekTipe.SISWA;
+        LaporanPerSiswa r = laporan.laporanPerSiswa(sekolahId, tipe, subjekId, tgl, dari, sampai);
+
+        List<List<Object>> ringkasan = new ArrayList<>();
+        ringkasan.add(List.of("Subjek", tipe.name() + " #" + subjekId));
+        ringkasan.add(List.of("Saldo saat ini", r.saldo()));
+        ringkasan.add(List.of("Jumlah transaksi sukses", r.ringkasan().jumlahTransaksiSukses()));
+        ringkasan.add(List.of("Nilai belanja sukses", r.ringkasan().nilaiBelanjaSukses()));
+        ringkasan.add(List.of("Jumlah transaksi void", r.ringkasan().jumlahTransaksiVoid()));
+        ringkasan.add(List.of("Nilai void", r.ringkasan().nilaiVoid()));
+        ringkasan.add(List.of("Total top-up tunai", r.ringkasan().totalTopup()));
+        ringkasan.add(List.of("Total HPP", r.ringkasan().totalHpp()));
+
+        List<List<Object>> transaksi = new ArrayList<>();
+        for (LaporanPerSiswa.BarisTransaksi t : r.transaksi()) {
+            transaksi.add(List.of(
+                    nvl(t.id()),
+                    t.status() == null ? "" : t.status().name(),
+                    t.total(), t.totalHpp(), nvl(t.petugasId()), nvl(t.titikKasirId()),
+                    nvl(t.alasanVoid()),
+                    t.waktu() == null ? "" : FMT.format(t.waktu())));
+        }
+
+        List<List<Object>> mutasi = new ArrayList<>();
+        for (LaporanPerSiswa.BarisMutasi m : r.mutasiSaldo()) {
+            mutasi.add(List.of(
+                    nvl(m.id()),
+                    m.jenis() == null ? "" : m.jenis().name(),
+                    nvl(m.arah()), m.nominal(), m.saldoSetelah(),
+                    nvl(m.transaksiId()), nvl(m.keterangan()),
+                    m.waktu() == null ? "" : FMT.format(m.waktu())));
+        }
+
+        List<ExcelWriter.Bagian> bagian = List.of(
+                new ExcelWriter.Bagian(List.of("Metrik", "Nilai"), ringkasan),
+                new ExcelWriter.Bagian(List.of("Transaksi ID", "Status", "Total", "HPP",
+                        "Petugas", "Titik Kasir", "Alasan Void", "Waktu"), transaksi),
+                new ExcelWriter.Bagian(List.of("Mutasi ID", "Jenis", "Arah", "Nominal",
+                        "Saldo Setelah", "Transaksi ID", "Keterangan", "Waktu"), mutasi));
+
+        String judul = "Laporan Per Siswa - " + tipe.name() + " " + subjekId;
+        List<String> judulBaris = List.of(judul, "Periode: " + label);
+        byte[] isi = excel.tulisBagian(judul, judulBaris, bagian);
+        String nama = judul.replaceAll("\\s+", "-").toLowerCase() + ".xlsx";
+        return new HasilEkspor(nama, isi);
     }
 
     // ────────────────────────────────────────────────────────────────

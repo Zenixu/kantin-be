@@ -88,6 +88,78 @@ public class ExcelWriter {
         }
     }
 
+    /**
+     * Bangun workbook satu sheet dengan <b>beberapa bagian</b> (mis. Ringkasan,
+     * lalu Transaksi, lalu Mutasi Saldo). Tiap bagian punya header sendiri dan
+     * dipisah satu baris kosong. Dipakai laporan multi-tabel seperti Per siswa.
+     *
+     * @param namaSheet nama sheet
+     * @param judul     baris judul (mis. nama laporan + periode); boleh kosong
+     * @param bagian    daftar bagian (header + baris data)
+     * @return byte .xlsx siap kirim
+     */
+    public byte[] tulisBagian(String namaSheet, List<String> judul, List<Bagian> bagian) {
+        try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = wb.createSheet(sanitasiNamaSheet(namaSheet));
+
+            CellStyle gayaJudul = gayaTebal(wb);
+            CellStyle gayaHeader = gayaTebal(wb);
+            gayaHeader.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            gayaHeader.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+            int r = 0;
+            int kolomMaks = 0;
+            if (judul != null && !judul.isEmpty()) {
+                for (String j : judul) {
+                    Row row = sheet.createRow(r++);
+                    Cell c = row.createCell(0);
+                    c.setCellValue(j);
+                    c.setCellStyle(gayaJudul);
+                }
+                r++; // satu baris kosong pemisah
+            }
+
+            if (bagian != null) {
+                for (Bagian b : bagian) {
+                    if (b.header() != null && !b.header().isEmpty()) {
+                        Row row = sheet.createRow(r++);
+                        for (int c = 0; c < b.header().size(); c++) {
+                            Cell cell = row.createCell(c);
+                            cell.setCellValue(b.header().get(c));
+                            cell.setCellStyle(gayaHeader);
+                        }
+                        kolomMaks = Math.max(kolomMaks, b.header().size());
+                    }
+                    if (b.baris() != null) {
+                        for (List<Object> data : b.baris()) {
+                            Row row = sheet.createRow(r++);
+                            for (int c = 0; c < data.size(); c++) {
+                                isiSel(row.createCell(c), data.get(c));
+                            }
+                            kolomMaks = Math.max(kolomMaks, data.size());
+                        }
+                    }
+                    r++; // baris kosong pemisah antar bagian
+                }
+            }
+
+            for (int c = 0; c < kolomMaks; c++) {
+                sheet.autoSizeColumn(c);
+                int lebar = Math.min(sheet.getColumnWidth(c) + 512, 60 * 256);
+                sheet.setColumnWidth(c, lebar);
+            }
+
+            wb.write(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException("Gagal membangun berkas Excel", e);
+        }
+    }
+
+    /** Satu bagian laporan: header kolom + baris data (satu tabel). */
+    public record Bagian(List<String> header, List<List<Object>> baris) {
+    }
+
     private void isiSel(Cell cell, Object nilai) {
         if (nilai == null) {
             cell.setBlank();
