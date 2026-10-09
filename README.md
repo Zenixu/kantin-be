@@ -4,7 +4,7 @@ Backend modul **kantin sekolah cashless** untuk platform SKOOLIA. 100% non-tunai
 pembeli membayar dengan **tap kartu RFID**, saldo didebit dari ledger append-only,
 stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
-> **Status:** MVP fitur (PRD §4–§11) ≈ **90%** selesai · 88 endpoint · 211 unit test hijau ·
+> **Status:** MVP fitur (PRD §4–§11) ≈ **90%** selesai · 88 endpoint · 215 unit test hijau ·
 > 22 migrasi Flyway. Sisa pekerjaan: integrasi eksternal (masih `*Fallback`) & hardening
 > — lihat [Peta Sisa Pekerjaan](#-peta-sisa-pekerjaan).
 
@@ -84,17 +84,29 @@ karena MSYS mengubah path. Pakai salah satu:
 ## 🧪 Test & Build
 
 ```bash
-./mvn-run.sh -o -q test       # 211 unit test (37 file *Test)
+./mvn-run.sh -o -q test       # 215 unit test (38 file *Test)
 ./mvn-run.sh -o -q verify     # + 29 integration test (*IT, Testcontainers)
 ./mvn-run.sh clean package    # build jar
 ```
 
-- Unit test: **211 lolos, 0 gagal** (`target/surefire-reports/`).
-- Integration test: `*IT` memakai **Testcontainers** (PostgreSQL/Redis nyata).
+- Unit test: **215 lolos, 0 gagal** (`target/surefire-reports/`).
+- Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata).
 - `TODO`/`FIXME` di `src/main`: **0**.
 
-> **Catatan CI:** belum ada workflow GitHub Actions. `Jenkinsfile` (build image → push
-> registry → deploy k3s) **tidak menjalankan test** — lihat issue #141.
+### CI (otomatis per-PR)
+
+- **GitHub Actions** — [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+  tiap push/PR ke `main`/`develop` menjalankan `./mvnw verify` (JDK 25 temurin,
+  unit + integration test) dan mengunggah laporan test. **Wajib hijau** sebelum merge
+  (WORKFLOW.md §4).
+- **Jenkinsfile** — stage `Test` (`./mvnw verify`) berjalan **sebelum** build image,
+  jadi pipeline gagal bila ada test merah.
+
+### Observability
+
+- Metrik Prometheus di `GET /actuator/prometheus` (Micrometer). SLO tap p95 ≤ 1 dtk
+  (PRD §12) diukur lewat timer `kantin_tap_duration_seconds`. Detail & contoh query/alert:
+  [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md).
 
 ---
 
