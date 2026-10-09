@@ -24,6 +24,22 @@ pipeline {
             }
         }
 
+        stage('Test') {
+            // Gerbang mutu (issue #141, WORKFLOW.md §4): `verify` menjalankan
+            // unit test (Surefire, *Test) + integration test (Failsafe, *IT)
+            // berbasis Testcontainers. Agent Jenkins sudah punya Docker (dipakai
+            // build image di stage berikut), jadi IT ledger/race-condition
+            // benar-benar dijalankan. Pipeline GAGAL bila ada test merah.
+            steps {
+                sh './mvnw -B -ntp verify'
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'target/*-reports/*.xml'
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh """

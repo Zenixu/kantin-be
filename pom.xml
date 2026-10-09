@@ -57,6 +57,16 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
+		<!-- ============================================================ -->
+		<!-- OBSERVABILITY: Micrometer + Prometheus registry (issue #146)  -->
+		<!-- ============================================================ -->
+		<!-- Mengekspos /actuator/prometheus agar SLO (tap p95 <= 1 dtk,    -->
+		<!-- PRD §12) & alerting bisa dipantau. Versi dikelola BOM         -->
+		<!-- micrometer-bom (micrometer.version di spring-boot-dependencies). -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
 		<!-- AOP: dipakai RBAC berbasis anotasi @PerluPeran (security/PeranAspect).
 		     ⚠️ Spring Boot 4: artifact lama spring-boot-starter-aop DIHAPUS,
 		     diganti spring-boot-starter-aspectj. Jangan pakai nama lama. -->

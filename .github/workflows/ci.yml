@@ -1,0 +1,53 @@
+name: CI
+
+# Gerbang mutu per-PR (issue #141).
+# WORKFLOW.md §4: "CI harus hijau" — workflow ini yang menegakkannya di GitHub,
+# karena Jenkinsfile hanya build & deploy (tanpa stage test).
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Batalkan run lama bila branch yang sama di-push ulang.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & Test (JDK 25)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # JDK 25 — WAJIB (AGENTS.md §2, CONVENTIONS.md §11: bukan 21/26).
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Tampilkan versi toolchain
+        run: ./mvnw --version
+
+      # `verify` menjalankan unit test (Surefire, *Test) DAN integration test
+      # (Failsafe, *IT) berbasis Testcontainers. Runner ubuntu GitHub sudah
+      # menyediakan Docker, jadi IT ledger/race-condition benar-benar dijalankan.
+      - name: Build & Test
+        run: ./mvnw -B -ntp verify
+
+      - name: Unggah laporan test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laporan-test
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 7

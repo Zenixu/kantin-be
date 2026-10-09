@@ -89,6 +89,7 @@ Controller (tipis) ──► Service (aturan bisnis) ──► DB
 | Endpoint | Auth | Peran |
 |---|---|---|
 | `GET /actuator/health` | publik | — |
+| `GET /actuator/prometheus` | publik (default; set `KANTIN_METRICS_PUBLIC=false` untuk menutup) | — |
 | `POST /api/webhook/{sumber}` | **HMAC-SHA256 + anti-replay** (bukan token) | — |
 | `GET /api/internal/**` | **HMAC-SHA256 + anti-replay** (rahasia terpisah) | — (mesin-ke-mesin) |
 | `GET /api/auth/me` | token | apa pun yang valid |
