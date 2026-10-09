@@ -1,6 +1,7 @@
 package com.asqi.scholia_kantin_be.service.kartu;
 
 import com.asqi.scholia_kantin_be.component.exception.ConflictException;
+import com.asqi.scholia_kantin_be.component.logging.AuditLogger;
 import com.asqi.scholia_kantin_be.helper.IdGenerator;
 import com.asqi.scholia_kantin_be.model.KartuTamu;
 import com.asqi.scholia_kantin_be.repository.KartuTamuRepository;
@@ -31,9 +32,10 @@ class KartuTamuAntiTabrakanTest {
 
     private final KartuTamuRepository repo = mock(KartuTamuRepository.class);
     private final IdGenerator idGenerator = mock(IdGenerator.class);
+    private final AuditLogger auditLogger = mock(AuditLogger.class);
 
     private KartuTamuService service(UidSiswaPort port) {
-        return new KartuTamuService(repo, idGenerator, port);
+        return new KartuTamuService(repo, idGenerator, port, auditLogger);
     }
 
     @Test
