@@ -1,0 +1,147 @@
+name: Uji Beban (nightly)
+
+# Uji beban SLO tap p95 <= 1 dtk (PRD §12 no.8) — issue #145.
+#
+# OPSIONAL / TIDAK MEMBLOK PR: butuh Docker, boot aplikasi, dan beban tinggi,
+# jadi dijalankan TERJADWAL (nightly) atau manual — bukan pada setiap PR.
+# Gerbang per-PR tetap .github/workflows/ci.yml (unit + integration test).
+#
+# Build GAGAL bila threshold k6 tak terpenuhi (p95 >= 1 dtk / gagal > 1%),
+# sehingga regresi performa terdeteksi otomatis dan tampil sebagai run merah.
+
+on:
+  schedule:
+    # 19:00 UTC = 02:00 WIB (Asia/Jakarta) — di luar jam sekolah.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      tap_rate:
+        description: 'Laju tap (tap/detik)'
+        required: false
+        default: '50'
+      duration:
+        description: 'Lama skenario (mis. 2m, 5m)'
+        required: false
+        default: '2m'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uji-beban-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  uji-beban:
+    name: Uji beban tap (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: kantin_db
+          POSTGRES_USER: kantin
+          POSTGRES_PASSWORD: kantin_dev
+          TZ: Asia/Jakarta
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kantin -d kantin_db"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    env:
+      TZ: Asia/Jakarta
+      # Aplikasi → layanan (services dipetakan ke localhost runner).
+      DB_URL: jdbc:postgresql://localhost:5432/kantin_db?stringtype=unspecified
+      DB_USERNAME: kantin
+      DB_PASSWORD: kantin_dev
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      # Profil uji beban: aktifkan lookup Kartu Tamu nyata (KartuLookupLoadTest).
+      SPRING_PROFILES_ACTIVE: local,loadtest
+      # Shim login dev agar k6 bisa minta token (kantin-be tanpa login sendiri).
+      KANTIN_DEV_LOGIN_ENABLED: 'true'
+      # Matikan rate limit agar 429 tidak mengotori pengukuran latensi jalur sukses.
+      KANTIN_RATE_LIMIT_ENABLED: 'false'
+      # Beban (dari input manual atau default).
+      TAP_RATE: ${{ github.event.inputs.tap_rate || '50' }}
+      DURATION: ${{ github.event.inputs.duration || '2m' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # Keypair RS256 DUMMY + EPHEMERAL (hanya untuk run ini) agar shim login
+      # dev bisa menerbitkan token yang lolos verifikasi. Bukan kredensial nyata.
+      - name: Siapkan keypair JWT dummy (ephemeral)
+        run: |
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/priv.pem 2>/dev/null
+          echo "KANTIN_DEV_LOGIN_PRIVATE_KEY=$(openssl pkcs8 -topk8 -nocrypt -in /tmp/priv.pem -outform DER | base64 -w0)" >> "$GITHUB_ENV"
+          echo "JWT_ADMIN_PUBLIC_KEY=$(openssl rsa -in /tmp/priv.pem -pubout -outform DER | base64 -w0)" >> "$GITHUB_ENV"
+
+      - name: Build jar (tanpa test — sudah diuji di CI per-PR)
+        run: ./mvnw -B -ntp clean package -DskipTests
+
+      - name: Jalankan aplikasi (background)
+        run: |
+          nohup java -jar target/*.jar > app.log 2>&1 &
+          echo "APP_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Tunggu aplikasi sehat
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8082/actuator/health >/dev/null; then
+              echo "kantin-be sehat setelah ${i} percobaan."; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::kantin-be tidak sehat dalam 120 dtk"; tail -100 app.log; exit 1
+
+      - name: Seed data uji beban
+        run: |
+          PGPASSWORD=kantin_dev psql -h localhost -U kantin -d kantin_db -v ON_ERROR_STOP=1 \
+            -f load/seed/seed-loadtest.sql
+
+      - name: Pasang k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -qq
+          sudo apt-get install -y k6
+          k6 version
+
+      - name: Jalankan uji beban (k6)
+        run: |
+          k6 run --summary-export=k6-summary.json load/k6/tap-slo.js
+          echo "=== Ringkasan k6 ==="
+          cat k6-summary.json
+
+      - name: Unggah hasil (ringkasan k6 + log app)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hasil-uji-beban
+          path: |
+            k6-summary.json
+            app.log
+          if-no-files-found: ignore
+          retention-days: 14
