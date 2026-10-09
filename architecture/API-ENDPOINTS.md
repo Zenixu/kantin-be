@@ -3,7 +3,7 @@
 > **Single source of truth endpoint kantin-be.** Semua path berprefix `/api`.
 > Respons selalu dibungkus `Response<T>` (`{ responseCode, message, data, ... }`).
 >
-> **Sinkron terakhir:** 2026-10-09 · **Total: 86 endpoint** (85 di `controller/` + 1 shim dev)
+> **Sinkron terakhir:** 2026-10-09 · **Total: 87 endpoint** (86 di `controller/` + 1 shim dev)
 > di **14 controller**. Dijaga otomatis oleh `ApiEndpointsDocTest` — uji ini
 > **gagal** bila daftar di bawah tidak lagi sama persis dengan anotasi
 > `@…Mapping` di kode. Bila menambah/mengubah endpoint, perbarui dokumen ini.
@@ -167,13 +167,14 @@
 | `GET` | `/api/laporan/penjualan/titik` | TU, admin, pengelola | **Penjualan per titik kasir** (#116): transaksi, nilai, HPP, laba kotor per titik |
 | `GET` | `/api/laporan/penjualan/petugas` | TU, admin, pengelola | **Penjualan per petugas** (#116): transaksi, nilai, HPP, laba kotor per petugas |
 | `GET` | `/api/laporan/per-siswa` | TU, admin, pengelola | **Per siswa** (#117): riwayat lengkap satu subjek. Query: `subjekTipe=SISWA`, `subjekId`, periode |
+| `GET` | `/api/laporan/setoran-tu` | TU, admin, pengelola | **Setoran kas TU** (#143): rekap top-up tunai per petugas per hari + disetor + **selisih**. Query: `tanggal?`. **Tanpa kepsek** (§9.5: hanya Bendahara) |
 | `GET` | `/api/laporan/kartu-stok/{menuId}` | TU, admin, pengelola | **Kartu stok per item** (#118): riwayat mutasi satu menu + saldo berjalan. Query: `batas?` |
-| `GET` | `/api/laporan/ekspor` | TU, admin, pengelola, kepsek* | Unduh **Excel `.xlsx`** (bukan JSON). Query: `jenis` ∈ `JenisLaporan`, `tanggal`/`dari`/`sampai`, `menuId?`. *Kepsek hanya jenis yang boleh dibacanya — `STOK`/`BARANG_MASUK` → **403** |
+| `GET` | `/api/laporan/ekspor` | TU, admin, pengelola, kepsek* | Unduh **Excel `.xlsx`** (bukan JSON). Query: `jenis` ∈ `JenisLaporan`, `tanggal`/`dari`/`sampai`, `menuId?`. *Kepsek hanya jenis yang boleh dibacanya — `STOK`/`BARANG_MASUK`/`SETORAN_TU` → **403** |
 
-> **`JenisLaporan` (13 jenis ekspor):** `PENJUALAN`, `PENJUALAN_ITEM`,
+> **`JenisLaporan` (14 jenis ekspor):** `PENJUALAN`, `PENJUALAN_ITEM`,
 > `PENJUALAN_KATEGORI`, `SALDO_MENGENDAP`, `REKONSILIASI`, `STOK`,
 > `KERUGIAN_STOK`, `BARANG_MASUK`, `PEMBATALAN`, `KARTU_TAMU`,
-> `PENJUALAN_TITIK`, `PENJUALAN_PETUGAS`, `KARTU_STOK`.
+> `PENJUALAN_TITIK`, `PENJUALAN_PETUGAS`, `KARTU_STOK`, `SETORAN_TU`.
 > Kepsek hanya boleh mengekspor: `PENJUALAN`, `PENJUALAN_ITEM`,
 > `PENJUALAN_KATEGORI`, `SALDO_MENGENDAP`, `REKONSILIASI`, `KERUGIAN_STOK`.
 
@@ -292,7 +293,6 @@
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|
 | Laporan ekspor PDF | ekspor PDF (saat ini hanya Excel) | Q3, Q5 |
-| Laporan Setoran TU di modul laporan | `GET /api/laporan/setoran-tu` + ekspor | issue #143 (belum dikerjakan) |
 | Ekspor "Per siswa" | `case PER_SISWA` di ekspor | issue #144 (belum dikerjakan) |
 | Aktivasi & fee | toggle modul, fee platform | status dibaca (#42); toggle tetap milik internal-be (Q6) |
 | Top-up online | (dari callback-be) | Q4 — handler webhook sudah siap |

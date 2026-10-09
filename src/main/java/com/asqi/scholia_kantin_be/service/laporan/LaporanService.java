@@ -8,6 +8,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.KartuStokItem;
 import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
+import com.asqi.scholia_kantin_be.dto.RekapSetoranTuItem;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
@@ -78,6 +79,7 @@ public class LaporanService {
     private final com.asqi.scholia_kantin_be.repository.TitikKasirRepository titikKasirRepo;
     private final HppService hppService;
     private final JamKantin jam;
+    private final com.asqi.scholia_kantin_be.service.saldo.SetoranTuService setoranTuService;
 
     // ────────────────────────────────────────────────────────────────
     // Periode
@@ -462,6 +464,27 @@ public class LaporanService {
     private String label(OffsetDateTime[] r) {
         DateTimeFormatter f = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
         return f.format(r[0]) + " s/d " + f.format(r[1]);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // Setoran kas TU (PRD §9.2 & §9.5, issue #143)
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Laporan <b>Setoran kas TU</b> (PRD §9.5): rekap top-up tunai
+     * <b>per petugas per hari</b> + uang yang sudah dikonfirmasi disetor +
+     * <b>selisih</b>. Sumber kebenaran rekap = {@link
+     * com.asqi.scholia_kantin_be.service.saldo.SetoranTuService#rekap} (ledger
+     * {@code TOPUP_TUNAI} + {@code setoran_tu} append-only), sehingga laporan
+     * modul laporan &amp; endpoint operasional selalu konsisten.
+     *
+     * <p>Tenant-scoped; baca-saja. {@code tanggal} {@code null} = hari ini
+     * (zona kantin). Akses PRD §9.5: <b>Bendahara</b> (dipetakan ke
+     * {@code TU_SEKOLAH}) — kepsek <b>tidak</b> berhak.
+     */
+    @Transactional(readOnly = true)
+    public List<RekapSetoranTuItem> laporanSetoranTu(Long sekolahId, LocalDate tanggal) {
+        return setoranTuService.rekap(sekolahId, tanggal);
     }
 
     private static long nolJikaNull(Long nilai) {

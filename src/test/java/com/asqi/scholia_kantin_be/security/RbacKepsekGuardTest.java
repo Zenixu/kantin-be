@@ -176,6 +176,13 @@ class RbacKepsekGuardTest {
                 .doesNotContain(AktorKantin.KEPSEK);
     }
 
+    @Test
+    @DisplayName("laporan SETORAN TU (§9.5: hanya Bendahara) tertutup untuk kepsek (#143)")
+    void laporanSetoranTuTertutupUntukKepsek() {
+        assertThat(peranPada(LaporanController.class, "setoranTu", LocalDate.class))
+                .doesNotContain(AktorKantin.KEPSEK);
+    }
+
     // ────────────────────────────────────────────────────────────────
     // 4) Ekspor: kepsek hanya jenis yang boleh dibacanya
     // ────────────────────────────────────────────────────────────────

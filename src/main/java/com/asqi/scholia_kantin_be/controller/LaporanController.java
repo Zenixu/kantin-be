@@ -9,6 +9,7 @@ import com.asqi.scholia_kantin_be.dto.BarisPenjualan;
 import com.asqi.scholia_kantin_be.dto.BarisStok;
 import com.asqi.scholia_kantin_be.dto.KartuStokItem;
 import com.asqi.scholia_kantin_be.dto.LaporanPerSiswa;
+import com.asqi.scholia_kantin_be.dto.RekapSetoranTuItem;
 import com.asqi.scholia_kantin_be.dto.RingkasanPenjualan;
 import com.asqi.scholia_kantin_be.dto.RingkasanRekonsiliasi;
 import com.asqi.scholia_kantin_be.dto.RingkasanSaldoMengendap;
@@ -224,6 +225,19 @@ public class LaporanController {
         return CommonResponse.data(
                 laporan.laporanPerSiswa(TenantContext.sekolahIdWajib(), subjekTipe, subjekId,
                         tanggal, dari, sampai));
+    }
+
+    /**
+     * Laporan <b>Setoran kas TU</b> (PRD §9.5, issue #143): rekap top-up tunai
+     * per petugas per hari + uang disetor + <b>selisih</b>. RBAC <b>Bendahara</b>
+     * (PRD §9.5: hanya Bendahara) — kepsek <b>tidak</b> berhak. Tanpa kepsek.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("setoran-tu")
+    public ResponseEntity<Response<List<RekapSetoranTuItem>>> setoranTu(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal) {
+        return CommonResponse.data(
+                laporan.laporanSetoranTu(TenantContext.sekolahIdWajib(), tanggal));
     }
 
     /**
