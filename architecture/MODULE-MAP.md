@@ -8,8 +8,10 @@
 
 > **Status per 2026-10-12:** Fase 0–9 **selesai** (kode + test hijau). Fase 10
 > (hardening) sebagian: CI per-PR & metrics aktif, **proteksi branch BELUM aktif**
-> ([#171](https://github.com/Zenixu/kantin-be/issues/171)), hasil uji beban k6 **tercatat
-> tetapi belum lulus SLO di laju target** ([#172](https://github.com/Zenixu/kantin-be/issues/172)).
+> ([#171](https://github.com/Zenixu/kantin-be/issues/171)), uji beban k6 SLO tap
+> **lulus di laju target 50–100 tap/dtk** di runner target
+> ([#172](https://github.com/Zenixu/kantin-be/issues/172); temuan cold-start
+> dipisah ke [#180](https://github.com/Zenixu/kantin-be/issues/180)).
 > Sisa sebenarnya = **integrasi eksternal** (adapter REST sudah ada, belum tersambung
 > ke kredensial/kontrak tim lain), yang **bukan** lagi soal menulis fitur melainkan
 > menunggu tim SKOOLIA.
@@ -25,7 +27,7 @@ FASE 6  Kasir (tap/void)    →  validasi 6 tahap, transaksi, sesi, tutup      �
 FASE 7  Saldo & Kartu Tamu  →  top-up tunai, refund, limit, blokir, kartu    ✅ selesai (topup online: webhook siap)
 FASE 8  Integrasi & Laporan →  BukuKasClient, notifikasi, laporan Excel      🟡 laporan ✅; adapter REST ✅ (#160); kredensial ⏳ (#164)
 FASE 9  Aktivasi & Fee      →  toggle modul, fee platform                    🟡 status dibaca; toggle milik internal-be (#164)
-FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                🟡 CI/metrics ✅; branch ⏳ (#171); SLO tap ⏳ (#172); UAT ⏳ (#174)
+FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                🟡 CI/metrics ✅; branch ⏳ (#171); SLO tap ✅ (#172, cold-start #180); UAT ⏳ (#174)
 ```
 
 **Sisa nyata:** 6 integrasi eksternal — adapter REST **sudah ada** & diuji WireMock
