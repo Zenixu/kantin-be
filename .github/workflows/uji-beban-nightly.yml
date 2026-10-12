@@ -139,6 +139,15 @@ jobs:
       - name: Uji mandiri parser p95 (tanpa dependensi)
         run: python3 load/k6/p95-prometheus.py --self-test
 
+      # Warmup: SLO PRD §12 no.8 adalah tentang JAM ISTIRAHAT (steady state),
+      # bukan detik-detik pertama JVM dingin. Tanpa warmup, pengukuran laju
+      # pertama (mis. 100 tap/dtk langsung setelah boot) didominasi JIT/compile
+      # & pengisian pool — bukan kapasitas produksi. Jalankan beban ringan dulu
+      # agar gerbang mengukur throughput stabil (lihat catatan di §5 docs).
+      - name: Warmup JVM & pool (bukan bagian pengukuran SLO)
+        run: |
+          TAP_RATE=20 DURATION=30s k6 run load/k6/tap-slo.js || true
+
       - name: Jalankan uji beban (k6) untuk tiap laju + silang-cek Prometheus
         run: |
           set -uo pipefail
