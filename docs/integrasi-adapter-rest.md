@@ -95,3 +95,15 @@ kontrak tim SKOOLIA belum final) tetap berjalan. Pola sama dengan
 
 WireMock berjalan embedded sehingga uji ini **tidak butuh Docker** dan ikut
 dalam `./mvnw test` biasa.
+
+## Uji integrasi jalur demo (E2E) — #164
+
+`DemoE2EIT` (Testcontainers) membuktikan jalur demo berjalan **end-to-end**:
+*tap Kartu Tamu → potong saldo/stok → tutup sesi → posting Buku Kas SUKSES →
+idempoten*. IT ini mengaktifkan adapter demo nyata (`KartuLookupDemo` +
+`BukuKasDemo`) lewat `kantin.demo.enabled=true`, sehingga yang diuji adalah jalur
+kode produksi — hanya backend eksternalnya disimulasikan.
+
+```bash
+./mvnw verify -Dtest=DemoE2EIT    # butuh Docker (Testcontainers)
+```
