@@ -4,7 +4,7 @@ Backend modul **kantin sekolah cashless** untuk platform SKOOLIA. 100% non-tunai
 pembeli membayar dengan **tap kartu RFID**, saldo didebit dari ledger append-only,
 stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
-> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **217 unit test hijau** ·
+> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **223 unit test hijau** ·
 > **22 migrasi Flyway**. Sisa pekerjaan: **integrasi eksternal** (masih `*Fallback` — menunggu
 > tim SKOOLIA & public key RS256) dan **hardening/operasional**
 > — lihat [Peta Sisa Pekerjaan](#-peta-sisa-pekerjaan).
@@ -77,6 +77,19 @@ cp src/main/resources/application-local.properties.example \
 
 > Port aplikasi **8082** (admin-be 8081, agar tidak bentrok).
 
+### 4. (Opsional) Demo alur kasir E2E tanpa data SKOOLIA
+
+Untuk menguji **tap → potong saldo/stok → tutup sesi → laporan** di lokal
+**tanpa** menunggu tim SKOOLIA (Q7), pakai profil `demo` + seed demo:
+
+```bash
+SPRING_PROFILES_ACTIVE=local,demo ./mvnw spring-boot:run
+psql "postgresql://kantin:kantin_dev@localhost:5432/kantin_db" -f load/seed/seed-demo.sql
+```
+
+Langkah lengkap (token, curl, reset): [`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md).
+⚠️ Profil `demo` **hanya lokal** — jangan dipakai di staging/produksi.
+
 ### ⚠️ Git Bash (MSYS) di Windows
 
 `./mvnw` (versi shell) bisa gagal `ClassNotFoundException: ...classworlds.launcher.Launcher`
@@ -92,12 +105,12 @@ karena MSYS mengubah path. Pakai salah satu:
 ## 🧪 Test & Build
 
 ```bash
-./mvn-run.sh -o -q test       # 217 unit test (39 file *Test)
+./mvn-run.sh -o -q test       # 223 unit test (40 file *Test)
 ./mvn-run.sh -o -q verify     # + 30 integration test (*IT, Testcontainers)
 ./mvn-run.sh clean package    # build jar
 ```
 
-- Unit test: **217 lolos, 0 gagal** (`target/surefire-reports/`).
+- Unit test: **223 lolos, 0 gagal** (`target/surefire-reports/`).
 - Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata) —
   butuh **Docker aktif**; dijalankan lewat `verify`/`failsafe`.
 - `TODO`/`FIXME` di `src/main`: **0**.
