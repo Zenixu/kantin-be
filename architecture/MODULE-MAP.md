@@ -7,9 +7,12 @@
 ## 1. Urutan Fase (rekomendasi)
 
 > **Status per 2026-10-12:** Fase 0–9 **selesai** (kode + test hijau). Fase 10
-> (hardening) sebagian: CI per-PR & proteksi branch aktif, uji beban punya harness
-> (hasil belum dicatat). Sisa sebenarnya = **integrasi eksternal** (masih `*Fallback`),
-> yang **bukan** lagi soal menulis fitur melainkan menunggu kontrak/kredensial tim lain.
+> (hardening) sebagian: CI per-PR & metrics aktif, **proteksi branch BELUM aktif**
+> ([#171](https://github.com/Zenixu/kantin-be/issues/171)), hasil uji beban k6 **tercatat
+> tetapi belum lulus SLO di laju target** ([#172](https://github.com/Zenixu/kantin-be/issues/172)).
+> Sisa sebenarnya = **integrasi eksternal** (adapter REST sudah ada, belum tersambung
+> ke kredensial/kontrak tim lain), yang **bukan** lagi soal menulis fitur melainkan
+> menunggu tim SKOOLIA.
 
 ```
 FASE 0  Fondasi Repo        →  git, docs, .gitignore, scaffold               ✅ selesai
@@ -18,16 +21,17 @@ FASE 2  Infra Dev Lokal     →  PostgreSQL+Redis, application-local           �
 FASE 3  Auth & Tenant       →  JWT RS256, TenantContext, SekolahGuard, RBAC  ✅ selesai (Q1,Q2,Q7 diadaptasi)
 FASE 4  Ledger Inti         →  saldo_ledger, mutasi_stok, locking, test      ✅ selesai
 FASE 5  Katalog & Stok/HPP  →  menu, kategori, barang masuk, opname          ✅ selesai
-FASE 6  Kasir (tap/void)    →  validasi 6 tahap, transaksi, sesi, tutup      ✅ selesai (lookup kartu: fallback)
+FASE 6  Kasir (tap/void)    →  validasi 6 tahap, transaksi, sesi, tutup      ✅ selesai (lookup kartu: fallback/demo)
 FASE 7  Saldo & Kartu Tamu  →  top-up tunai, refund, limit, blokir, kartu    ✅ selesai (topup online: webhook siap)
-FASE 8  Integrasi & Laporan →  BukuKasClient, notifikasi, laporan Excel      🟡 laporan ✅; REST client ⏳ (#160)
+FASE 8  Integrasi & Laporan →  BukuKasClient, notifikasi, laporan Excel      🟡 laporan ✅; adapter REST ✅ (#160); kredensial ⏳ (#164)
 FASE 9  Aktivasi & Fee      →  toggle modul, fee platform                    🟡 status dibaca; toggle milik internal-be (#164)
-FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                🟡 CI/branch/metrics ✅; uji beban ⏳ (#161)
+FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                🟡 CI/metrics ✅; branch ⏳ (#171); SLO tap ⏳ (#172); UAT ⏳ (#174)
 ```
 
-**Sisa nyata:** 6 integrasi eksternal masih `*Fallback` (REST client nyata belum ada →
-[#160](https://github.com/Zenixu/kantin-be/issues/160)); sisanya menunggu kredensial/kontrak
-tim SKOOLIA ([#164](https://github.com/Zenixu/kantin-be/issues/164)). Indeks:
+**Sisa nyata:** 6 integrasi eksternal — adapter REST **sudah ada** & diuji WireMock
+([#160](https://github.com/Zenixu/kantin-be/issues/160)) tetapi belum tersambung ke
+endpoint/kunci produksi; jalur demo tersedia. Menunggu kredensial/kontrak tim SKOOLIA
+([#164](https://github.com/Zenixu/kantin-be/issues/164)). Indeks:
 [#165](https://github.com/Zenixu/kantin-be/issues/165).
 
 ---

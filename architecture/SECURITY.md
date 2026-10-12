@@ -168,9 +168,11 @@ Lihat `BUGS-DITEMUKAN.md` B6–B8 tentang perbaikan status 403 dari `admin-be`.
   dengan **rahasia TERPISAH** `KANTIN_INTERNAL_SECRET` (kosong/disabled ⇒ 503,
   fail-closed) + anti-replay + allowlist IP opsional. Lihat
   `docs/integrasi-anti-tabrakan-uid.md`.
-- ⚠️ **Audit top-up/void/barang-masuk/opname** sudah menulis `audit_log` (B18).
-  Aksi lain (ubah harga jual, blokir item, ubah limit) menunggu service terkait
-  dibuat — pastikan tiap service baru memanggil `AuditLogger.catat`.
+- ✅ **Audit lengkap** (B18) — `audit_log` ditulis untuk: top-up (tunai/online), void, koreksi saldo,
+  barang masuk & pembaliknya, opname, **ubah harga jual** (`UBAH_HARGA_JUAL`), **blokir/buka kartu**
+  (`BLOKIR_KARTU`/`BUKA_BLOKIR_KARTU`), **blokir/buka item** (`BLOKIR_ITEM`/`BUKA_BLOKIR_ITEM`),
+  **ubah limit harian** (`SET_LIMIT_HARIAN`), perubahan pengaturan/kebijakan/titik kasir, dan
+  kartu tamu. Pastikan tiap service baru tetap memanggil `AuditLogger.catat`.
 
 ---
 

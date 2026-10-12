@@ -1,8 +1,13 @@
 # 📋 Plan — Proteksi Branch `main` & `develop`
 
-> **Status: ✅ AKTIF (sejak 2026-10-06).** Owner (`Zenixu`) sudah mengaktifkan
-> proteksi. Dokumen ini menyimpan **konteks, cara verifikasi, dan riwayat** —
-> berguna bila proteksi perlu diubah/diperiksa ulang.
+> **Status: ⚠️ BELUM AKTIF (diverifikasi ulang 2026-10-12).**
+> Klaim sebelumnya ("AKTIF sejak 2026-10-06") **tidak lagi benar**. Verifikasi GitHub API
+> 2026-10-12: `branches/main.protected=false`, `branches/develop.protected=false`, dan satu-satunya
+> ruleset (`main`, id 24626209) ber-`enforcement=disabled`. Re-aktivasi dilacak di
+> [#171](https://github.com/Zenixu/kantin-be/issues/171).
+>
+> Dokumen ini menyimpan **konteks, cara verifikasi, dan riwayat** — berguna untuk
+> mengaktifkan/memeriksa ulang proteksi.
 >
 > Rujukan aturan: [`WORKFLOW.md` §1](./WORKFLOW.md) — *"Tidak boleh push langsung
 > ke `main` atau `develop`. Selalu via PR."* Proteksi branch adalah cara GitHub
@@ -12,9 +17,10 @@
 
 ## 1. Kenapa ini penting (khusus repo ini)
 
-Repo ini **tidak punya CI** (`.github/workflows/` kosong) — tidak ada robot yang
-memverifikasi PR. Jadi **PR + review adalah satu-satunya gerbang mutu**. Tanpa
-proteksi, tidak ada gerbang sama sekali.
+Repo ini **punya CI** (`.github/workflows/ci.yml`, `./mvnw verify` per-PR — issue #141),
+tetapi proteksi branch tetap penting: CI hanya **menjalankan** test, bukan
+**mewajibkan** PR/approval. Tanpa proteksi, `git push` langsung bisa melewati
+review sepenuhnya.
 
 Risiko nyata yang dicegah:
 
@@ -23,7 +29,7 @@ Risiko nyata yang dicegah:
 | `git push --force` ke `develop` | commit anggota lain **hilang**, riwayat rusak | ditolak (rule *non-fast-forward*) |
 | Branch `develop`/`main` terhapus | hilang, harus restore manual | ditolak (rule *deletion*) |
 | Push langsung ke `develop` | semua orang ikut kena | wajib lewat PR → ada review |
-| Kode rusak masuk `develop` | tidak ada CI yang menangkap | tertangkap saat review PR |
+| Kode rusak masuk `develop` | lolos bila CI dilewati/tidak wajib | ditangkap saat review PR + status CI |
 
 > ⚠️ Risiko `--force` nyata di tim ini: `WORKFLOW.md` §6 memakai
 > `--force-with-lease` di branch fitur — salah target sedikit saja bisa
@@ -31,40 +37,24 @@ Risiko nyata yang dicegah:
 
 ---
 
-## 2. Kondisi saat ini (per 2026-10-06)
+## 2. Kondisi saat ini (per 2026-10-12)
 
-**Proteksi SUDAH AKTIF.** Bukti yang bisa diverifikasi ulang:
-
-- `gh pr merge` ke `develop` **ditolak**: *"the base branch policy prohibits the merge"*.
-- `gh pr merge --admin` juga **ditolak**: *"At least 2 approving reviews are required by reviewers with write access."*
-- PR tanpa review → `mergeStateStatus: BLOCKED`, `reviewDecision: REVIEW_REQUIRED`.
-
-> ⚠️ **Jumlah approval = 2.** Cukup berat untuk tim kecil: penulis PR **tidak boleh**
-> meng-approve PR-nya sendiri, jadi butuh **2 orang lain** hadir. Bila terasa
-> menghambat, pertimbangkan turunkan ke **1** (lihat §3).
-
-**Catatan penting soal cara verifikasi (sempat menyesatkan):**
-
-| Cara cek | Hasil | Akurasi |
-|---|---|---|
-| `branches/{b}.protected` | `true` | ✅ menandakan ada proteksi |
-| `rules/branches/{b}` (rulesets) | `[]` | ⚠️ **kosong walau proteksi aktif** |
-| `rulesets` | 1 ruleset `develop`, `enforcement=disabled` | ⚠️ **menyesatkan** |
-| `gh pr merge` (praktik nyata) | ditolak | ✅ **paling andal** |
-
-Artinya: proteksi di repo ini tampaknya memakai **branch protection rule klasik**
-(bukan rulesets — ruleset `develop` yang lama masih `disabled` dan boleh
-diabaikan/dihapus). Endpoint klasik `branches/{b}/protection` mengembalikan
-**404** karena akun kita **bukan admin** — itu **bukan** tanda proteksi tidak ada.
-
-**Cara paling andal memeriksa:** buat PR ke `develop`, lalu lihat
-`gh pr view <n> --json mergeStateStatus,reviewDecision`. `BLOCKED` +
-`REVIEW_REQUIRED` = proteksi bekerja.
+**Proteksi BELUM AKTIF.** Bukti verifikasi langsung (2026-10-12):
 
 ```bash
-gh pr view <nomor> --repo Zenixu/kantin-be --json mergeStateStatus,reviewDecision
-# BLOCKED + REVIEW_REQUIRED -> proteksi aktif & menunggu review
+gh api repos/Zenixu/kantin-be/branches/main    --jq .protected   # -> false
+gh api repos/Zenixu/kantin-be/branches/develop --jq .protected   # -> false
+gh api repos/Zenixu/kantin-be/rulesets                            # -> 1 ruleset (main), enforcement=disabled
 ```
+
+> **Catatan koreksi:** klaim §2 sebelumnya ("proteksi aktif, terbukti PR #5 ditolak")
+> **tidak lagi berlaku** — kemungkinan rule klasik yang dulu dipasang sudah dilepas
+> atau tidak pernah benar-benar mengikat `main`/`develop`. Endpoint klasik
+> `branches/{b}/protection` mengembalikan **404** karena akun kita bukan admin —
+> **jangan** dijadikan bukti; pakai `branches/{b}.protected` & `rulesets`.
+
+**Cara paling andal memeriksa:** `branches/{b}.protected` = `true` **atau** ada
+ruleset dengan `enforcement=active` & target ref yang cocok.
 
 ---
 
@@ -128,3 +118,4 @@ Uji langsung: push ke `develop` dari branch lokal → **ditolak** GitHub.
 | 2026-10-06 | Dokumen ini dibuat agar owner dapat menyelesaikan tanpa konteks tambahan. |
 | 2026-10-06 | Owner **mengaktifkan proteksi** (rule klasik). Terbukti: merge PR #5 ke `develop` ditolak *"base branch policy prohibits the merge"*; `--admin` pun ditolak (*"At least 2 approving reviews"*). Owner lalu menembusnya via admin override. |
 | 2026-10-06 | Dokumen diperbarui: status → **AKTIF**, + catatan 2 approval & cara verifikasi yang andal. |
+| 2026-10-12 | **Verifikasi ulang: proteksi BELUM AKTIF** — `branches/{main,develop}.protected=false`, ruleset `main` `enforcement=disabled`. Status dokumen dikoreksi. Dilacak di [#171](https://github.com/Zenixu/kantin-be/issues/171). |
