@@ -9,6 +9,7 @@ Folder ini menampung dokumen kerja **non-Flyway** (AGENTS.md §4):
 | `integrasi-*.md` | Catatan integrasi lintas repo (admin-be, mobile-be, FE) |
 | `uji-beban-tap.md` | Cara menjalankan & ambang SLO uji beban tap (issue #145) |
 | `demo-e2e-kasir.md` | Cara menjalankan alur kasir **end-to-end** di lokal tanpa data SKOOLIA (issue #163) |
+| `checklist-pra-rilis.md` | **Checklist pra-rilis produksi** — daftar env/rahasia/flag yang wajib dicek sebelum rilis (issue #173) |
 | `sql/` | Query SQL **manual** (ad-hoc, eksplorasi, data perbaikan) — **bukan** migrasi |
 
 > Skrip & data uji beban (k6) ada di [`load/`](../load/) — lihat
