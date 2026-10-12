@@ -238,9 +238,11 @@ Yang menahan sisa progres:
    (OPEN-QUESTIONS Q4–Q8) & public key RS256 produksi (Q1/Q2) —
    [#164](https://github.com/Zenixu/kantin-be/issues/164) (blocked). Jalur **demo** tanpa API key
    sudah tersedia ([`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md)).
-2. **Hardening & operasional** — hasil uji beban SLO tap p95 **belum lulus di laju target 50–100 tap/dtk**
-   ([#172](https://github.com/Zenixu/kantin-be/issues/172), hasil k6 tercatat di
-   [`docs/uji-beban-tap.md`](docs/uji-beban-tap.md)); proteksi branch **belum aktif**
+2. **Hardening & operasional** — SLO uji beban tap p95 **tervalidasi lulus di laju target 50–100 tap/dtk**
+   pada runner target ([#172](https://github.com/Zenixu/kantin-be/issues/172); hasil di
+   [`docs/uji-beban-tap.md`](docs/uji-beban-tap.md) §5.2, p95 klien 6–9 ms, p95 server 0,238 dtk).
+   Catatan: pada **JVM dingin** (tanpa warmup) laju 100 tap/dtk masih melanggar SLO → temuan
+   cold-start terpisah. Proteksi branch **belum aktif**
    ([#171](https://github.com/Zenixu/kantin-be/issues/171)); checklist hardening pra-produksi
    ([#173](https://github.com/Zenixu/kantin-be/issues/173)); UAT & cakupan test
    ([#174](https://github.com/Zenixu/kantin-be/issues/174)). CI per-PR & metrics sudah aktif (#141/#146).
