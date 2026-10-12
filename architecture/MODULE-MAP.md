@@ -6,21 +6,29 @@
 
 ## 1. Urutan Fase (rekomendasi)
 
+> **Status per 2026-10-12:** Fase 0–9 **selesai** (kode + test hijau). Fase 10
+> (hardening) sebagian: CI per-PR & proteksi branch aktif, uji beban punya harness
+> (hasil belum dicatat). Sisa sebenarnya = **integrasi eksternal** (masih `*Fallback`),
+> yang **bukan** lagi soal menulis fitur melainkan menunggu kontrak/kredensial tim lain.
+
 ```
-FASE 0  Fondasi Repo        →  git, docs, .gitignore, scaffold               [tidak ada blocker]
-FASE 1  Scaffold Spring     →  pom.xml, struktur, Docker, compose            [tidak ada blocker]
-FASE 2  Infra Dev Lokal     →  PostgreSQL+Redis, application-local           [tidak ada blocker]
-FASE 3  Auth & Tenant       →  JWT RS256, TenantContext, SekolahGuard, RBAC  [🔴 blokir: Q1,Q2,Q7]
-FASE 4  Ledger Inti         →  saldo_ledger, mutasi_stok, locking, test      [tidak ada blocker]
-FASE 5  Katalog & Stok/HPP  →  menu, kategori, barang masuk, opname          [tidak ada blocker]
-FASE 6  Kasir (tap/void)    →  validasi 6 tahap, transaksi, sesi, tutup      [🔴 blokir: Q7 (lookup kartu)]
-FASE 7  Saldo & Kartu Tamu  →  top-up tunai, refund, limit, blokir, kartu    [🔴 blokir: Q4 (topup online)]
-FASE 8  Integrasi & Laporan →  BukuKasClient, notifikasi, laporan Excel      [🔴 blokir: Q3,Q5]
-FASE 9  Aktivasi & Fee      →  toggle modul, fee platform                    [🟡 Q6]
-FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                —
+FASE 0  Fondasi Repo        →  git, docs, .gitignore, scaffold               ✅ selesai
+FASE 1  Scaffold Spring     →  pom.xml, struktur, Docker, compose            ✅ selesai
+FASE 2  Infra Dev Lokal     →  PostgreSQL+Redis, application-local           ✅ selesai
+FASE 3  Auth & Tenant       →  JWT RS256, TenantContext, SekolahGuard, RBAC  ✅ selesai (Q1,Q2,Q7 diadaptasi)
+FASE 4  Ledger Inti         →  saldo_ledger, mutasi_stok, locking, test      ✅ selesai
+FASE 5  Katalog & Stok/HPP  →  menu, kategori, barang masuk, opname          ✅ selesai
+FASE 6  Kasir (tap/void)    →  validasi 6 tahap, transaksi, sesi, tutup      ✅ selesai (lookup kartu: fallback)
+FASE 7  Saldo & Kartu Tamu  →  top-up tunai, refund, limit, blokir, kartu    ✅ selesai (topup online: webhook siap)
+FASE 8  Integrasi & Laporan →  BukuKasClient, notifikasi, laporan Excel      🟡 laporan ✅; REST client ⏳ (#160)
+FASE 9  Aktivasi & Fee      →  toggle modul, fee platform                    🟡 status dibaca; toggle milik internal-be (#164)
+FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                🟡 CI/branch/metrics ✅; uji beban ⏳ (#161)
 ```
 
-**Strategi:** sementara Q1–Q7 🔴 belum terjawab, tim bisa mengerjakan **Fase 0,1,2,4,5** yang tidak terblokir.
+**Sisa nyata:** 6 integrasi eksternal masih `*Fallback` (REST client nyata belum ada →
+[#160](https://github.com/Zenixu/kantin-be/issues/160)); sisanya menunggu kredensial/kontrak
+tim SKOOLIA ([#164](https://github.com/Zenixu/kantin-be/issues/164)). Indeks:
+[#165](https://github.com/Zenixu/kantin-be/issues/165).
 
 ---
 

@@ -4,8 +4,9 @@ Backend modul **kantin sekolah cashless** untuk platform SKOOLIA. 100% non-tunai
 pembeli membayar dengan **tap kartu RFID**, saldo didebit dari ledger append-only,
 stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
-> **Status:** MVP fitur (PRD §4–§11) ≈ **90%** selesai · 86 endpoint · unit test hijau ·
-> 22 migrasi Flyway. Sisa pekerjaan: integrasi eksternal (masih `*Fallback`) & hardening
+> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **217 unit test hijau** ·
+> **22 migrasi Flyway**. Sisa pekerjaan: **integrasi eksternal** (masih `*Fallback` — menunggu
+> tim SKOOLIA & public key RS256) dan **hardening/operasional**
 > — lihat [Peta Sisa Pekerjaan](#-peta-sisa-pekerjaan).
 >
 > Daftar endpoint lengkap & tersinkron: [`architecture/API-ENDPOINTS.md`](architecture/API-ENDPOINTS.md)
@@ -91,13 +92,14 @@ karena MSYS mengubah path. Pakai salah satu:
 ## 🧪 Test & Build
 
 ```bash
-./mvn-run.sh -o -q test       # 215 unit test (38 file *Test)
-./mvn-run.sh -o -q verify     # + 29 integration test (*IT, Testcontainers)
+./mvn-run.sh -o -q test       # 217 unit test (39 file *Test)
+./mvn-run.sh -o -q verify     # + 30 integration test (*IT, Testcontainers)
 ./mvn-run.sh clean package    # build jar
 ```
 
-- Unit test: **215 lolos, 0 gagal** (`target/surefire-reports/`).
-- Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata).
+- Unit test: **217 lolos, 0 gagal** (`target/surefire-reports/`).
+- Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata) —
+  butuh **Docker aktif**; dijalankan lewat `verify`/`failsafe`.
 - `TODO`/`FIXME` di `src/main`: **0**.
 
 ### CI (otomatis per-PR)
@@ -164,7 +166,8 @@ docs/                              spesifikasi, plan, integrasi, SQL manual
 
 ## 🔌 Integrasi Eksternal
 
-Semua panggilan lintas-sistem lewat `service/integrasi/`. Status saat ini:
+Semua panggilan lintas-sistem lewat `service/integrasi/`. Status saat ini
+(**kelas REST client nyata belum ada** — masih port + `*Fallback`):
 
 | Target | Kegunaan | Status |
 |---|---|---|
@@ -175,6 +178,8 @@ Semua panggilan lintas-sistem lewat `service/integrasi/`. Status saat ini:
 
 Rincian kontrak & pertanyaan yang memblokir: [`architecture/INTEGRATIONS.md`](architecture/INTEGRATIONS.md)
 dan [`architecture/OPEN-QUESTIONS.md`](architecture/OPEN-QUESTIONS.md).
+Penulisan adapter nyata (bisa dikerjakan sekarang, diuji dengan WireMock):
+[#160](https://github.com/Zenixu/kantin-be/issues/160).
 
 ---
 
@@ -200,14 +205,24 @@ git push -u origin feat/nama-fitur   # buka PR ke develop
 
 Sisa pekerjaan dilacak sebagai **issue GitHub** di
 [`Zenixu/kantin-be`](https://github.com/Zenixu/kantin-be/issues) (label `tracking`).
+Indeks terkini: **[#165](https://github.com/Zenixu/kantin-be/issues/165)**.
 
 Yang menahan sisa progres:
 
-1. **6 integrasi eksternal masih `*Fallback`** — menunggu tim admin-be / mobile-be /
-   callback-be / internal-be (OPEN-QUESTIONS Q4–Q8) & public key RS256 produksi (Q1/Q2).
-2. **Hardening & operasional** — CI (test otomatis), proteksi branch, uji beban SLO tap p95,
-   metrics/observability.
-3. **Kelengkapan laporan** — laporan "Setoran kas TU" & ekspor "Per siswa" (PRD §9.5).
+1. **6 integrasi eksternal masih `*Fallback`** — kelas REST client nyata belum ada
+   (`grep` = 0). Menunggu tim admin-be / mobile-be / callback-be / internal-be
+   (OPEN-QUESTIONS Q4–Q8) & public key RS256 produksi (Q1/Q2). Lihat
+   [#160](https://github.com/Zenixu/kantin-be/issues/160) (adapter + uji WireMock)
+   dan [#164](https://github.com/Zenixu/kantin-be/issues/164) (blocked, kredensial produksi).
+2. **Hardening & operasional** — uji beban SLO tap p95 sudah punya harness (#145) tetapi
+   **hasil terukurnya belum dicatat** ([#161](https://github.com/Zenixu/kantin-be/issues/161));
+   CI per-PR, proteksi branch, & metrics sudah aktif (#141/#142/#146).
+3. **Rapikan doc drift** ([#162](https://github.com/Zenixu/kantin-be/issues/162)) &
+   **seed demo E2E** untuk membuka jalan kantin-fe
+   ([#163](https://github.com/Zenixu/kantin-be/issues/163)).
+
+> Laporan **"Setoran kas TU"** & ekspor **"Per siswa"** (PRD §9.5) **sudah selesai**
+> (#143/#144) — bukan lagi bagian dari sisa pekerjaan.
 
 ---
 
