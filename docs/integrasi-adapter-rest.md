@@ -65,10 +65,32 @@ kantin.integrasi.bukukas.max-attempts=3
 
 Atau via environment (lihat `.env.example`).
 
+## Penjaga kesiapan produksi (#164)
+
+Untuk memastikan **tidak ada `*Fallback` yang dipakai di staging/produksi**,
+`PemeriksaIntegrasiProduksi` berjalan saat aplikasi siap
+(`ApplicationReadyEvent`). Bila `kantin.integrasi.wajib-aktif=true`, start
+**DIGAGALKAN** (fail-closed) ketika:
+
+- salah satu dari **6 adapter** belum aktif (`…enabled=false` → masih `*Fallback`);
+- adapter aktif tetapi `base-url` kosong;
+- public key **RS256** admin-be / mobile-be belum terpasang
+  (`jwt.admin.public-key` / `jwt.mobile.public-key`).
+
+```properties
+# staging/produksi:
+kantin.integrasi.wajib-aktif=true
+```
+
+Default `false` agar dev/demo/test (yang memang memakai `*Fallback` karena
+kontrak tim SKOOLIA belum final) tetap berjalan. Pola sama dengan
+`PemeriksaTopologiDatabase` (ADR-0010/Q11).
+
 ## Verifikasi
 
 ```bash
-./mvnw test -Dtest=AdapterRestWireMockTest   # 22 uji kontrak
+./mvnw test -Dtest=AdapterRestWireMockTest          # 22 uji kontrak
+./mvnw test -Dtest=PemeriksaIntegrasiProduksiTest   # 6 uji penjaga produksi (#164)
 ```
 
 WireMock berjalan embedded sehingga uji ini **tidak butuh Docker** dan ikut

@@ -52,6 +52,18 @@ public class IntegrasiRestProperties {
     private Endpoint aktivasi = new Endpoint();
 
     /**
+     * Penjaga kesiapan produksi (issue <b>#164</b>). Bila {@code true}, saat
+     * aplikasi siap ({@code ApplicationReadyEvent}) kantin-be <b>menolak start</b>
+     * kecuali <b>keenam</b> adapter REST aktif + {@code base-url} terisi
+     * <b>dan</b> public key RS256 admin-be &amp; mobile-be terpasang.
+     *
+     * <p>Default {@code false} (dev/demo/test tetap memakai {@code *Fallback}).
+     * Set {@code true} di <b>staging/produksi</b> agar tidak ada {@code *Fallback}
+     * yang diam-diam aktif. Lihat {@link PemeriksaIntegrasiProduksi}.
+     */
+    private boolean wajibAktif = false;
+
+    /**
      * Satu endpoint REST yang bisa dinyalakan/dimatikan.
      *
      * <p>{@link #path} relatif terhadap {@link #baseUrl}. {@link #timeoutMs}
