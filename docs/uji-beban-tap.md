@@ -53,6 +53,22 @@ TAP_RATE=100 DURATION=3m k6 run load/k6/tap-slo.js
 > mis. dari `scripts/dev/mint-jwt-dummy.sh staf --sekolah 1 --role PETUGAS_KANTIN`)
 > agar skrip tidak perlu login.
 
+> **Tanpa Docker / pakai Podman:** bila mesin hanya punya **Podman** (rootless,
+> tanpa sudo), langkah 1 & 4 tetap jalan:
+> ```bash
+> podman run -d --name kantin-pg-lt -e POSTGRES_DB=kantin_db \
+>   -e POSTGRES_USER=kantin -e POSTGRES_PASSWORD=kantin_dev -p 55432:5432 postgres:18-alpine
+> podman run -d --name kantin-redis-lt -p 56379:6379 redis:7-alpine
+> # arahkan app (env menang atas application-local.properties):
+> SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:55432/kantin_db?stringtype=unspecified' \
+> SPRING_DATASOURCE_USERNAME=kantin SPRING_DATASOURCE_PASSWORD=kantin_dev \
+> SPRING_DATA_REDIS_PORT=56379 SPRING_PROFILES_ACTIVE=local,loadtest \
+> KANTIN_DEV_LOGIN_ENABLED=true KANTIN_RATE_LIMIT_ENABLED=false ./mvnw -o spring-boot:run
+> # k6 juga lewat Podman (host network agar menjangkau app di localhost):
+> podman run --rm -i --network=host -e BASE_URL=http://localhost:8082 -e TOKEN="$TOKEN" \
+>   -v "$PWD/load:/load:ro,z" grafana/k6 run /load/k6/tap-slo.js
+> ```
+
 ### Opsi env skrip k6
 
 | Env | Default | Arti |
@@ -96,13 +112,38 @@ Build **gagal** bila salah satu tak terpenuhi:
 > Isi tabel ini setelah menjalankan pada lingkungan target (runner CI / staging).
 > Lingkungan dev tanpa Docker tidak dapat menjalankan skenario nyata.
 
-| Tanggal | Lingkungan | TAP_RATE | Durasi | p95 (ms) | p99 (ms) | Gagal | Lulus SLO? |
-|---|---|---|---|---|---|---|---|
-| _(isi)_ | _(staging/CI)_ | 50 | 2m | | | | |
-| _(isi)_ | _(staging/CI)_ | 100 | 3m | | | | |
+### 5.1 Hasil — 2026-10-12 (laptop dev, via Podman)
 
-**Bila p95 > 1 dtk → buka temuan optimasi** (mis. indeks DB, cache, N+1 query,
-ukuran koneksi pool) sebagai issue terpisah dan tautkan ke #145.
+Lingkungan: **laptop dev** (Intel i5-8265U, 4 fisik/8 thread, 15 GiB RAM,
+Fedora 44) — **bukan** runner khusus. PostgreSQL 18 & Redis 7 via **Podman**
+(rootless), app `local,loadtest`, rate-limit OFF, `kantin_tap_duration_seconds`
+sebagai silang-cek. Seed `seed-loadtest.sql` (1 menu, 20 kartu).
+
+| TAP_RATE | Durasi | p95 (ms) | p99 (ms) | Gagal | Lulus SLO? |
+|---|---|---|---|---|---|
+| 5 | 30s | ~60 | ~90 | 0% | ✅ |
+| 10 | 30s | 102 | 129 | 0% | ✅ |
+| 20 | 30s | 111 | 154 | 0% | ✅ |
+| 30 | 30s | 225 | 352 | 0% | ✅ |
+| 40 | 30s | 1 990 | 2 310 | 0% | ❌ (mulai saturasi) |
+| 50 | 2m | 7 710 | 8 720 | 0% | ❌ (jenuh) |
+
+- **Fungsional 100%**: `tap_ok` = 100%, `http_req_failed` = 0%, `tap_rate_limited` = 0% pada **semua** laju → tidak ada error/5xx, hanya latensi.
+- **Kapasitas**: di laptop ini, SLO p95 ≤ 1 dtk **terpenuhi s.d. ~30 tap/dtk**; di atas ~35–40 tap/dtk latensi naik tajam (throughput jenuh ~36–41 req/s). Silang-cek server (`kantin_tap_duration_seconds`) **konsisten** (sum/count ≈ 4,93 dtk, max 12,1 dtk pada laju 50).
+- **Diagnosa**: jenuh karena **kapasitas host/JVM** (1 JVM + 1 PG di laptop yang juga dipakai kerja lain, load avg ~10 saat uji), **bukan bug korektnes**. Uji pembanding menyebar tap ke **20 menu** (hot-row `stok_cache` `FOR UPDATE` dihapus) hanya menaikkan p95 7,71 → 5,80 dtk — perbaikan kecil, jadi bukan hot-row yang dominan.
+
+### 5.2 Kesimpulan & tindak lanjut
+
+- **SLO belum tervalidasi pada laju target (50–100 tap/dtk)** karena keterbatasan
+  laptop dev. Angka di atas **bukan** hasil produksi/staging — jangan dipakai
+  sebagai bukti lulus SLO.
+- **Yang dibutuhkan**: jalankan skrip yang sama di **runner CI/staging** (workflow
+  nightly, §7) dengan DB/Redis khusus & resource memadai, lalu isi tabel §5.
+- **Bila p95 > 1 dtk di runner target** → buka temuan optimasi (mis. indeks DB,
+  cache, N+1 query, ukuran koneksi pool, tuning JVM) sebagai issue terpisah dan
+  tautkan ke #145/#161. Kandidat pertama dari diagnosa: serialisasi
+  `SELECT … FOR UPDATE` pada `stok_cache`/`saldo_cache` dan ukuran pool Hikari
+  (default 10) saat kontensi tinggi.
 
 ## 6. Lookup kartu ke SKOOLIA (Q7)
 
