@@ -101,7 +101,8 @@ class DemoE2EIT {
         TenantContext.set(IdentitasKantin.builder().userId("555").sekolahId(SEKOLAH).build());
         jdbc.execute("TRUNCATE TABLE transaksi_menunggu_konfirmasi, transaksi_item, transaksi, "
                 + "sesi_kasir, titik_kasir, kartu_tamu, saldo_ledger, saldo_cache, "
-                + "mutasi_stok, stok_cache, posting_buku_kas, sekolah_kantin_config CASCADE");
+                + "mutasi_stok, stok_cache, posting_buku_kas, kategori_menu, menu, "
+                + "sekolah_kantin_config CASCADE");
         jdbc.update("INSERT INTO titik_kasir (id, sekolah_id, nama, is_active, created_at, updated_at) "
                 + "VALUES (?, ?, 'Kasir Demo', true, now(), now())", TITIK, SEKOLAH);
         jdbc.update("INSERT INTO kategori_menu (id, sekolah_id, nama, urutan, is_active, created_at, updated_at) "
@@ -137,6 +138,13 @@ class DemoE2EIT {
         return r;
     }
 
+    /** ID sesi kasir TERBUKA (dibuka otomatis oleh tap) — dibaca langsung dari DB. */
+    private Long sesiTerbukaId() {
+        return jdbc.queryForObject(
+                "SELECT id FROM sesi_kasir WHERE sekolah_id = ? AND status = 'TERBUKA'",
+                Long.class, SEKOLAH);
+    }
+
     @Test
     @DisplayName("alur penuh: tap Kartu Tamu → tutup sesi → Buku Kas SUKSES (referensi demo)")
     void alurPenuhSampaiPostingBukuKas() {
@@ -149,8 +157,7 @@ class DemoE2EIT {
         assertThat(ledgerStok.stok(SEKOLAH, MENU_NASI)).isEqualTo(18);
 
         // 2) Tutup sesi → posting Buku Kas lewat BukuKasDemo (SUKSES, bukan dilewati).
-        SesiKasir sesi = sesiKasir.sesiTerbukaAtauBuka(SEKOLAH, TITIK);
-        SesiKasir ditutup = sesiKasir.tutupSesi(SEKOLAH, sesi.getId(), 555L, false);
+        SesiKasir ditutup = sesiKasir.tutupSesi(SEKOLAH, sesiTerbukaId(), 555L, false);
 
         assertThat(ditutup.getStatus()).isEqualTo(StatusSesiKasir.DITUTUP);
         assertThat(ditutup.getTotalBersih()).isEqualTo(16_000L);
@@ -162,17 +169,17 @@ class DemoE2EIT {
     @DisplayName("idempoten: posting ulang sesi yang sama tidak menggandakan entri Buku Kas")
     void postingUlangTidakMenggandakan() {
         tapService.tap(SEKOLAH, petugas, request("demo-e2e-2", 1));
-        SesiKasir sesi = sesiKasir.sesiTerbukaAtauBuka(SEKOLAH, TITIK);
-        SesiKasir ditutup = sesiKasir.tutupSesi(SEKOLAH, sesi.getId(), 555L, false);
+        Long sesiId = sesiTerbukaId();
+        SesiKasir ditutup = sesiKasir.tutupSesi(SEKOLAH, sesiId, 555L, false);
         String referensiAwal = ditutup.getReferensiBukuKas();
 
         // Posting ulang (mis. retry scheduler) → dilewati karena flag sudah true.
-        HasilPostingBukuKas hasil = bukuKasPosting.postingUlangSistem(SEKOLAH, sesi.getId());
+        HasilPostingBukuKas hasil = bukuKasPosting.postingUlangSistem(SEKOLAH, sesiId);
 
         assertThat(hasil.sukses()).isTrue();
         assertThat(hasil.pesan()).contains("Sudah diposting");
 
-        SesiKasir lagi = sesiKasir.ambil(SEKOLAH, sesi.getId());
+        SesiKasir lagi = sesiKasir.ambil(SEKOLAH, sesiId);
         assertThat(lagi.isPostingBukuKas()).isTrue();
         assertThat(lagi.getReferensiBukuKas()).isEqualTo(referensiAwal);
     }
