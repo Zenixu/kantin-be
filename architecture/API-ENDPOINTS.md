@@ -3,7 +3,7 @@
 > **Single source of truth endpoint kantin-be.** Semua path berprefix `/api`.
 > Respons selalu dibungkus `Response<T>` (`{ responseCode, message, data, ... }`).
 >
-> **Sinkron terakhir:** 2026-10-09 · **Total: 87 endpoint** (86 di `controller/` + 1 shim dev)
+> **Sinkron terakhir:** 2026-10-12 · **Total: 87 endpoint** (86 di `controller/` + 1 shim dev)
 > di **14 controller**. Dijaga otomatis oleh `ApiEndpointsDocTest` — uji ini
 > **gagal** bila daftar di bawah tidak lagi sama persis dengan anotasi
 > `@…Mapping` di kode. Bila menambah/mengubah endpoint, perbarui dokumen ini.
@@ -294,10 +294,14 @@
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|
 | Laporan ekspor PDF | ekspor PDF (saat ini hanya Excel) | Q3, Q5 |
-| Aktivasi & fee | toggle modul, fee platform | status dibaca (#42); toggle tetap milik internal-be (Q6) |
-| Top-up online | (dari callback-be) | Q4 — handler webhook sudah siap |
+| Aktivasi & fee | toggle modul, fee platform | status dibaca (#42); **toggle tetap milik internal-be** (Q6) — bukan tugas kantin-be |
+| Top-up online | handler webhook **sudah ada** (`POST /api/webhook/{sumber}`); sisa = **aktivasi adapter/kredensial callback-be** | Q4 — kontrak payload (OPEN-QUESTIONS) |
 
 > Lihat `MODULE-MAP.md` §1 untuk urutan fase & `OPEN-QUESTIONS.md` untuk Q1–Q7.
+> **Catatan (2026-10-12):** 6 adapter REST integrasi nyata sudah ada di
+> `config/integrasi/*RestClient` (#160); yang tersisa adalah menyambungkannya ke
+> endpoint/kredensial produksi (#164). Untuk demo tanpa kredensial, profil `demo`
+> mengaktifkan adapter demo (`dev/*Demo`).
 
 ---
 

@@ -39,10 +39,14 @@
   | `admin-be` | staf sekolah (petugas, pengelola, TU, bendahara, admin, kepsek) | ⛔ **PERLU KONFIRMASI** (path/endpoint) |
   | `mobile-be` | orang tua | ⛔ **PERLU KONFIRMASI** (repo belum ada di clone) |
 - Verifikasi pakai `jjwt` 0.12.6, algoritma **RS256**. **Fallback HS256 DILARANG** di production.
-- Klaim yang dipakai: `user_id`, `sekolah_id`, `role` (perlu konfirmasi bentuk persisnya).
-- Implementasi: dua `JwtDecoder` + `AdminJwtAuthTokenFilter` / `MobileJwtAuthTokenFilter`.
+- Klaim yang dipakai: `user_id`, `sekolah_id`, `role` (bentuk persisnya diadaptasi lewat `KlaimResolver`).
+- Implementasi: `KantinJwtDecoder` (RS256, fail-closed bila key kosong) + filter JWT.
 
-> ⛔ **BLOCKING:** tanpa format klaim & public key yang pasti, fondasi auth tidak bisa ditulis. Lihat [`OPEN-QUESTIONS.md`](./OPEN-QUESTIONS.md) Q1.
+> 🟡 **DIIMPLEMENTASI (adaptasi Q1/Q2).** Fondasi auth **sudah jalan** — decoder
+> toleran terhadap klaim yang tersedia & memanggil `GET /api/auth/me` admin-be untuk
+> melengkapi identitas bila klaim absen. Yang **masih perlu**: **public key RS256
+> produksi** admin-be & mobile-be (dev memakai keypair temporary). Lihat
+> [`OPEN-QUESTIONS.md`](./OPEN-QUESTIONS.md) Q1/Q2 & [#164](https://github.com/Zenixu/kantin-be/issues/164).
 
 ---
 
@@ -196,9 +200,12 @@ POST /api/webhook/{sumber}   (mis. CALLBACK_BE)
 
 - Push ke ortu untuk: belanja, void, top-up online berhasil, top-up tunai TU, refund/pindah.
 - Contoh: `"Budi belanja Rp8.000 di Kantin: Nasi Uduk, Es Jeruk"`.
-- Implementasi: `NotifikasiClient` → API internal mobile-be.
+- Implementasi: `NotifikasiPort` (fallback fail-open + adapter REST `NotifikasiRestClient` + demo `NotifikasiDemo`).
 
-> ⛔ **BLOCKING:** repo mobile-be belum ada di clone. Perlu endpoint & format. Lihat Q5.
+> 🟡 **ADAPTER SIAP; TINGGAL AKTIVASI.** Kontrak ditetapkan (`POST /api/internal/notifikasi`
+> ke mobile-be, lihat Q5) — adapter REST + uji kontrak WireMock sudah ada, **default nonaktif**.
+> Untuk demo tanpa kredensial, profil `demo` memakai `NotifikasiDemo`. Aktivasi produksi
+> menunggu endpoint/kredensial ([#164](https://github.com/Zenixu/kantin-be/issues/164)).
 
 ---
 
@@ -208,7 +215,11 @@ POST /api/webhook/{sumber}   (mis. CALLBACK_BE)
 - Konfigurasi fee platform per sekolah (per top-up nominal/persentase &/atau langganan).
 - Laporan fee per sekolah per periode.
 
-> ⛔ **BLOCKING:** kontrak API internal-be perlu dikonfirmasi. Lihat Q6.
+> 🟡 **ADAPTER SIAP; TINGGAL AKTIVASI.** Kontrak ditetapkan (Q6) — `AktivasiModulFilter`
+> menegakkan toggle (sekolah nonaktif → 409, fail-open bila status tak diketahui),
+> adapter REST + demo tersedia. Toggle tetap **milik internal-be** (bukan tugas
+> kantin-be). Aktivasi produksi menunggu endpoint/kredensial
+> ([#164](https://github.com/Zenixu/kantin-be/issues/164)).
 
 ---
 

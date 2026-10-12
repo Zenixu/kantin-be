@@ -4,9 +4,9 @@ Backend modul **kantin sekolah cashless** untuk platform SKOOLIA. 100% non-tunai
 pembeli membayar dengan **tap kartu RFID**, saldo didebit dari ledger append-only,
 stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
-> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **223 unit test hijau** ·
-> **22 migrasi Flyway**. Sisa pekerjaan: **integrasi eksternal** (masih `*Fallback` — menunggu
-> tim SKOOLIA & public key RS256) dan **hardening/operasional**
+> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **256 unit test + 30 integration test** ·
+> **22 migrasi Flyway**. Sisa pekerjaan: **integrasi eksternal** (6 adapter REST **sudah ada**, menunggu
+> kredensial/kontrak tim SKOOLIA) dan **hardening/operasional**
 > — lihat [Peta Sisa Pekerjaan](#-peta-sisa-pekerjaan).
 >
 > Daftar endpoint lengkap & tersinkron: [`architecture/API-ENDPOINTS.md`](architecture/API-ENDPOINTS.md)
@@ -97,20 +97,27 @@ karena MSYS mengubah path. Pakai salah satu:
 
 ```bash
 ./mvnw.cmd clean compile      # Opsi A — PowerShell / CMD
-./mvn-run.sh clean test       # Opsi B — wrapper lokal untuk Git Bash
+./mvn-run.sh clean test       # Opsi B — helper lokal Git Bash (tidak di-commit; lihat catatan)
 ```
+
+> `mvn-run.sh` adalah helper lokal yang **tidak dilacak git** (berisi path mesin
+> masing-masing) — buat sendiri bila perlu, lihat [`README-DEV.md`](README-DEV.md) §7.
+> Untuk CI/anggota lain, pakai `./mvnw` / `./mvnw.cmd` (Opsi A).
 
 ---
 
 ## 🧪 Test & Build
 
 ```bash
-./mvn-run.sh -o -q test       # 223 unit test (40 file *Test)
-./mvn-run.sh -o -q verify     # + 30 integration test (*IT, Testcontainers)
-./mvn-run.sh clean package    # build jar
+./mvnw -o -q test             # 256 unit test (43 file *Test)
+./mvnw -o -q verify           # + 30 integration test (*IT, Testcontainers)
+./mvnw clean package          # build jar
 ```
 
-- Unit test: **223 lolos, 0 gagal** (`target/surefire-reports/`).
+> Di Git Bash (MSYS) `./mvnw` bisa gagal — pakai `./mvnw.cmd` atau helper lokal
+> `./mvn-run.sh` (lihat bagian Git Bash di atas).
+
+- Unit test: **256 lolos, 0 gagal** (`target/surefire-reports/`).
 - Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata) —
   butuh **Docker aktif**; dijalankan lewat `verify`/`failsafe`.
 - `TODO`/`FIXME` di `src/main`: **0**.
@@ -179,20 +186,23 @@ docs/                              spesifikasi, plan, integrasi, SQL manual
 
 ## 🔌 Integrasi Eksternal
 
-Semua panggilan lintas-sistem lewat `service/integrasi/`. Status saat ini
-(**kelas REST client nyata belum ada** — masih port + `*Fallback`):
+Semua panggilan lintas-sistem lewat `service/integrasi/`. **6 adapter REST nyata sudah ada**
+(`config/integrasi/*RestClient`, diuji kontrak WireMock — [#160](https://github.com/Zenixu/kantin-be/issues/160))
+tetapi **default nonaktif** (`kantin.integrasi.*.enabled=false`); selama nonaktif, `*Fallback` yang dipakai.
+Di staging/produksi, `kantin.integrasi.wajib-aktif=true` **menggagalkan start** bila masih ada `*Fallback`
+([#164](https://github.com/Zenixu/kantin-be/issues/164)). Untuk demo tanpa kredensial, profil `demo`
+mengaktifkan adapter **demo** yang meniru sistem eksternal (`dev/*Demo`):
 
 | Target | Kegunaan | Status |
 |---|---|---|
-| `admin-be` | Buku Kas, lookup kartu/siswa | ⚠️ masih `*Fallback` (fail-open) |
-| `mobile-be` | Notifikasi, identitas ortu | ⚠️ masih `*Fallback` |
+| `admin-be` | Buku Kas, lookup kartu/siswa | ⚠️ adapter REST ada; default `*Fallback` (butuh kredensial) |
+| `mobile-be` | Notifikasi, identitas ortu | ⚠️ adapter REST ada; default `*Fallback` (butuh kredensial) |
 | `callback-be` | Callback top-up online | ✅ webhook HMAC terpasang |
-| `internal-be` | Aktivasi modul & fee platform | ⚠️ masih `*Fallback` |
+| `internal-be` | Aktivasi modul & fee platform | ⚠️ adapter REST ada; default `*Fallback` (butuh kredensial) |
 
 Rincian kontrak & pertanyaan yang memblokir: [`architecture/INTEGRATIONS.md`](architecture/INTEGRATIONS.md)
 dan [`architecture/OPEN-QUESTIONS.md`](architecture/OPEN-QUESTIONS.md).
-Penulisan adapter nyata (bisa dikerjakan sekarang, diuji dengan WireMock):
-[#160](https://github.com/Zenixu/kantin-be/issues/160).
+Jalur demo end-to-end (tanpa API key): [`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md).
 
 ---
 
@@ -222,17 +232,20 @@ Indeks terkini: **[#165](https://github.com/Zenixu/kantin-be/issues/165)**.
 
 Yang menahan sisa progres:
 
-1. **6 integrasi eksternal masih `*Fallback`** — kelas REST client nyata belum ada
-   (`grep` = 0). Menunggu tim admin-be / mobile-be / callback-be / internal-be
-   (OPEN-QUESTIONS Q4–Q8) & public key RS256 produksi (Q1/Q2). Lihat
-   [#160](https://github.com/Zenixu/kantin-be/issues/160) (adapter + uji WireMock)
-   dan [#164](https://github.com/Zenixu/kantin-be/issues/164) (blocked, kredensial produksi).
-2. **Hardening & operasional** — uji beban SLO tap p95 sudah punya harness (#145) tetapi
-   **hasil terukurnya belum dicatat** ([#161](https://github.com/Zenixu/kantin-be/issues/161));
-   CI per-PR, proteksi branch, & metrics sudah aktif (#141/#142/#146).
-3. **Rapikan doc drift** ([#162](https://github.com/Zenixu/kantin-be/issues/162)) &
-   **seed demo E2E** untuk membuka jalan kantin-fe
-   ([#163](https://github.com/Zenixu/kantin-be/issues/163)).
+1. **6 integrasi eksternal** — adapter REST nyata **sudah ada** & diuji WireMock
+   ([#160](https://github.com/Zenixu/kantin-be/issues/160)), tetapi **belum tersambung ke endpoint/kunci
+   produksi**. Menunggu tim admin-be / mobile-be / callback-be / internal-be
+   (OPEN-QUESTIONS Q4–Q8) & public key RS256 produksi (Q1/Q2) —
+   [#164](https://github.com/Zenixu/kantin-be/issues/164) (blocked). Jalur **demo** tanpa API key
+   sudah tersedia ([`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md)).
+2. **Hardening & operasional** — hasil uji beban SLO tap p95 **belum lulus di laju target 50–100 tap/dtk**
+   ([#172](https://github.com/Zenixu/kantin-be/issues/172), hasil k6 tercatat di
+   [`docs/uji-beban-tap.md`](docs/uji-beban-tap.md)); proteksi branch **belum aktif**
+   ([#171](https://github.com/Zenixu/kantin-be/issues/171)); checklist hardening pra-produksi
+   ([#173](https://github.com/Zenixu/kantin-be/issues/173)); UAT & cakupan test
+   ([#174](https://github.com/Zenixu/kantin-be/issues/174)). CI per-PR & metrics sudah aktif (#141/#146).
+3. **Doc drift** ([#175](https://github.com/Zenixu/kantin-be/issues/175)) & **seed demo E2E**
+   ([#163](https://github.com/Zenixu/kantin-be/issues/163)) — sebagian besar sudah dirapikan.
 
 > Laporan **"Setoran kas TU"** & ekspor **"Per siswa"** (PRD §9.5) **sudah selesai**
 > (#143/#144) — bukan lagi bagian dari sisa pekerjaan.

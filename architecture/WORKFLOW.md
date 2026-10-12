@@ -27,8 +27,11 @@ main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
 
 > **Tidak boleh push langsung ke `main` atau `develop`.** Selalu via PR.
 >
-> ✅ **Proteksi branch AKTIF** (sejak 2026-10-06) — PR ke `develop`/`main` wajib
-> **2 approval**. Detail, cara verifikasi, & riwayat: [`docs/plan-branch-protection.md`](../docs/plan-branch-protection.md).
+> ⚠️ **Proteksi branch BELUM AKTIF** — meskipun `WORKFLOW.md` & `docs/plan-branch-protection.md`
+> sebelumnya menyatakan aktif, verifikasi GitHub API (2026-10-12) menunjukkan ruleset `main`
+> `enforcement=disabled` dan `branches/main.protected=false`. Perbaikan dilacak di
+> [#171](https://github.com/Zenixu/kantin-be/issues/171). **Sampai aktif, disiplin PR manual wajib.**
+> Detail & cara verifikasi: [`docs/plan-branch-protection.md`](../docs/plan-branch-protection.md).
 
 ---
 
