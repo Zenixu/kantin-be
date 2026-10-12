@@ -31,6 +31,28 @@
 	<!-- Testcontainers BOM: Spring Boot 4 tidak lagi mengelola versinya. -->
 	<dependencyManagement>
 		<dependencies>
+			<!--
+				WireMock 3.13 (uji kontrak #160) memakai wiremock-jetty12 yang
+				dibangun untuk Jetty 12.0.x, sedangkan Spring Boot 4.0.2 mengelola
+				Jetty 12.1.5 (menghapus Environment.ensure(String)) →
+				NoSuchMethodError saat start. Jetty di sini hanya test-scope
+				(runtime web = Tomcat), jadi BOM 12.0.16 diimpor untuk
+				menyelaraskannya. Impor di POM ini menang atas versi warisan.
+			-->
+			<dependency>
+				<groupId>org.eclipse.jetty</groupId>
+				<artifactId>jetty-bom</artifactId>
+				<version>12.0.16</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.eclipse.jetty.ee10</groupId>
+				<artifactId>jetty-ee10-bom</artifactId>
+				<version>12.0.16</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<dependency>
 				<groupId>org.testcontainers</groupId>
 				<artifactId>testcontainers-bom</artifactId>
@@ -203,6 +225,55 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- ============================================================ -->
+		<!-- WIREMOCK: uji kontrak adapter REST integrasi (issue #160)    -->
+		<!-- ============================================================ -->
+		<!-- Stub HTTP lokal untuk membuktikan adapter memetakan          -->
+		<!-- sukses/timeout/5xx/payload salah dengan benar. TIDAK butuh   -->
+		<!-- Docker (server embedded) sehingga ikut jalan di `mvn test`.  -->
+		<dependency>
+			<groupId>org.wiremock</groupId>
+			<artifactId>wiremock</artifactId>
+			<version>3.13.1</version>
+			<scope>test</scope>
+			<exclusions>
+				<!--
+					WireMock core menarik Jetty 11 (jetty-servlet/servlets/webapp &
+					http2-server 11.0.24) sementara Spring Boot 4 memakai Jetty 12.
+					Campuran ini memecah runtime ("WriteFlusher$Listener" hilang).
+					Jetty 11 di-exclude; wiremock-jetty12 di bawah menyediakan
+					implementasi Jetty 12 (jetty-ee10-servlet).
+				-->
+				<exclusion>
+					<groupId>org.eclipse.jetty</groupId>
+					<artifactId>jetty-servlet</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.eclipse.jetty</groupId>
+					<artifactId>jetty-servlets</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.eclipse.jetty</groupId>
+					<artifactId>jetty-webapp</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.eclipse.jetty.http2</groupId>
+					<artifactId>http2-server</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<!--
+			WireMock 3.13 default memakai Jetty 11; proyek ini memakai Jetty 12
+			(Spring Boot 4). Modul wiremock-jetty12 menyediakan HttpServerFactory
+			untuk Jetty 12 — tanpa ini WireMockServer gagal start
+			("Jetty 11 is not present").
+		-->
+		<dependency>
+			<groupId>org.wiremock</groupId>
+			<artifactId>wiremock-jetty12</artifactId>
+			<version>3.13.1</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
