@@ -24,6 +24,13 @@ GET  /api/laporan/…             # cek laporan
 Data yang di-seed: sekolah `1`, titik kasir `DEMO1`, 1 sesi **TERBUKA**, 3 menu,
 **5 Kartu Tamu** (UID `DE000001`..`DE000005`, saldo Rp 100.000).
 
+> **Integrasi eksternal disimulasikan (bukan API key).** Profil `demo` juga
+> mengaktifkan adapter **demo** untuk 6 integrasi yang masih `blocked` (butuh
+> kredensial tim SKOOLIA) — Buku Kas, Notifikasi, Lookup kartu, Status siswa,
+> UID siswa, Aktivasi modul. Semua meniru sistem eksternal di lokal sehingga alur
+> end-to-end (termasuk posting Buku Kas & notifikasi) benar-benar berjalan tanpa
+> API key. Lihat §9.
+
 ---
 
 ## 1. Infrastruktur
@@ -140,11 +147,26 @@ psql "postgresql://kantin:kantin_dev@localhost:5432/kantin_db" -f load/seed/seed
 
 | Gerbang | Default | Efek |
 |---|---|---|
-| `kantin.demo.enabled` | `false` | `KartuLookupDemo` hanya hidup bila `true` (profil `demo`) |
+| `kantin.demo.enabled` | `false` | Adapter **demo** (6 integrasi) & `KartuLookupDemo` hanya hidup bila `true` (profil `demo`) |
 | `kantin.loadtest.enabled` | `false` | `KartuLookupLoadTest` hanya hidup bila `true` (profil `loadtest`) |
 | `kantin.dev-login.enabled` | `false` | Shim login hanya hidup bila `true` + profil `local` |
+| `kantin.integrasi.*.enabled` | `false` | Adapter REST **nyata** hanya hidup bila `true` (staging/produksi) |
+| `kantin.integrasi.wajib-aktif` | `false` | Bila `true`, start DIGAGALKAN bila masih ada `*Fallback` (penjaga produksi #164) |
 | `@Profile("local")` | — | Shim login dev **tidak** dimuat di staging/produksi |
 
+**Adapter demo (semua digerbangi `kantin.demo.enabled`):**
+
+| Port | Kelas demo | Meniru | Perilaku |
+|---|---|---|---|
+| `KartuLookupPort` | `KartuLookupDemo` | admin-be lookup siswa | Kenali **Kartu Tamu** (data lokal) |
+| `BukuKasPort` | `BukuKasDemo` | admin-be Buku Kas | Entri **SUKSES** (referensi tiruan) |
+| `NotifikasiPort` | `NotifikasiDemo` | mobile-be push | **TERKIRIM** (log ringkasan) |
+| `StatusSiswaPort` | `StatusSiswaDemo` | admin-be status siswa | Siswa **aktif**; blokir = log |
+| `UidSiswaPort` | `UidSiswaDemo` | admin-be anti-tabrakan UID | UID **tidak** dipakai siswa |
+| `AktivasiModulPort` | `AktivasiModulDemo` | internal-be aktivasi/fee | Modul **aktif** (`diketahui=true`) |
+
+- Semua adapter demo `@Primary` — **jangan** aktifkan bersamaan dengan adapter
+  REST nyata (`kantin.integrasi.*.enabled=true`) → dua `@Primary` ambigu.
 - `KartuLookupDemo` & `KartuLookupLoadTest` sama-sama `@Primary` — **jangan**
   aktifkan keduanya bersamaan (dua `@Primary` → ambigu). Pilih satu profil.
 - Identitas **siswa** tetap menunggu Q7: hanya Kartu Tamu yang dikenali di sini.
