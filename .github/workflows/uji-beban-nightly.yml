@@ -1,6 +1,7 @@
 name: Uji Beban (nightly)
 
-# Uji beban SLO tap p95 <= 1 dtk (PRD §12 no.8) — issue #145.
+# Uji beban SLO tap p95 <= 1 dtk (PRD §12 no.8) — issue #145, divalidasi di
+# runner target untuk issue #172.
 #
 # OPSIONAL / TIDAK MEMBLOK PR: butuh Docker, boot aplikasi, dan beban tinggi,
 # jadi dijalankan TERJADWAL (nightly) atau manual — bukan pada setiap PR.
@@ -8,6 +9,10 @@ name: Uji Beban (nightly)
 #
 # Build GAGAL bila threshold k6 tak terpenuhi (p95 >= 1 dtk / gagal > 1%),
 # sehingga regresi performa terdeteksi otomatis dan tampil sebagai run merah.
+#
+# Sejak issue #172, nightly menjalankan SELURUH rentang target PRD
+# (50–100 tap/dtk: 50, 75, 100) dan menyilang-cek p95 dengan metrik SERVER
+# `kantin_tap_duration_seconds` (Prometheus) — bukan hanya sisi klien k6.
 
 on:
   schedule:
@@ -16,11 +21,11 @@ on:
   workflow_dispatch:
     inputs:
       tap_rate:
-        description: 'Laju tap (tap/detik)'
+        description: 'Laju tap (tap/detik). Kosongkan untuk rentang penuh 50 75 100.'
         required: false
-        default: '50'
+        default: ''
       duration:
-        description: 'Lama skenario (mis. 2m, 5m)'
+        description: 'Lama skenario per laju (mis. 2m, 5m)'
         required: false
         default: '2m'
 
@@ -35,7 +40,7 @@ jobs:
   uji-beban:
     name: Uji beban tap (k6)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     services:
       postgres:
@@ -72,8 +77,9 @@ jobs:
       KANTIN_DEV_LOGIN_ENABLED: 'true'
       # Matikan rate limit agar 429 tidak mengotori pengukuran latensi jalur sukses.
       KANTIN_RATE_LIMIT_ENABLED: 'false'
-      # Beban (dari input manual atau default).
-      TAP_RATE: ${{ github.event.inputs.tap_rate || '50' }}
+      # Laju yang diuji: DEFAULT = seluruh rentang target PRD (50–100 tap/dtk).
+      # Dispatch manual dengan input tap_rate menguji satu laju saja.
+      TAP_RATES: ${{ github.event.inputs.tap_rate || '50 75 100' }}
       DURATION: ${{ github.event.inputs.duration || '2m' }}
 
     steps:
@@ -129,19 +135,64 @@ jobs:
           sudo apt-get install -y k6
           k6 version
 
-      - name: Jalankan uji beban (k6)
-        run: |
-          k6 run --summary-export=k6-summary.json load/k6/tap-slo.js
-          echo "=== Ringkasan k6 ==="
-          cat k6-summary.json
+      # Sanity: pastikan alat silang-cek Prometheus sehat sebelum dipakai.
+      - name: Uji mandiri parser p95 (tanpa dependensi)
+        run: python3 load/k6/p95-prometheus.py --self-test
 
-      - name: Unggah hasil (ringkasan k6 + log app)
+      - name: Jalankan uji beban (k6) untuk tiap laju + silang-cek Prometheus
+        run: |
+          set -uo pipefail
+          mkdir -p hasil-k6
+          gagal=0
+
+          for rate in $TAP_RATES; do
+            echo "::group::TAP_RATE=$rate (durasi $DURATION)"
+            # Snapshot metrik SERVER sebelum & sesudah agar p95 sisi server
+            # dihitung untuk laju INI saja (counter Prometheus monoton/kumulatif).
+            curl -sf http://localhost:8082/actuator/prometheus \
+              -o "hasil-k6/prom-sebelum-$rate.txt" || true
+
+            if ! TAP_RATE="$rate" DURATION="$DURATION" \
+                 k6 run --summary-export="hasil-k6/k6-summary-$rate.json" load/k6/tap-slo.js; then
+              echo "::warning::k6 TAP_RATE=$rate MELANGGAR threshold (p95>=1 dtk / gagal>1%)"
+              gagal=1
+            fi
+
+            curl -sf http://localhost:8082/actuator/prometheus \
+              -o "hasil-k6/prom-sesudah-$rate.txt" || true
+
+            echo "--- Silang-cek server (kantin_tap_duration_seconds) TAP_RATE=$rate ---"
+            if ! python3 load/k6/p95-prometheus.py --gerbang \
+                   "hasil-k6/prom-sebelum-$rate.txt" "hasil-k6/prom-sesudah-$rate.txt" \
+                   | tee "hasil-k6/prom-p95-$rate.json"; then
+              echo "::warning::p95 sisi SERVER (Prometheus) melanggar SLO pada TAP_RATE=$rate"
+              gagal=1
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "=== Ringkasan k6 tiap laju ==="
+          for f in hasil-k6/k6-summary-*.json; do
+            echo "## $f"; cat "$f"; echo
+          done
+
+          echo "=== Silang-cek server tiap laju ==="
+          for f in hasil-k6/prom-p95-*.json; do
+            echo "## $f"; cat "$f"; echo
+          done
+
+          if [ "$gagal" -ne 0 ]; then
+            echo "::error::SLO tap p95 <= 1 dtk TIDAK terpenuhi pada >=1 laju (lihat ringkasan)."
+            exit 1
+          fi
+
+      - name: Unggah hasil (ringkasan k6 + prom + log app)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hasil-uji-beban
           path: |
-            k6-summary.json
+            hasil-k6/
             app.log
           if-no-files-found: ignore
           retention-days: 14
