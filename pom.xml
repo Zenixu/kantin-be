@@ -324,12 +324,13 @@
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<configuration>
 					<!--
-						PENTING (issue #174): IT harus memakai argLine JaCoCo
-						(${failsafeArgLine}) agar cakupan dari integration test
-						tergabung ke jacoco.exec. Tanpa ini, hanya cakupan unit
-						yang terukur (IT jalan tapi tidak tercatat).
+						PENTING (issue #174): Failsafe TIDAK memakai argLine JaCoCo
+						secara default (berbeda dari Surefire). Set eksplisit ke
+						${argLine} (yang diisi jacoco:prepare-agent) agar cakupan
+						integration test tergabung ke jacoco.exec. Tanpa ini, IT
+						jalan tetapi cakupannya tidak tercatat.
 					-->
-					<argLine>${failsafeArgLine}</argLine>
+					<argLine>${argLine}</argLine>
 					<systemPropertyVariables>
 						<api.version>${docker.api.version}</api.version>
 					</systemPropertyVariables>
@@ -356,12 +357,15 @@
 				</configuration>
 			</plugin>
 			<!--
-				JaCoCo (issue #174): cakupan test untuk unit (Surefire) + integrasi
-				(Failsafe, Testcontainers). `prepare-agent` menyuntik argLine; agent
-				terpisah untuk IT (argLine IT) agar hasil keduanya tergabung.
-				`report` menulis target/site/jacoco/ (HTML+XML+CSV) pada fase verify.
-				Tanpa `check` yang menggagalkan build — angka cakupan dicatat sebagai
-				artefak & gerbang lunak (lihat docs/uat-dan-dod-rilis.md).
+				JaCoCo (issue #174): cakupan test unit (Surefire) + integrasi
+				(Failsafe, Testcontainers), digabung ke satu target/jacoco.exec.
+				- prepare-agent (initialize): menyetel properti `argLine` ke
+				  -javaagent:...jacoco.exec. Surefire memakai `argLine` secara
+				  default; Failsafe TIDAK, jadi argLine di-set eksplisit di
+				  konfigurasi maven-failsafe-plugin (lihat plugin di atas).
+				- report (verify): menulis target/site/jacoco/ (HTML+XML+CSV).
+				Tanpa `check` yang menggagalkan build — angka cakupan dicatat
+				sebagai artefak & gerbang lunak (lihat docs/uat-dan-dod-rilis.md).
 			-->
 			<plugin>
 				<groupId>org.jacoco</groupId>
@@ -373,22 +377,6 @@
 						<goals>
 							<goal>prepare-agent</goal>
 						</goals>
-					</execution>
-					<execution>
-						<id>prepare-agent-it</id>
-						<goals>
-							<goal>prepare-agent-integration</goal>
-						</goals>
-						<configuration>
-							<!--
-								Samakan file exec dengan unit test (default
-								prepare-agent-integration = jacoco-it.exec, TIDAK
-								dibaca oleh goal `report`). Dengan destFile yang
-								sama + append=true (default), cakupan unit & IT
-								tergabung ke satu jacoco.exec (issue #174).
-							-->
-							<destFile>${project.build.directory}/jacoco.exec</destFile>
-						</configuration>
 					</execution>
 					<execution>
 						<id>report</id>
