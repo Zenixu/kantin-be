@@ -110,7 +110,7 @@ karena MSYS mengubah path. Pakai salah satu:
 
 ```bash
 ./mvnw -o -q test             # 256 unit test (43 file *Test)
-./mvnw -o -q verify           # + 30 integration test (*IT, Testcontainers)
+./mvnw -o -q verify           # + 30 integration test (*IT, Testcontainers) + laporan JaCoCo
 ./mvnw clean package          # build jar
 ```
 
@@ -120,6 +120,9 @@ karena MSYS mengubah path. Pakai salah satu:
 - Unit test: **256 lolos, 0 gagal** (`target/surefire-reports/`).
 - Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata) —
   butuh **Docker aktif**; dijalankan lewat `verify`/`failsafe`.
+- **Cakupan test (JaCoCo)**: `./mvnw verify` menulis `target/site/jacoco/`
+  (HTML/XML/CSV); diunggah sebagai artefak CI. Angka & skenario UAT/DoD rilis:
+  [`docs/uat-dan-dod-rilis.md`](docs/uat-dan-dod-rilis.md).
 - `TODO`/`FIXME` di `src/main`: **0**.
 
 ### CI (otomatis per-PR)

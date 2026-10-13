@@ -26,6 +26,13 @@
 			lebih lama, override: -Ddocker.api.version=1.43
 		-->
 		<docker.api.version>1.44</docker.api.version>
+		<!--
+			JaCoCo (issue #174): mengukur cakupan test. Dijalankan pada `verify`
+			(prepare-agent di initialize, report di verify) sehingga `./mvnw verify`
+			menghasilkan laporan HTML + XML + CSV di target/site/jacoco/.
+			Versi 0.8.13 mendukung bytecode Java 25.
+		-->
+		<jacoco.version>0.8.13</jacoco.version>
 	</properties>
 
 	<!-- Testcontainers BOM: Spring Boot 4 tidak lagi mengelola versinya. -->
@@ -340,6 +347,40 @@
 						</exclude>
 					</excludes>
 				</configuration>
+			</plugin>
+			<!--
+				JaCoCo (issue #174): cakupan test untuk unit (Surefire) + integrasi
+				(Failsafe, Testcontainers). `prepare-agent` menyuntik argLine; agent
+				terpisah untuk IT (argLine IT) agar hasil keduanya tergabung.
+				`report` menulis target/site/jacoco/ (HTML+XML+CSV) pada fase verify.
+				Tanpa `check` yang menggagalkan build — angka cakupan dicatat sebagai
+				artefak & gerbang lunak (lihat docs/uat-dan-dod-rilis.md).
+			-->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>prepare-agent-it</id>
+						<goals>
+							<goal>prepare-agent-integration</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

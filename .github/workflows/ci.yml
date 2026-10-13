@@ -51,3 +51,13 @@ jobs:
             target/failsafe-reports/
           if-no-files-found: ignore
           retention-days: 7
+
+      # Laporan cakupan JaCoCo (issue #174) — HTML + XML + CSV.
+      - name: Unggah laporan cakupan (JaCoCo)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laporan-coverage
+          path: target/site/jacoco/
+          if-no-files-found: ignore
+          retention-days: 7
