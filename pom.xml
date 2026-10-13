@@ -379,6 +379,16 @@
 						<goals>
 							<goal>prepare-agent-integration</goal>
 						</goals>
+						<configuration>
+							<!--
+								Samakan file exec dengan unit test (default
+								prepare-agent-integration = jacoco-it.exec, TIDAK
+								dibaca oleh goal `report`). Dengan destFile yang
+								sama + append=true (default), cakupan unit & IT
+								tergabung ke satu jacoco.exec (issue #174).
+							-->
+							<destFile>${project.build.directory}/jacoco.exec</destFile>
+						</configuration>
 					</execution>
 					<execution>
 						<id>report</id>
