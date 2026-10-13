@@ -35,6 +35,8 @@ main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
 > **menolak force-push (`non_fast_forward`) & penghapusan branch (`deletion`)**.
 > Push langsung ditolak: `GH013: Changes must be made through a pull request`.
 > Verifikasi: `gh api repos/Zenixu/kantin-be/branches/main --jq .protected` → `true`.
+> **Bypass:** akun owner `Zenixu` boleh **merge PR** tanpa menunggu approval (mode
+> `pull_request`) — karena penulis tak bisa self-approve; **push langsung tetap ditolak**.
 > Detail & cara verifikasi: [`docs/plan-branch-protection.md`](../docs/plan-branch-protection.md).
 
 ---

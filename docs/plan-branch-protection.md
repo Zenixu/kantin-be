@@ -71,7 +71,15 @@ remote: - Required status check "Build & Test (JDK 25)" is expected.
 | Branch harus up-to-date (`strict`) | ya |
 | Force-push | ditolak (`non_fast_forward`) |
 | Hapus branch | ditolak (`deletion`) |
-| Bypass | **tidak ada** (admin pun ikut aturan) |
+| Bypass | **owner `Zenixu`** boleh **merge PR** tanpa menunggu approval (mode `pull_request`); **push langsung tetap diblokir** |
+
+> **Bypass owner (2026-10-13).** Karena penulis PR **tidak boleh** meng-approve
+> PR-nya sendiri, PR yang dibuat akun owner (`Zenixu`) akan selalu berstatus
+> `REVIEW_REQUIRED` dan tak bisa di-merge. Agar owner tetap bisa bekerja, akun
+> `Zenixu` didaftarkan sebagai **bypass actor** dengan mode **`pull_request`**:
+> boleh **merge PR** (tombol *Merge without waiting for requirements* / `gh pr merge
+> --admin`), **tetapi tidak** boleh push/force-push langsung ke `main`/`develop`.
+> Anggota lain tetap tunduk penuh pada aturan (wajib PR + 1 approval).
 
 > **Catatan koreksi (2026-10-12):** klaim §2 sebelumnya ("proteksi aktif, terbukti PR #5
 > ditolak") **tidak berlaku** — ruleset `main` saat itu `enforcement=disabled` **dan**
@@ -153,3 +161,4 @@ Uji langsung: push ke `develop` dari branch lokal → **ditolak** GitHub.
 | 2026-10-13 | Owner (via Zenixu) **mengaktifkan proteksi**: ruleset `main` (24626209) di-`active` + target ref diisi; ruleset `develop` baru dibuat (id `24968833`, `active`). Aturan: PR + approval + status check `Build & Test (JDK 25)` + branch up-to-date + blok force-push/hapus. |
 | 2026-10-13 | **Keputusan owner: jumlah approval = 1** (bukan 2) — cukup sebagai gerbang review untuk tim kecil tanpa memperlambat merge. Kedua ruleset diperbarui (`required_approving_review_count=1`). |
 | 2026-10-13 | **Verifikasi:** `branches/{main,develop}.protected=true`; uji push langsung → `GH013: Changes must be made through a pull request` (ditolak). Status dokumen → **AKTIF**. #171 selesai. |
+| 2026-10-13 | Ditambahkan **bypass owner** (`Zenixu`, mode `pull_request`) — owner boleh merge PR sendiri (penulis tak bisa self-approve), tapi **push langsung tetap diblokir**. Aturan tetap penuh untuk anggota lain. |
