@@ -323,6 +323,13 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<configuration>
+					<!--
+						PENTING (issue #174): IT harus memakai argLine JaCoCo
+						(${failsafeArgLine}) agar cakupan dari integration test
+						tergabung ke jacoco.exec. Tanpa ini, hanya cakupan unit
+						yang terukur (IT jalan tapi tidak tercatat).
+					-->
+					<argLine>${failsafeArgLine}</argLine>
 					<systemPropertyVariables>
 						<api.version>${docker.api.version}</api.version>
 					</systemPropertyVariables>
