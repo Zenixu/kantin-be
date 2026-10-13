@@ -184,6 +184,9 @@ Sebuah tugas dianggap **selesai** hanya jika:
 - [ ] Dokumentasi diperbarui (`architecture/` bila mengubah keputusan).
 - [ ] PR lulus review + CI hijau.
 
+> **DoD tingkat rilis** (lintas modul + bukti UAT/cakupan) ada terpisah di
+> [`docs/uat-dan-dod-rilis.md`](../docs/uat-dan-dod-rilis.md) (issue #174).
+
 ---
 
 ## 10. Yang DILARANG (Daftar Merah)
