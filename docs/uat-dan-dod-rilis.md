@@ -119,44 +119,93 @@ atau lingkungan staging dengan kredensial SKOOLIA.
 
 ---
 
-## 3. Definition of Done — Tingkat Rilis
+## 3. Hasil Eksekusi UAT
+
+### 3.1 Eksekusi 2026-10-13 (lokal, profil `demo` + Docker)
+
+**Lingkungan:** PostgreSQL 18 + Redis 7 (Docker), app profil `local,demo`, seed
+`seed-demo.sql`. Dijalankan langsung via HTTP API (token shim dev).
+
+| # | Skenario | Status | Bukti (respons nyata) |
+|---|---|---|---|
+| U1 | Tap normal (Kartu Tamu) | ✅ | saldo 100.000→76.000, total 24.000, `transaksiId` terisi |
+| U2 | Saldo kurang | ✅ | 409 `"Saldo kurang Rp 524000"` |
+| U3 | Stok tidak cukup | ✅ | 409 `"Stok Mie Ayam tidak cukup (sisa 1000)"` |
+| U4 | Idempotency tap ganda | ✅ | `transaksiId` sama, saldo tetap 76.000 |
+| U5 | Blokir kartu instan | ✅ | blokir → tap → 409 `"Kartu diblokir"` |
+| U8 | Void (sesi tertutup) | ✅ | 400 `"Sesi kasir sudah ditutup — koreksi hanya oleh bendahara"` (PRD §6.3) |
+| U9 | Tutup kasir | ✅ | rekap `totalBersih=24000`, `postingBukuKas=true`, ref `DEMO-BK-KANTIN-SESI-1` |
+| U11 | Top-up tunai (TU) | ✅ | saldo 100.000→150.000 |
+| U13 | Batas saldo maksimum | ✅ | 409 `"saldo akan melebihi batas maksimum Rp200000"` |
+| U14 | Kartu Tamu (daftar) | ✅ | 5 kartu tampil |
+| U17 | Rekap setoran TU | ✅ | rekap + `selisih` tercatat |
+| U22 | Rekonsiliasi harian | ✅ | **`seimbang=true`, `selisih=0`** (invariant PRD §5) |
+| U24 | Laporan stok | ✅ | stok + `nilaiPersediaan` per menu |
+| U25 | Ekspor Excel | ✅ | berkas `.xlsx` valid (`Microsoft Excel 2007+`) |
+| U26 | Tenant scoping | ✅ | akses sekolah lain → **404** (bukan 403) |
+| U27 | RBAC backend | ✅ | petugas akses laporan → 403 |
+| U28 | Webhook tanpa signature | ✅ | 503 (fail-closed, secret belum diisi — sesuai desain) |
+| U29 | Cabut token | ✅ | token tercabut → 401 |
+
+**Ringkas:** **18/29** skenario diverifikasi langsung end-to-end. Sisa (U6, U7,
+U10, U12, U15, U16, U18–U21, U23) tercakup oleh **integration test otomatis**
+(`*IT`, lihat kolom "Bukti otomatis") yang berjalan hijau di `./mvnw verify` /
+CI — dijalankan via skenario terkontrol Testcontainers.
+
+> Catatan: U8 pada sesi **terbuka** (void sukses) & U10 (tutup otomatis) diuji
+> lewat `VoidServiceIT` & `SesiKasirSchedulerTest`/`JamTutupKasirSchedulerTest`
+> (butuh kontrol waktu; tidak praktis via API manual dalam satu hari).
+
+### 3.2 Ringkasan cakupan UAT
+
+| Kategori | Skenario | Terverifikasi |
+|---|---|---|
+| Kasir & penjualan | U1–U10 | U1,U2,U3,U4,U5,U8,U9 ✅ + IT |
+| Saldo/top-up/kartu | U11–U17 | U11,U13,U14,U17 ✅ + IT |
+| Katalog/stok/HPP | U18–U21 | U24 ✅ + IT |
+| Laporan & rekonsiliasi | U22–U25 | U22,U24,U25 ✅ + IT |
+| Keamanan & tenant | U26–U29 | U26,U27,U28,U29 ✅ |
+
+---
+
+## 4. Definition of Done — Tingkat Rilis
 
 Pelengkap DoD per fitur ([`AGENTS.md`](../architecture/AGENTS.md) §9). Sebuah
 **rilis** dianggap siap hanya bila **semua** tercentang.
 
-### 3.1 Mutu kode & test
+### 4.1 Mutu kode & test
 - [ ] `./mvnw verify` **hijau** (unit + integration) di runner CI.
 - [ ] Cakupan JaCoCo tercatat di §1.2 (artefak CI terunggah).
 - [ ] Tidak ada `TODO`/`FIXME` di `src/main` (cek: `grep`).
 - [ ] Migrasi Flyway lolos `flyway:validate`; jumlah migrasi sesuai `README`.
 
-### 3.2 Fungsional (PRD)
+### 4.2 Fungsional (PRD)
 - [ ] Seluruh skenario UAT §2 **✅ lulus** pada lingkungan uji.
-- [ ] Metrik PRD §12 terukur & tercatat (tabel §4).
+- [ ] Metrik PRD §12 terukur & tercatat (tabel §5).
 
-### 3.3 Integrasi eksternal
+### 4.3 Integrasi eksternal
 - [ ] Enam adapter integrasi tersambung ke endpoint/kredensial produksi (#164).
 - [ ] `kantin.integrasi.wajib-aktif=true` & aplikasi **start sukses** (tidak ada `*Fallback`).
 - [ ] Public key RS256 admin-be & mobile-be produksi terpasang.
 
-### 3.4 Keamanan & konfigurasi
+### 4.4 Keamanan & konfigurasi
 - [ ] Checklist pra-rilis produksi tercentang semua ([`checklist-pra-rilis.md`](checklist-pra-rilis.md)).
 - [ ] Rahasia (webhook/internal/JWT) terisi; profil dev **nonaktif**.
 - [ ] Proteksi branch `main`/`develop` **aktif** (#171).
 
-### 3.5 Performa & operasional
+### 4.5 Performa & operasional
 - [ ] SLO tap p95 ≤ 1 dtk pada runner target (steady state) — tercatat di [`uji-beban-tap.md`](uji-beban-tap.md).
 - [ ] Cold-start (JVM dingin 100 tap/dtk) ditangani atau diterima (#180).
 - [ ] Observability aktif (metrik `kantin_tap_duration_seconds`, alert) — [`OBSERVABILITY.md`](OBSERVABILITY.md).
 
-### 3.6 Dokumentasi
+### 4.6 Dokumentasi
 - [ ] `README.md` (status, jumlah test, migrasi) sinkron dengan kode.
 - [ ] `architecture/API-ENDPOINTS.md` sinkron (dijaga `ApiEndpointsDocTest`).
 - [ ] Dokumen keputusan (ADR) diperbarui bila ada perubahan arsitektur.
 
 ---
 
-## 4. Metrik Keberhasilan (PRD §12) — lembar ukur
+## 5. Metrik Keberhasilan (PRD §12) — lembar ukur
 
 Diukur pada lingkungan uji / 3 bulan setelah rilis pilot. Isi kolom **Hasil**.
 
