@@ -27,10 +27,16 @@ main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
 
 > **Tidak boleh push langsung ke `main` atau `develop`.** Selalu via PR.
 >
-> ⚠️ **Proteksi branch BELUM AKTIF** — meskipun `WORKFLOW.md` & `docs/plan-branch-protection.md`
-> sebelumnya menyatakan aktif, verifikasi GitHub API (2026-10-12) menunjukkan ruleset `main`
-> `enforcement=disabled` dan `branches/main.protected=false`. Perbaikan dilacak di
-> [#171](https://github.com/Zenixu/kantin-be/issues/171). **Sampai aktif, disiplin PR manual wajib.**
+> ✅ **Proteksi branch AKTIF** (diaktifkan **2026-10-13**, issue
+> [#171](https://github.com/Zenixu/kantin-be/issues/171)) — ditegakkan lewat **ruleset**
+> GitHub untuk `main` (id `24626209`) & `develop` (id `24968833`), keduanya
+> `enforcement=active`, dengan aturan: **wajib PR**, **1 approval**,
+> **status check `Build & Test (JDK 25)` hijau** & **branch up-to-date**, serta
+> **menolak force-push (`non_fast_forward`) & penghapusan branch (`deletion`)**.
+> Push langsung ditolak: `GH013: Changes must be made through a pull request`.
+> Verifikasi: `gh api repos/Zenixu/kantin-be/branches/main --jq .protected` → `true`.
+> **Bypass:** akun owner `Zenixu` boleh **merge PR** tanpa menunggu approval (mode
+> `pull_request`) — karena penulis tak bisa self-approve; **push langsung tetap ditolak**.
 > Detail & cara verifikasi: [`docs/plan-branch-protection.md`](../docs/plan-branch-protection.md).
 
 ---

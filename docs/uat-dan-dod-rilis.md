@@ -32,14 +32,23 @@ Laporan dihasilkan saat fase `verify`:
 | `./mvnw verify` (unit + IT, butuh Docker) | **angka sebenarnya** | dipakai sebagai bukti rilis |
 
 > **Catatan:** angka unit-saja **bukan** cakupan sebenarnya. Jalankan `verify`
-> (atau lihat artefak CI) untuk angka lengkap. Catat angka rilis di tabel di bawah.
+> (atau lihat artefak CI) untuk angka lengkap.
+>
+> ⚠️ **Penting (jendela konfigurasi):** plugin Failsafe **tidak** memakai
+> `argLine` JaCoCo secara default. Tanpa `<argLine>${argLine}</argLine>` pada
+> `maven-failsafe-plugin`, cakupan integration test **tidak tergabung** (IT jalan,
+> tapi angka tetap seperti unit-saja ~27%). Konfigurasi sudah diperbaiki di
+> `pom.xml` (issue #174).
 
 ### 1.2 Angka tercatat
 
 | Tanggal | Lingkungan | Baris | Instruksi | Cabang | Sumber |
 |---|---|---|---|---|---|
-| 2026-10-13 | laptop dev (unit saja) | 27,8% | 26,9% | 25,9% | `target/site/jacoco/jacoco.csv` |
-| _isi setelah CI_ | runner CI (unit + IT) | _tbd_ | _tbd_ | _tbd_ | artefak `laporan-coverage` |
+| 2026-10-13 | laptop dev (**unit + IT**, Docker) | **79,0%** | **78,0%** | **62,7%** | `target/site/jacoco/jacoco.csv` |
+| 2026-10-13 | laptop dev (unit saja, tanpa Docker) | 27,8% | 26,9% | 25,9% | ilustrasi efek IT tidak terhitung |
+
+> Kelas kritis terukur tinggi: `TapService` 92,0% · `LaporanService` 91,7% ·
+> `KartuTamuService` 92,5% · `LedgerSaldoService` 87,8% · `SesiKasirService` 82,8%.
 
 ---
 
