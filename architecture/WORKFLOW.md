@@ -30,7 +30,7 @@ main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
 > ✅ **Proteksi branch AKTIF** (diaktifkan **2026-10-13**, issue
 > [#171](https://github.com/Zenixu/kantin-be/issues/171)) — ditegakkan lewat **ruleset**
 > GitHub untuk `main` (id `24626209`) & `develop` (id `24968833`), keduanya
-> `enforcement=active`, dengan aturan: **wajib PR**, **2 approval**,
+> `enforcement=active`, dengan aturan: **wajib PR**, **1 approval**,
 > **status check `Build & Test (JDK 25)` hijau** & **branch up-to-date**, serta
 > **menolak force-push (`non_fast_forward`) & penghapusan branch (`deletion`)**.
 > Push langsung ditolak: `GH013: Changes must be made through a pull request`.

@@ -64,7 +64,7 @@ remote: - Required status check "Build & Test (JDK 25)" is expected.
 | Aturan | Nilai |
 |---|---|
 | Wajib PR sebelum merge | ya |
-| Jumlah approval | **2** |
+| Jumlah approval | **1** |
 | Dismiss review basi saat push baru | ya |
 | Wajib resolusi komentar review | ya |
 | Status check wajib | `Build & Test (JDK 25)` |
@@ -89,7 +89,7 @@ ruleset dengan `enforcement=active` & target ref yang cocok.
 Proteksi sekarang memakai **rulesets** (bukan rule klasik). Endpoint klasik
 `branches/{b}/protection` **404** untuk akun non-admin, jadi ubah lewat rulesets.
 
-### Mengubah jumlah approval (mis. 2 → 1)
+### Mengubah jumlah approval (mis. 1 → 2)
 
 **UI:** Settings → Rules → Rulesets → pilih `main` / `develop` → *Require a pull
 request before merging* → *Require approvals* → ubah angka → **Save**.
@@ -97,7 +97,7 @@ request before merging* → *Require approvals* → ubah angka → **Save**.
 **`gh` CLI (owner)** — kirim ulang seluruh definisi ruleset (PUT menggantikan isi):
 
 ```bash
-# contoh: turunkan jadi 1 approval untuk ruleset develop (id 24968833)
+# contoh: ubah jumlah approval untuk ruleset develop (id 24968833)
 gh api -X PUT repos/Zenixu/kantin-be/rulesets/24968833 --input ruleset-develop.json
 # (ubah "required_approving_review_count" di file JSON sebelum mengirim)
 ```
@@ -109,13 +109,11 @@ gh api -X PUT repos/Zenixu/kantin-be/rulesets/24626209 \
   -f "enforcement=disabled"        # atau "evaluate" untuk uji tanpa memblokir
 ```
 
-> **Jumlah approval — keputusan #171:** dipakai **2** (sesuai `WORKFLOW.md` §1 &
-> permintaan issue). **Konsekuensi:** penulis PR tak boleh approve PR-nya sendiri,
-> jadi setiap PR butuh **2 reviewer berbeda**. Tim saat ini punya **5 akun
-> non-owner** dengan akses `push` (`Derylfabiensyah`, `M-Arkan-Raihan-Nugraha`,
-> `Panca-Satia`, `Mayoranz`, `wibisanabama`) → memadai. Bila kelak terasa
-> menghambat, turunkan ke **1** dengan perintah di atas (dan selaraskan
-> `WORKFLOW.md` §1).
+> **Jumlah approval — keputusan #171:** dipakai **1** (keputusan owner,
+> 2026-10-13). Penulis PR tak boleh approve PR-nya sendiri, jadi setiap PR butuh
+> **1 reviewer lain**. Ini gerbang review yang cukup untuk tim kecil tanpa
+> memperlambat merge. Bila ingin diperketat, naikkan ke **2** dengan perintah di
+> atas (dan selaraskan `WORKFLOW.md` §1).
 
 ### Riwayat mekanisme
 
@@ -152,5 +150,6 @@ Uji langsung: push ke `develop` dari branch lokal → **ditolak** GitHub.
 | 2026-10-06 | Owner **mengaktifkan proteksi** (rule klasik). Terbukti: merge PR #5 ke `develop` ditolak *"base branch policy prohibits the merge"*; `--admin` pun ditolak (*"At least 2 approving reviews"*). Owner lalu menembusnya via admin override. |
 | 2026-10-06 | Dokumen diperbarui: status → **AKTIF**, + catatan 2 approval & cara verifikasi yang andal. |
 | 2026-10-12 | **Verifikasi ulang: proteksi BELUM AKTIF** — `branches/{main,develop}.protected=false`, ruleset `main` `enforcement=disabled`. Status dokumen dikoreksi. Dilacak di [#171](https://github.com/Zenixu/kantin-be/issues/171). |
-| 2026-10-13 | Owner (via Zenixu) **mengaktifkan proteksi**: ruleset `main` (24626209) di-`active` + target ref diisi; ruleset `develop` baru dibuat (id `24968833`, `active`). Aturan: PR + **2 approval** + status check `Build & Test (JDK 25)` + branch up-to-date + blok force-push/hapus. |
+| 2026-10-13 | Owner (via Zenixu) **mengaktifkan proteksi**: ruleset `main` (24626209) di-`active` + target ref diisi; ruleset `develop` baru dibuat (id `24968833`, `active`). Aturan: PR + approval + status check `Build & Test (JDK 25)` + branch up-to-date + blok force-push/hapus. |
+| 2026-10-13 | **Keputusan owner: jumlah approval = 1** (bukan 2) — cukup sebagai gerbang review untuk tim kecil tanpa memperlambat merge. Kedua ruleset diperbarui (`required_approving_review_count=1`). |
 | 2026-10-13 | **Verifikasi:** `branches/{main,develop}.protected=true`; uji push langsung → `GH013: Changes must be made through a pull request` (ditolak). Status dokumen → **AKTIF**. #171 selesai. |
