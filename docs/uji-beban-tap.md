@@ -169,34 +169,71 @@ GitHub Actions, `main`) memberi hasil konsisten.
 Semua run: `tap_ok` 100%, `http_req_failed` 0%, `tap_rate_limited` 0%; cross-check
 Prometheus (`kantin_tap_duration_seconds`) `lulus_slo=true` di tiap laju.
 
-### 5.3 Catatan penting — JVM dingin vs hangat (temuan #172)
+### 5.3 Cold-start: JVM baru boot tanpa warmup (temuan #172, lanjutan #180)
 
 Pengukuran **100 tap/dtk pada JVM yang baru boot (tanpa warmup)** **melanggar**
-SLO: p95 klien ≈ **1 163–1 398 ms** (dua run independen), sementara **median
-tetap ~7 ms** dan **p95 sisi server ~0,24 dtk**. Artinya tail berasal dari
-**pemanasan JIT/kompilasi + pengisian pool koneksi pada detik-detik awal**, bukan
-kapasitas pemrosesan steady state:
+SLO. Skenario ini kini bisa diukur eksplisit (workflow input `warmup`):
 
-| Kondisi (100 tap/dtk) | p95 klien | median | p95 server | Lulus? |
-|---|---|---|---|---|
-| JVM **dingin** (langsung setelah boot) | ~1 163–1 398 ms | ~7 ms | ~0,24 dtk | ❌ |
-| JVM **hangat** (setelah warmup) | ~6–12 ms | ~5 ms | ~0,24 dtk | ✅ |
+```bash
+gh workflow run uji-beban-nightly.yml -f warmup=false -f tap_rate=100 -f duration=2m
+```
 
-Karena SLO PRD §12 no.8 berbicara tentang **jam istirahat** (beban steady state,
-bukan detik pertama setelah deploy), workflow nightly kini menjalankan **warmup
-30 dtk @20 tap/dtk** sebelum pengukuran, sehingga gerbang mengukur kapasitas
-steady state dan tidak flaky. **Temuan cold-start ini tetap dicatat** sebagai
-kandidat optimasi terpisah (mis. `-XX:TieredStopAtLevel`, CDS/AppCDS, atau
-panaskan pool saat start) — lihat tindak lanjut §5.4.
+**Diagnosa (4 run cold-start).** Tail-nya **bukan** CPU/JIT — CPU proses hanya
+13–21 %, total jeda GC ~0,1 dtk, throughput tetap ~99 tap/dtk. Yang mendominasi
+adalah **waktu tunggu ambil koneksi Hikari**:
+
+| Run | Kolam | p95 klien | p95 server | `hikaricp…acquire_sum` | Tap > 1 dtk |
+|---|---|---|---|---|---|
+| `38536059471` | 10 | 1 167 ms | `+Inf` ❌ | 1 327 dtk (87 % durasi tap) | 5,74 % |
+| `38536969811` | 30 | **689 ms** ✅ | 676 ms ✅ | 777 dtk | 4,14 % |
+| `38537759753` | 30 | 2 446 ms | `+Inf` ❌ | 2 486 dtk | 11,13 % |
+| `38538444320` | 30 | 2 366 ms | `+Inf` ❌ | 2 439 dtk | 10,49 % |
+
+**Penyebab (terkonfirmasi di kode).** Satu tap mengambil koneksi Hikari **3×**:
+dua pra-cek idempotency **di luar** transaksi
+(`TransaksiRepository.existsBySekolahIdAndIdempotencyKey`,
+`TransaksiMenungguKonfirmasiRepository.findBySekolahIdAndIdempotencyKey`) plus
+satu `TransactionTemplate` utama (`TapService.jalankanTap`); metrik
+`hikaricp_connections_acquire_seconds_count` ≈ 3 × jumlah tap. Saat JVM masih
+dingin transaksi lebih lama sehingga kolam (default **10**) mendekati jenuh dan
+tunggu meledak; saat hangat tunggu itu hanya **0,09 ms** (7,6 dtk / 82 810
+ambil) — itulah sebabnya warmup menutupi masalah.
+
+**Hasilnya TIDAK stabil di runner bersama** — ini temuan penting. Konfigurasi
+yang **sama** (kolam 30) memberi p95 **689 ms** di satu run dan **2 366–2 446 ms**
+di dua run lain; SHA yang sama diulang pun (dan SHA lama tanpa V23) memberi
+1 708 ms. Yang berkorelasi adalah kecepatan runner itu sendiri (boot 8,2 dtk vs
+10,7–11,6 dtk). Jadi **cold-start tidak layak dijadikan gerbang mutlak di runner
+CI bersama**: angka dari satu run tidak bisa dipakai sebagai bukti lulus/gagal.
+SLO PRD §12 no.8 sendiri berbicara tentang **jam istirahat** (steady state),
+sehingga nightly **default tetap warmup** 30 dtk @20 tap/dtk (§5.2).
+
+**Mitigasi yang dipasang:** `spring.datasource.hikari.maximum-pool-size=30`
+(`KANTIN_DB_POOL_MAX`), `server.tomcat.threads.min-spare=100`
+(`KANTIN_TOMCAT_MIN_SPARE`), dan opsi JVM `-Xms=-Xmx -XX:+AlwaysPreTouch` di
+workflow. Dua yang terakhir tidak terukur memberi perbaikan (tidak pula
+regresi); pelebaran kolam menurunkan tunggu ambil koneksi pada run pembanding
+yang sebanding (1 327 → 777 dtk).
+
+**Rekomendasi lanjutan (belum dikerjakan, butuh keputusan tim):**
+
+1. **Kurangi 3 → 1 pengambilan koneksi per tap** — jalankan kedua pra-cek
+   idempotency di dalam satu transaksi (atau di dalam transaksi utama). Ini
+   memangkas permintaan kolam ~66 % dan menyentuh penyebabnya langsung, tetapi
+   mengubah **jalur uang** → perlu tinjauan tersendiri.
+2. Bila angka absolut cold-start memang ingin dijadikan gerbang, ukur di
+   lingkungan terkendali (runner khusus / bare-metal), bukan runner bersama.
 
 ### 5.4 Kesimpulan & tindak lanjut
 
 - **SLO p95 ≤ 1 dtk pada laju target (50–100 tap/dtk) TERPENUHI** di runner target
   (GitHub Actions) — p95 klien 6–9 ms, p95 server 0,238 dtk (§5.2). Bukti
   tersimpan sebagai artefak run nightly (Acceptance Criteria #172).
-- **Cold-start** (100 tap/dtk tanpa warmup) melanggar SLO (§5.3). Karena PRD
-  mengukur steady state jam istirahat, warmup ditambahkan; optimasi cold-start
-  (JIT/CDS/pool) dibuka sebagai temuan terpisah.
+- **Cold-start** (100 tap/dtk tanpa warmup) **belum bisa dijadikan gerbang
+  mutlak**: penyebabnya antrean kolam koneksi (1 tap = 3× ambil koneksi, §5.3)
+  dan hasilnya sangat bervariasi antar runner (p95 689–2 446 ms dengan
+  konfigurasi sama). Mitigasi (kolam 10 → 30) sudah dipasang; perbaikan
+  struktural + cara pengukuran dicatat di §5.3.
 - Bila p95 **steady state** kembali > 1 dtk di runner target (regresi) → buka
   temuan optimasi (indeks DB, cache, N+1, ukuran pool Hikari, tuning JVM)
   sebagai issue terpisah dan tautkan ke #145/#161/#172.
@@ -223,7 +260,9 @@ menjalankan uji beban **terjadwal (nightly)** dan **manual** (`workflow_dispatch
 — **tidak** memblok PR (butuh Docker + boot app). Langkah:
 
 1. Spin up PostgreSQL 18 & Redis 7 (service container) + boot jar + seed.
-2. **Warmup** 30 dtk @20 tap/dtk (di luar pengukuran SLO — lihat §5.3).
+2. **Warmup** 30 dtk @20 tap/dtk (di luar pengukuran SLO — lihat §5.3). Langkah
+   ini **dilewati** bila dispatch memakai input `warmup=false` (skenario
+   cold-start, §5.3).
 3. Untuk **tiap laju** di `TAP_RATES` (default `50 75 100`, seluruh rentang target
    PRD): snapshot `/actuator/prometheus` **sebelum**, jalankan `k6 run` (threshold
    k6 = gerbang klien), snapshot **sesudah**, lalu silang-cek p95 server dengan

@@ -28,6 +28,10 @@ on:
         description: 'Lama skenario per laju (mis. 2m, 5m)'
         required: false
         default: '2m'
+      warmup:
+        description: 'Jalankan warmup sebelum pengukuran? Set false untuk mengukur skenario COLD-START (issue #180).'
+        required: false
+        default: 'true'
 
 permissions:
   contents: read
@@ -81,6 +85,12 @@ jobs:
       # Dispatch manual dengan input tap_rate menguji satu laju saja.
       TAP_RATES: ${{ github.event.inputs.tap_rate || '50 75 100' }}
       DURATION: ${{ github.event.inputs.duration || '2m' }}
+      # Opsi JVM (issue #180 — stabilitas latensi saat JVM baru boot):
+      #   -Xms = -Xmx  → heap tidak tumbuh saat beban naik (hindari GC berulang
+      #                  + realokasi di detik-detik awal),
+      #   +AlwaysPreTouch → seluruh halaman heap disentuh saat start sehingga
+      #                  tidak ada page-fault stall di tengah beban.
+      APP_JAVA_OPTS: '-Xms1g -Xmx1g -XX:+AlwaysPreTouch'
 
     steps:
       - name: Checkout
@@ -106,7 +116,8 @@ jobs:
 
       - name: Jalankan aplikasi (background)
         run: |
-          nohup java -jar target/*.jar > app.log 2>&1 &
+          echo "Opsi JVM: $APP_JAVA_OPTS"
+          nohup java $APP_JAVA_OPTS -jar target/*.jar > app.log 2>&1 &
           echo "APP_PID=$!" >> "$GITHUB_ENV"
 
       - name: Tunggu aplikasi sehat
@@ -144,9 +155,21 @@ jobs:
       # pertama (mis. 100 tap/dtk langsung setelah boot) didominasi JIT/compile
       # & pengisian pool — bukan kapasitas produksi. Jalankan beban ringan dulu
       # agar gerbang mengukur throughput stabil (lihat catatan di §5 docs).
+      #
+      # Dispatch dengan input `warmup: false` untuk mengukur skenario COLD-START
+      # secara eksplisit (issue #180) — langkah ini dilewati.
       - name: Warmup JVM & pool (bukan bagian pengukuran SLO)
+        if: ${{ github.event.inputs.warmup != 'false' }}
         run: |
           TAP_RATE=20 DURATION=30s k6 run load/k6/tap-slo.js || true
+
+      - name: Catat mode pengukuran
+        run: |
+          if [ "${{ github.event.inputs.warmup }}" = "false" ]; then
+            echo "::notice::MODE COLD-START (tanpa warmup) — skenario issue #180."
+          else
+            echo "::notice::MODE STEADY-STATE (dengan warmup)."
+          fi
 
       - name: Jalankan uji beban (k6) untuk tiap laju + silang-cek Prometheus
         run: |
