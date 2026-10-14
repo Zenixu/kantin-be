@@ -7,14 +7,17 @@
 ## 1. Model Branching
 
 ```
-main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
- └── develop    ← integrasi harian tim. PROTECTED. Hanya merge dari PR.
-      ├── feat/<modul>-<deskripsi>
-      ├── fix/<modul>-<deskripsi>
-      ├── hotfix/<deskripsi>       (dari main, untuk bug production mendesak)
-      ├── chore/<deskripsi>
-      └── docs/<deskripsi>
+main            ← production-ready. PROTECTED. Satu-satunya branch tetap.
+ ├── feat/<modul>-<deskripsi>
+ ├── fix/<modul>-<deskripsi>
+ ├── hotfix/<deskripsi>       (dari main, untuk bug production mendesak)
+ ├── chore/<deskripsi>
+ └── docs/<deskripsi>
 ```
+
+> **Model main-only** (diputuskan **2026-10-14**). Branch `develop` **dihapus** —
+> sebelumnya `develop` terus divergen dari `main` karena alur nyata berjalan
+> PR → `main`. Semua pekerjaan bercabang dari `main` & kembali ke `main` via PR.
 
 **Penamaan branch:**
 | Prefix | Untuk | Contoh |
@@ -25,14 +28,13 @@ main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
 | `chore/` | Non-fitur | `chore/setup-docker-compose` |
 | `docs/` | Dokumentasi | `docs/adr-0002-jwt-rs256` |
 
-> **Tidak boleh push langsung ke `main` atau `develop`.** Selalu via PR.
+> **Tidak boleh push langsung ke `main`.** Selalu via PR.
 >
 > ✅ **Proteksi branch AKTIF** (diaktifkan **2026-10-13**, issue
 > [#171](https://github.com/Zenixu/kantin-be/issues/171)) — ditegakkan lewat **ruleset**
-> GitHub untuk `main` (id `24626209`) & `develop` (id `24968833`), keduanya
-> `enforcement=active`, dengan aturan: **wajib PR**, **1 approval**,
-> **status check `Build & Test (JDK 25)` hijau** & **branch up-to-date**, serta
-> **menolak force-push (`non_fast_forward`) & penghapusan branch (`deletion`)**.
+> GitHub untuk `main` (id `24626209`), `enforcement=active`, dengan aturan: **wajib PR**,
+> **1 approval**, **status check `Build & Test (JDK 25)` hijau** & **branch up-to-date**,
+> serta **menolak force-push (`non_fast_forward`) & penghapusan branch (`deletion`)**.
 > Push langsung ditolak: `GH013: Changes must be made through a pull request`.
 > Verifikasi: `gh api repos/Zenixu/kantin-be/branches/main --jq .protected` → `true`.
 > **Bypass:** akun owner `Zenixu` boleh **merge PR** tanpa menunggu approval (mode
@@ -44,8 +46,8 @@ main            ← production-ready. PROTECTED. Hanya merge dari PR (develop).
 ## 2. Alur Kerja Harian (per anggota)
 
 ```bash
-# 1. Sinkron develop
-git checkout develop && git pull origin develop
+# 1. Sinkron main
+git checkout main && git pull origin main
 
 # 2. Buat branch fitur
 git checkout -b feat/kasir-tap-validasi
@@ -57,7 +59,7 @@ git commit -m "feat(kasir): tambah validasi urutan 6 tahap"
 # 4. Push
 git push -u origin feat/kasir-tap-validasi
 
-# 5. Buka PR ke develop (via GitHub)
+# 5. Buka PR ke main (via GitHub)
 ```
 
 ---
@@ -144,7 +146,7 @@ Reviewer gunakan label: `nit:` (opsional), `suggestion:`, `blocking:`.
 ```bash
 git checkout feat/nama-branch
 git fetch origin
-git rebase origin/develop
+git rebase origin/main
 # selesaikan konflik
 git add <file>
 git rebase --continue
@@ -156,7 +158,7 @@ git push --force-with-lease
 
 ## 7. Rilis
 
-- `develop` → `main` = PR rilis, diberi **tag** (`v0.1.0`).
+- Rilis dari **`main`** (PR yang sudah merged), diberi **tag** (`v0.1.0`).
 - Versi: `MAJOR.MINOR.PATCH`. Fase MVP pilot = `v0.x`.
 - Deploy via Jenkins (pola admin-be).
 
@@ -166,6 +168,6 @@ git push --force-with-lease
 
 - Agen **selalu** baca `AGENTS.md` + dokumen terkait sebelum menulis kode.
 - Agen **tidak** commit/push tanpa diminta manusia.
-- Agen **tidak** mengubah `main`/`develop` langsung.
+- Agen **tidak** mengubah `main` langsung.
 - Agen mengikuti konvensi §3 commit & DoD `AGENTS.md §9`.
 - Perubahan agen ditinjau manusia seperti kontributor biasa.

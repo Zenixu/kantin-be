@@ -5,9 +5,9 @@ name: CI
 # karena Jenkinsfile hanya build & deploy (tanpa stage test).
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 # Batalkan run lama bila branch yang sama di-push ulang.
 concurrency:

@@ -1,17 +1,20 @@
-# 📋 Plan — Proteksi Branch `main` & `develop`
+# 📋 Plan — Proteksi Branch `main`
 
-> **Status: ✅ AKTIF (diaktifkan & diverifikasi 2026-10-13).**
-> Proteksi ditegakkan lewat **ruleset** GitHub: `main` (id `24626209`) & `develop`
-> (id `24968833`), keduanya `enforcement=active` dan target ref terisi. Verifikasi
-> 2026-10-13: `branches/main.protected=true`, `branches/develop.protected=true`,
-> push langsung ditolak `GH013: Changes must be made through a pull request`.
+> **Status: ✅ AKTIF untuk `main` (diaktifkan & diverifikasi 2026-10-13).**
+> Proteksi ditegakkan lewat **ruleset** GitHub: `main` (id `24626209`),
+> `enforcement=active` dan target ref terisi. Verifikasi 2026-10-13:
+> `branches/main.protected=true`, push langsung ditolak
+> `GH013: Changes must be made through a pull request`.
 > Dilacak & ditutup di [#171](https://github.com/Zenixu/kantin-be/issues/171).
+>
+> **2026-10-14 — model main-only.** Branch `develop` **dihapus**; hanya `main` yang
+> dilindungi. Ruleset `develop` (id `24968833`) ikut dihapus.
 >
 > Dokumen ini menyimpan **konteks, cara verifikasi, dan riwayat** — berguna untuk
 > mengaktifkan/memeriksa ulang proteksi.
 >
 > Rujukan aturan: [`WORKFLOW.md` §1](./WORKFLOW.md) — *"Tidak boleh push langsung
-> ke `main` atau `develop`. Selalu via PR."* Proteksi branch adalah cara GitHub
+> ke `main`. Selalu via PR."* Proteksi branch adalah cara GitHub
 > **menegakkan** aturan itu, bukan sekadar kesepakatan lisan.
 
 ---
@@ -27,27 +30,25 @@ Risiko nyata yang dicegah:
 
 | Kejadian | Tanpa proteksi | Dengan proteksi |
 |---|---|---|
-| `git push --force` ke `develop` | commit anggota lain **hilang**, riwayat rusak | ditolak (rule *non-fast-forward*) |
-| Branch `develop`/`main` terhapus | hilang, harus restore manual | ditolak (rule *deletion*) |
-| Push langsung ke `develop` | semua orang ikut kena | wajib lewat PR → ada review |
-| Kode rusak masuk `develop` | lolos bila CI dilewati/tidak wajib | ditangkap saat review PR + status CI |
+| `git push --force` ke `main` | commit anggota lain **hilang**, riwayat rusak | ditolak (rule *non-fast-forward*) |
+| Branch `main` terhapus | hilang, harus restore manual | ditolak (rule *deletion*) |
+| Push langsung ke `main` | semua orang ikut kena | wajib lewat PR → ada review |
+| Kode rusak masuk `main` | lolos bila CI dilewati/tidak wajib | ditangkap saat review PR + status CI |
 
 > ⚠️ Risiko `--force` nyata di tim ini: `WORKFLOW.md` §6 memakai
 > `--force-with-lease` di branch fitur — salah target sedikit saja bisa
-> mengenai `develop`.
+> mengenai `main`.
 
 ---
 
-## 2. Kondisi saat ini (per 2026-10-13)
+## 2. Kondisi saat ini (per 2026-10-14)
 
-**Proteksi AKTIF.** Bukti verifikasi langsung (2026-10-13):
+**Proteksi AKTIF untuk `main`.** Bukti verifikasi langsung:
 
 ```bash
-gh api repos/Zenixu/kantin-be/branches/main    --jq .protected   # -> true
-gh api repos/Zenixu/kantin-be/branches/develop --jq .protected   # -> true
+gh api repos/Zenixu/kantin-be/branches/main --jq .protected   # -> true
 gh api repos/Zenixu/kantin-be/rulesets --jq '.[] | "\(.name) \(.enforcement)"'
 #   main active
-#   develop active
 ```
 
 Uji push langsung (ditolak oleh ruleset):
@@ -59,7 +60,7 @@ remote: - Required status check "Build & Test (JDK 25)" is expected.
  ! [remote rejected] ... (push declined due to repository rule violations)
 ```
 
-**Setelan yang ditegakkan** (identik untuk `main` & `develop`):
+**Setelan yang ditegakkan** (untuk `main`):
 
 | Aturan | Nilai |
 |---|---|
@@ -78,7 +79,7 @@ remote: - Required status check "Build & Test (JDK 25)" is expected.
 > `REVIEW_REQUIRED` dan tak bisa di-merge. Agar owner tetap bisa bekerja, akun
 > `Zenixu` didaftarkan sebagai **bypass actor** dengan mode **`pull_request`**:
 > boleh **merge PR** (tombol *Merge without waiting for requirements* / `gh pr merge
-> --admin`), **tetapi tidak** boleh push/force-push langsung ke `main`/`develop`.
+> --admin`), **tetapi tidak** boleh push/force-push langsung ke `main`.
 > Anggota lain tetap tunduk penuh pada aturan (wajib PR + 1 approval).
 
 > **Catatan koreksi (2026-10-12):** klaim §2 sebelumnya ("proteksi aktif, terbukti PR #5
@@ -99,14 +100,14 @@ Proteksi sekarang memakai **rulesets** (bukan rule klasik). Endpoint klasik
 
 ### Mengubah jumlah approval (mis. 1 → 2)
 
-**UI:** Settings → Rules → Rulesets → pilih `main` / `develop` → *Require a pull
+**UI:** Settings → Rules → Rulesets → pilih `main` → *Require a pull
 request before merging* → *Require approvals* → ubah angka → **Save**.
 
 **`gh` CLI (owner)** — kirim ulang seluruh definisi ruleset (PUT menggantikan isi):
 
 ```bash
-# contoh: ubah jumlah approval untuk ruleset develop (id 24968833)
-gh api -X PUT repos/Zenixu/kantin-be/rulesets/24968833 --input ruleset-develop.json
+# contoh: ubah jumlah approval untuk ruleset main (id 24626209)
+gh api -X PUT repos/Zenixu/kantin-be/rulesets/24626209 --input ruleset-main.json
 # (ubah "required_approving_review_count" di file JSON sebelum mengirim)
 ```
 
@@ -125,10 +126,9 @@ gh api -X PUT repos/Zenixu/kantin-be/rulesets/24626209 \
 
 ### Riwayat mekanisme
 
-Ruleset lama `develop` (id `24553483`, dibuat 2026-10-06) ber-`disabled` & target
-kosong; ruleset `main` (id `24626209`, dibuat 2026-10-07) juga `disabled` & target
-kosong. Keduanya kini digantikan/ diperbaiki: `main` (24626209) diaktifkan &
-target diisi, dan `develop` dibuat baru (id `24968833`).
+Ruleset `main` (id `24626209`, dibuat 2026-10-07) awalnya `disabled` & target
+kosong; kini diaktifkan & target diisi. Ruleset `develop` (id `24968833`) yang
+dibuat 2026-10-13 **dihapus** bersama branch `develop` (2026-10-14, model main-only).
 
 ---
 
@@ -139,12 +139,11 @@ target diisi, dan `develop` dibuat baru (id `24968833`).
 gh pr view <nomor> --repo Zenixu/kantin-be --json mergeStateStatus,reviewDecision
 
 # Flag cepat (true = ada proteksi)
-gh api repos/Zenixu/kantin-be/branches/develop --jq .protected
-gh api repos/Zenixu/kantin-be/branches/main    --jq .protected
+gh api repos/Zenixu/kantin-be/branches/main --jq .protected
 ```
 
-Uji langsung: push ke `develop` dari branch lokal → **ditolak** GitHub.
-(Jangan diuji dengan `--force` ke `develop` sungguhan.)
+Uji langsung: push ke `main` dari branch lokal → **ditolak** GitHub.
+(Jangan diuji dengan `--force` ke `main` sungguhan.)
 
 ---
 
@@ -157,8 +156,9 @@ Uji langsung: push ke `develop` dari branch lokal → **ditolak** GitHub.
 | 2026-10-06 | Dokumen ini dibuat agar owner dapat menyelesaikan tanpa konteks tambahan. |
 | 2026-10-06 | Owner **mengaktifkan proteksi** (rule klasik). Terbukti: merge PR #5 ke `develop` ditolak *"base branch policy prohibits the merge"*; `--admin` pun ditolak (*"At least 2 approving reviews"*). Owner lalu menembusnya via admin override. |
 | 2026-10-06 | Dokumen diperbarui: status → **AKTIF**, + catatan 2 approval & cara verifikasi yang andal. |
-| 2026-10-12 | **Verifikasi ulang: proteksi BELUM AKTIF** — `branches/{main,develop}.protected=false`, ruleset `main` `enforcement=disabled`. Status dokumen dikoreksi. Dilacak di [#171](https://github.com/Zenixu/kantin-be/issues/171). |
+| 2026-10-12 | **Verifikasi ulang: proteksi BELUM AKTIF** — `branches/{main}.protected=false`, ruleset `main` `enforcement=disabled`. Status dokumen dikoreksi. Dilacak di [#171](https://github.com/Zenixu/kantin-be/issues/171). |
 | 2026-10-13 | Owner (via Zenixu) **mengaktifkan proteksi**: ruleset `main` (24626209) di-`active` + target ref diisi; ruleset `develop` baru dibuat (id `24968833`, `active`). Aturan: PR + approval + status check `Build & Test (JDK 25)` + branch up-to-date + blok force-push/hapus. |
 | 2026-10-13 | **Keputusan owner: jumlah approval = 1** (bukan 2) — cukup sebagai gerbang review untuk tim kecil tanpa memperlambat merge. Kedua ruleset diperbarui (`required_approving_review_count=1`). |
 | 2026-10-13 | **Verifikasi:** `branches/{main,develop}.protected=true`; uji push langsung → `GH013: Changes must be made through a pull request` (ditolak). Status dokumen → **AKTIF**. #171 selesai. |
 | 2026-10-13 | Ditambahkan **bypass owner** (`Zenixu`, mode `pull_request`) — owner boleh merge PR sendiri (penulis tak bisa self-approve), tapi **push langsung tetap diblokir**. Aturan tetap penuh untuk anggota lain. |
+| 2026-10-14 | **Model main-only:** branch `develop` **dihapus** & ruleset `develop` (id `24968833`) dihapus. Hanya `main` yang dilindungi. `WORKFLOW.md`, `AGENTS.md`, `ci.yml`, `README.md` diselaraskan. |
