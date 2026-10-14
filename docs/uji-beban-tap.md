@@ -155,6 +155,20 @@ yang diminta issue #172.** Dijalankan lewat workflow nightly
 - **SLO terpenuhi di seluruh rentang target**: p95 klien 6–9 ms ≪ 1 000 ms; p95 **sisi server** (`kantin_tap_duration_seconds`, Prometheus) 0,238 dtk — konsisten (Acceptance Criteria #2 issue #172). Tiap laju memakai snapshot metrik sebelum/sesudah (`prom-sebelum-*.txt`/`prom-sesudah-*.txt`) agar p95 server dihitung per laju.
 - **Throughput** tepat sesuai target: 50 → ~50 req/s, 75 → ~75 req/s, 100 → ~100 req/s (k6 `http_reqs.rate`), tanpa 429/5xx.
 
+#### 5.2.1 Reprodusibilitas — lintas-run nightly (3 run independen)
+
+SLO **bukan** hasil sekali jalan: tiga run nightly independen (runner target
+GitHub Actions, `main`) memberi hasil konsisten.
+
+| Run (UTC) | 50 tap/dtk | 75 tap/dtk | 100 tap/dtk | p95 server | Lulus |
+|---|---|---|---|---|---|
+| [38235819198](https://github.com/Zenixu/kantin-be/actions/runs/38235819198) · 2026-10-12 | 9 ms | 7 ms | 6 ms | 0,238 dtk | ✅ |
+| [38330464289](https://github.com/Zenixu/kantin-be/actions/runs/38330464289) · 2026-10-13 | 12,97 ms | 9,77 ms | 8,88 ms | 0,2375 dtk | ✅ |
+| [38482656171](https://github.com/Zenixu/kantin-be/actions/runs/38482656171) · 2026-10-13 | 12,46 ms | 9,60 ms | 8,57 ms | 0,2375 dtk | ✅ |
+
+Semua run: `tap_ok` 100%, `http_req_failed` 0%, `tap_rate_limited` 0%; cross-check
+Prometheus (`kantin_tap_duration_seconds`) `lulus_slo=true` di tiap laju.
+
 ### 5.3 Catatan penting — JVM dingin vs hangat (temuan #172)
 
 Pengukuran **100 tap/dtk pada JVM yang baru boot (tanpa warmup)** **melanggar**
