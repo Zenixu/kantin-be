@@ -72,22 +72,8 @@ public interface StokCacheRepository extends JpaRepository<StokCache, Long> {
             """, nativeQuery = true)
     int pastikanBarisAda(@Param("menuId") Long menuId, @Param("sekolahId") Long sekolahId);
 
-    /**
-     * Sinkronkan ambang {@code stok_minimum} dari katalog menu ke {@code stok_cache}
-     * (PRD §7.5, issue #113). Membuat baris stok bila belum ada, atau
-     * memperbarui ambangnya bila sudah ada — sehingga {@link #stokMenipis} dan
-     * flag {@code menipis} memakai ambang yang benar (bukan 0).
-     *
-     * <p>Native karena {@code ON CONFLICT} khas PostgreSQL.
-     */
-    @Modifying
-    @Query(value = """
-            INSERT INTO stok_cache (menu_id, sekolah_id, stok, hpp, stok_minimum, updated_at)
-            VALUES (:menuId, :sekolahId, 0, 0, :stokMinimum, now())
-            ON CONFLICT (menu_id) DO UPDATE
-                SET stok_minimum = EXCLUDED.stok_minimum,
-                    updated_at   = now()
-            """, nativeQuery = true)
-    int sinkronStokMinimum(@Param("menuId") Long menuId, @Param("sekolahId") Long sekolahId,
-                           @Param("stokMinimum") int stokMinimum);
+    // Catatan (issue #196): tidak ada lagi metode sinkronStokMinimum di sini.
+    // Ambang stok_cache.stok_minimum dijaga trigger DB
+    // trg_menu_sinkron_stok_minimum (migrasi V23) sehingga SEMUA jalur tulis ke
+    // menu tetap sinkron — bukan hanya yang lewat service ini.
 }
