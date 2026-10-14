@@ -118,17 +118,17 @@ Detail lengkap di [`CONVENTIONS.md`](./CONVENTIONS.md). Ringkasan:
 Detail di [`WORKFLOW.md`](./WORKFLOW.md). Ringkasan:
 
 ```
-main            ← production-ready, dilindungi (protected)
- └── develop    ← integrasi harian
-      ├── feat/<modul>-<deskripsi>       mis. feat/kasir-tap-validasi
-      ├── fix/<modul>-<deskripsi>        mis. fix/ledger-race-debit
-      └── chore/<deskripsi>
+main            ← production-ready, dilindungi (protected). Satu-satunya branch tetap.
+ ├── feat/<modul>-<deskripsi>       mis. feat/kasir-tap-validasi
+ ├── fix/<modul>-<deskripsi>        mis. fix/ledger-race-debit
+ └── chore/<deskripsi>
 ```
 
-- **Satu fitur = satu branch = satu PR.**
+- **Satu fitur = satu branch = satu PR** (PR ke `main`).
 - PR **wajib** lewat review minimal 1 orang lain + lulus CI.
 - Commit message: `type(scope): deskripsi` (Conventional Commits).
-- **Dilarang** push langsung ke `main`/`develop`.
+- **Dilarang** push langsung ke `main`.
+- Branch `develop` **dihapus** (2026-10-14) — model **main-only**.
 
 ---
 
@@ -199,7 +199,7 @@ Sebuah tugas dianggap **selesai** hanya jika:
 - ❌ Menjawab 403 untuk data sekolah lain (harus 404).
 - ❌ Menambah `mvn`/dependency tanpa ADR bila menyimpang dari §2.
 - ❌ Commit secret / `.properties` berisi kredensial.
-- ❌ Push langsung ke `main`/`develop`.
+- ❌ Push langsung ke `main`.
 
 ---
 

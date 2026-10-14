@@ -191,7 +191,7 @@ Pelengkap DoD per fitur ([`AGENTS.md`](../architecture/AGENTS.md) §9). Sebuah
 ### 4.4 Keamanan & konfigurasi
 - [ ] Checklist pra-rilis produksi tercentang semua ([`checklist-pra-rilis.md`](checklist-pra-rilis.md)).
 - [ ] Rahasia (webhook/internal/JWT) terisi; profil dev **nonaktif**.
-- [ ] Proteksi branch `main`/`develop` **aktif** (#171).
+- [ ] Proteksi branch `main` **aktif** (#171).
 
 ### 4.5 Performa & operasional
 - [ ] SLO tap p95 ≤ 1 dtk pada runner target (steady state) — tercatat di [`uji-beban-tap.md`](uji-beban-tap.md).

@@ -128,7 +128,7 @@ karena MSYS mengubah path. Pakai salah satu:
 ### CI (otomatis per-PR)
 
 - **GitHub Actions** — [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
-  tiap push/PR ke `main`/`develop` menjalankan `./mvnw verify` (JDK 25 temurin,
+  tiap push/PR ke `main` menjalankan `./mvnw verify` (JDK 25 temurin,
   unit + integration test) dan mengunggah laporan test. **Wajib hijau** sebelum merge
   (WORKFLOW.md §4).
 - **Jenkinsfile** — stage `Test` (`./mvnw verify`) berjalan **sebelum** build image,
@@ -211,18 +211,18 @@ Jalur demo end-to-end (tanpa API key): [`docs/demo-e2e-kasir.md`](docs/demo-e2e-
 
 ## 🌿 Branch & Alur Kerja
 
-- Branch tetap: **`main`** (rilis) & **`develop`** (integrasi).
-- **Tidak boleh push langsung** ke `main`/`develop` — selalu via **PR + review**
+- Branch tetap: **`main`** saja (model **main-only**; `develop` dihapus 2026-10-14).
+- **Tidak boleh push langsung** ke `main` — selalu via **PR + review**
   ([`GIT-WORKFLOW.md`](GIT-WORKFLOW.md), [`architecture/WORKFLOW.md`](architecture/WORKFLOW.md)).
 - Branch fitur: `feat/<nama>` · `fix/<nama>` — hapus setelah PR di-merge.
 - Format commit: `type(scope): deskripsi` — `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
 
 ```bash
-git checkout develop && git pull origin develop
+git checkout main && git pull origin main
 git checkout -b feat/nama-fitur
 # ... kerja ...
 git commit -m "feat(kasir): tambah validasi urutan 6 tahap"
-git push -u origin feat/nama-fitur   # buka PR ke develop
+git push -u origin feat/nama-fitur   # buka PR ke main
 ```
 
 ---
