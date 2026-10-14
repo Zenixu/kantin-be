@@ -36,8 +36,8 @@ class PemeriksaIntegrasiProduksiTest {
     /** Environment dengan public key RS256 admin & mobile terpasang. */
     private MockEnvironment envKunciLengkap() {
         MockEnvironment e = new MockEnvironment();
-        e.setProperty("jwt.admin.public-key", "MIIBIjANBgkq...admin");
-        e.setProperty("jwt.mobile.public-key", "MIIBIjANBgkq...mobile");
+        e.setProperty("jwt.admin-public-key", "MIIBIjANBgkq...admin");
+        e.setProperty("jwt.mobile-public-key", "MIIBIjANBgkq...mobile");
         return e;
     }
 
@@ -88,7 +88,7 @@ class PemeriksaIntegrasiProduksiTest {
     @DisplayName("wajib-aktif=true & public key RS256 admin kosong → DIGAGALKAN")
     void kunciAdminKosong() {
         MockEnvironment env = new MockEnvironment();
-        env.setProperty("jwt.mobile.public-key", "MIIBIjANBgkq...mobile"); // admin kosong
+        env.setProperty("jwt.mobile-public-key", "MIIBIjANBgkq...mobile"); // admin kosong
         var pemeriksa = new PemeriksaIntegrasiProduksi(lengkap(), env);
 
         assertThatThrownBy(pemeriksa::periksa)
@@ -100,7 +100,7 @@ class PemeriksaIntegrasiProduksiTest {
     @DisplayName("wajib-aktif=true & public key RS256 mobile kosong → DIGAGALKAN")
     void kunciMobileKosong() {
         MockEnvironment env = new MockEnvironment();
-        env.setProperty("jwt.admin.public-key", "MIIBIjANBgkq...admin"); // mobile kosong
+        env.setProperty("jwt.admin-public-key", "MIIBIjANBgkq...admin"); // mobile kosong
         var pemeriksa = new PemeriksaIntegrasiProduksi(lengkap(), env);
 
         assertThatThrownBy(pemeriksa::periksa)

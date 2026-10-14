@@ -75,7 +75,7 @@ Untuk memastikan **tidak ada `*Fallback` yang dipakai di staging/produksi**,
 - salah satu dari **6 adapter** belum aktif (`…enabled=false` → masih `*Fallback`);
 - adapter aktif tetapi `base-url` kosong;
 - public key **RS256** admin-be / mobile-be belum terpasang
-  (`jwt.admin.public-key` / `jwt.mobile.public-key`).
+  (`jwt.admin-public-key` / `jwt.mobile-public-key`).
 
 ```properties
 # staging/produksi:

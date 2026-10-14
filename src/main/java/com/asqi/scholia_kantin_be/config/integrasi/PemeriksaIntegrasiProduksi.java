@@ -24,7 +24,7 @@ import java.util.List;
  *       masih dipakai; atau</li>
  *   <li>adapter aktif tetapi {@code base-url} kosong (panggilan akan gagal); atau</li>
  *   <li>public key <b>RS256</b> admin-be / mobile-be belum terpasang
- *       ({@code jwt.admin.public-key} / {@code jwt.mobile.public-key}) — token
+ *       ({@code jwt.admin-public-key} / {@code jwt.mobile-public-key}) — token
  *       produksi tidak dapat diverifikasi (PRD §11.10).</li>
  * </ol>
  *
@@ -64,11 +64,14 @@ public class PemeriksaIntegrasiProduksi {
             }
         }
 
-        if (kosong(environment.getProperty("jwt.admin.public-key"))) {
-            masalah.add("public key RS256 admin-be kosong (jwt.admin.public-key / JWT_ADMIN_PUBLIC_KEY)");
+        // Nama properti WAJIB kebab (jwt.admin-public-key): itulah nama yang mengikat ke
+        // JwtProperties.adminPublicKey. Bentuk dotted (jwt.admin.public-key) dianggap
+        // nested dan TIDAK pernah terisi -> penjaga ini akan salah lapor (bug #204).
+        if (kosong(environment.getProperty("jwt.admin-public-key"))) {
+            masalah.add("public key RS256 admin-be kosong (jwt.admin-public-key / JWT_ADMIN_PUBLIC_KEY)");
         }
-        if (kosong(environment.getProperty("jwt.mobile.public-key"))) {
-            masalah.add("public key RS256 mobile-be kosong (jwt.mobile.public-key / JWT_MOBILE_PUBLIC_KEY)");
+        if (kosong(environment.getProperty("jwt.mobile-public-key"))) {
+            masalah.add("public key RS256 mobile-be kosong (jwt.mobile-public-key / JWT_MOBILE_PUBLIC_KEY)");
         }
 
         if (!masalah.isEmpty()) {
