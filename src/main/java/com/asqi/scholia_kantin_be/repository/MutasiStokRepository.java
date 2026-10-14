@@ -3,9 +3,9 @@ package com.asqi.scholia_kantin_be.repository;
 import com.asqi.scholia_kantin_be.enums.ArahStok;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.model.MutasiStok;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -20,9 +20,13 @@ import java.util.Optional;
  *
  * <p><b>Append-only (PRD §11.1):</b> tanpa method {@code delete}/{@code update}.
  * {@link MutasiStok} juga {@code @Immutable}.
+ *
+ * <p>Riwayat berfilter memakai {@link JpaSpecificationExecutor} +
+ * {@link MutasiStokSpesifikasi} (bukan JPQL {@code IS NULL OR}) — lihat #198.
  */
 @Repository
-public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long> {
+public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long>,
+        JpaSpecificationExecutor<MutasiStok> {
 
     /** Mutasi stok yang lahir dari sebuah transaksi (void/rekonsiliasi). */
     List<MutasiStok> findBySekolahIdAndTransaksiId(Long sekolahId, Long transaksiId);
@@ -67,28 +71,6 @@ public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long> {
                                  @Param("dari") OffsetDateTime dari,
                                  @Param("sampai") OffsetDateTime sampai);
 
-    /**
-     * Riwayat mutasi stok dengan filter (PRD §9.5) — terbaru dulu, halaman.
-     *
-     * <p>Dipakai {@code GET /api/stok/riwayat} agar FE dapat menampilkan daftar
-     * restock sebelum memilih baris yang akan dibalik. Semua filter opsional:
-     * {@code menuId}, {@code jenis}, rentang waktu. <b>Tenant-scoped.</b>
-     */
-    @Query("""
-            SELECT m FROM MutasiStok m
-            WHERE m.sekolahId = :sekolahId
-              AND (:menuId IS NULL OR m.menuId = :menuId)
-              AND (:jenis IS NULL OR m.jenis = :jenis)
-              AND (:dari IS NULL OR m.waktu >= :dari)
-              AND (:sampai IS NULL OR m.waktu < :sampai)
-            ORDER BY m.id DESC
-            """)
-    Page<MutasiStok> riwayat(@Param("sekolahId") Long sekolahId,
-                             @Param("menuId") Long menuId,
-                             @Param("jenis") JenisMutasiStok jenis,
-                             @Param("dari") OffsetDateTime dari,
-                             @Param("sampai") OffsetDateTime sampai,
-                             Pageable pageable);
 
     /**
      * Barang masuk berdasarkan nomor bukti (untuk pembalik/riwayat) — terbaru

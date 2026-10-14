@@ -14,6 +14,7 @@ import com.asqi.scholia_kantin_be.model.MutasiStok;
 import com.asqi.scholia_kantin_be.model.StokCache;
 import com.asqi.scholia_kantin_be.repository.MenuRepository;
 import com.asqi.scholia_kantin_be.repository.MutasiStokRepository;
+import com.asqi.scholia_kantin_be.repository.MutasiStokSpesifikasi;
 import com.asqi.scholia_kantin_be.repository.StokCacheRepository;
 import com.asqi.scholia_kantin_be.security.SekolahGuard;
 import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
@@ -22,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -309,9 +311,15 @@ public class StokOperasiService {
                                                     int halaman, int ukuran) {
         int ukuranAman = (ukuran <= 0 || ukuran > UKURAN_MAKS) ? 20 : ukuran;
         int halamanAman = Math.max(0, halaman);
-        Pageable pageable = PageRequest.of(halamanAman, ukuranAman);
+        // Urutan terbaru dulu (id DESC) — dulu bagian dari JPQL; kini via Sort.
+        Pageable pageable = PageRequest.of(halamanAman, ukuranAman,
+                Sort.by(Sort.Direction.DESC, "id"));
 
-        Page<MutasiStok> page = mutasiRepo.riwayat(sekolahId, menuId, jenis, dari, sampai, pageable);
+        // #198: filter lewat Specification (predicate kondisional) — BUKAN pola
+        // JPQL ":x IS NULL OR ..." yang mengirim parameter null tanpa tipe eksplisit
+        // sehingga PostgreSQL menolak ("could not determine data type of parameter").
+        Page<MutasiStok> page = mutasiRepo.findAll(
+                MutasiStokSpesifikasi.riwayat(sekolahId, menuId, jenis, dari, sampai), pageable);
 
         // Hitung sisa yang dapat dibalik untuk semua BARANG_MASUK di halaman ini
         // dalam SATU query (bukan per baris).
