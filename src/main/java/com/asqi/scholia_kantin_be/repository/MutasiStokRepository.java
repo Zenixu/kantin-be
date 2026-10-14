@@ -3,9 +3,9 @@ package com.asqi.scholia_kantin_be.repository;
 import com.asqi.scholia_kantin_be.enums.ArahStok;
 import com.asqi.scholia_kantin_be.enums.JenisMutasiStok;
 import com.asqi.scholia_kantin_be.model.MutasiStok;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -22,7 +22,8 @@ import java.util.Optional;
  * {@link MutasiStok} juga {@code @Immutable}.
  */
 @Repository
-public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long> {
+public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long>,
+        JpaSpecificationExecutor<MutasiStok> {
 
     /** Mutasi stok yang lahir dari sebuah transaksi (void/rekonsiliasi). */
     List<MutasiStok> findBySekolahIdAndTransaksiId(Long sekolahId, Long transaksiId);
@@ -67,28 +68,16 @@ public interface MutasiStokRepository extends JpaRepository<MutasiStok, Long> {
                                  @Param("dari") OffsetDateTime dari,
                                  @Param("sampai") OffsetDateTime sampai);
 
-    /**
-     * Riwayat mutasi stok dengan filter (PRD §9.5) — terbaru dulu, halaman.
+    /*
+     * Riwayat mutasi stok berfilter (PRD §9.5) TIDAK lagi di sini.
      *
-     * <p>Dipakai {@code GET /api/stok/riwayat} agar FE dapat menampilkan daftar
-     * restock sebelum memilih baris yang akan dibalik. Semua filter opsional:
-     * {@code menuId}, {@code jenis}, rentang waktu. <b>Tenant-scoped.</b>
+     * Dibangun lewat Criteria API (Specification) di
+     * StokOperasiService#riwayat agar predicate hanya ditambahkan saat filter
+     * benar-benar terisi. Pola JPQL `:x IS NULL OR ...` membuat Hibernate
+     * mengirim parameter null TANPA tipe → PostgreSQL menolak
+     * "could not determine data type of parameter $4" → GET /api/stok/riwayat
+     * selalu HTTP 500 (bug #198). Lihat RiwayatStokIT sebagai uji regresinya.
      */
-    @Query("""
-            SELECT m FROM MutasiStok m
-            WHERE m.sekolahId = :sekolahId
-              AND (:menuId IS NULL OR m.menuId = :menuId)
-              AND (:jenis IS NULL OR m.jenis = :jenis)
-              AND (:dari IS NULL OR m.waktu >= :dari)
-              AND (:sampai IS NULL OR m.waktu < :sampai)
-            ORDER BY m.id DESC
-            """)
-    Page<MutasiStok> riwayat(@Param("sekolahId") Long sekolahId,
-                             @Param("menuId") Long menuId,
-                             @Param("jenis") JenisMutasiStok jenis,
-                             @Param("dari") OffsetDateTime dari,
-                             @Param("sampai") OffsetDateTime sampai,
-                             Pageable pageable);
 
     /**
      * Barang masuk berdasarkan nomor bukti (untuk pembalik/riwayat) — terbaru

@@ -17,11 +17,14 @@ import com.asqi.scholia_kantin_be.repository.MutasiStokRepository;
 import com.asqi.scholia_kantin_be.repository.StokCacheRepository;
 import com.asqi.scholia_kantin_be.security.SekolahGuard;
 import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -309,9 +312,15 @@ public class StokOperasiService {
                                                     int halaman, int ukuran) {
         int ukuranAman = (ukuran <= 0 || ukuran > UKURAN_MAKS) ? 20 : ukuran;
         int halamanAman = Math.max(0, halaman);
-        Pageable pageable = PageRequest.of(halamanAman, ukuranAman);
+        Pageable pageable = PageRequest.of(halamanAman, ukuranAman,
+                Sort.by(Sort.Direction.DESC, "id"));
 
-        Page<MutasiStok> page = mutasiRepo.riwayat(sekolahId, menuId, jenis, dari, sampai, pageable);
+        // Filter dibangun dinamis (Criteria API): predicate HANYA ditambahkan bila
+        // filternya benar-benar terisi. Ini menghindari pola `:x IS NULL OR ...`
+        // yang membuat Hibernate mengirim parameter null tanpa tipe → PostgreSQL
+        // menolak "could not determine data type of parameter" (bug #198: 500).
+        Page<MutasiStok> page = mutasiRepo.findAll(
+                filterRiwayat(sekolahId, menuId, jenis, dari, sampai), pageable);
 
         // Hitung sisa yang dapat dibalik untuk semua BARANG_MASUK di halaman ini
         // dalam SATU query (bukan per baris).
@@ -348,6 +357,38 @@ public class StokOperasiService {
     // ────────────────────────────────────────────────────────────────
     // HELPER
     // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Predicate filter riwayat stok (Criteria API) — <b>hanya</b> menambahkan
+     * syarat untuk filter yang terisi.
+     *
+     * <p>Kenapa bukan JPQL {@code :x IS NULL OR ...}: pola itu membuat Hibernate
+     * mengirim parameter {@code null} tanpa tipe eksplisit dan PostgreSQL
+     * menolaknya ({@code could not determine data type of parameter}) — penyebab
+     * bug #198 ({@code GET /api/stok/riwayat} selalu 500).
+     */
+    private static Specification<MutasiStok> filterRiwayat(Long sekolahId, Long menuId,
+                                                           JenisMutasiStok jenis,
+                                                           OffsetDateTime dari,
+                                                           OffsetDateTime sampai) {
+        return (root, query, cb) -> {
+            List<Predicate> syarat = new ArrayList<>();
+            syarat.add(cb.equal(root.get("sekolahId"), sekolahId));   // tenant-scoped
+            if (menuId != null) {
+                syarat.add(cb.equal(root.get("menuId"), menuId));
+            }
+            if (jenis != null) {
+                syarat.add(cb.equal(root.get("jenis"), jenis));
+            }
+            if (dari != null) {
+                syarat.add(cb.greaterThanOrEqualTo(root.get("waktu"), dari));
+            }
+            if (sampai != null) {
+                syarat.add(cb.lessThan(root.get("waktu"), sampai));
+            }
+            return cb.and(syarat.toArray(new Predicate[0]));
+        };
+    }
 
     /** Peta {@code asalMutasiId → total qty dibalik} (satu query, hindari N+1). */
     private Map<Long, Long> totalDibalikPerAsal(Long sekolahId, List<Long> asalIds) {
