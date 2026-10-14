@@ -293,7 +293,7 @@
 
 | Modul | Endpoint (rencana) | Blocker |
 |---|---|---|
-| Laporan ekspor PDF | ekspor PDF (saat ini hanya Excel) | Q3, Q5 |
+| ~~Laporan ekspor PDF~~ | **Tidak diperlukan** — PRD §9.5 hanya meminta ekspor **Excel `.xlsx`**, dan itu sudah ada (`GET /api/laporan/ekspor`, 15 jenis `JenisLaporan`). Q3 & Q5 sudah terjawab (tidak terkait PDF) | — |
 | Aktivasi & fee | toggle modul, fee platform | status dibaca (#42); **toggle tetap milik internal-be** (Q6) — bukan tugas kantin-be |
 | Top-up online | handler webhook **sudah ada** (`POST /api/webhook/{sumber}`); sisa = **aktivasi adapter/kredensial callback-be** | Q4 — kontrak payload (OPEN-QUESTIONS) |
 

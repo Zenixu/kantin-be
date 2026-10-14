@@ -72,7 +72,7 @@ com.asqi.scholia_kantin_be
 │
 ├── enums/                 ArahMutasi, ArahStok, JenisMutasiSaldo/Stok,
 │                          StatusTransaksi, StatusSesiKasir, ReferensiTipe
-└── component/logging/AuditLogger.java   (placeholder log → nanti tabel audit_log)
+└── component/logging/AuditLogger.java   (menulis ke tabel audit_log — migrasi V5)
 ```
 
 ---
@@ -157,7 +157,7 @@ Satu panggilan = **satu transaksi DB** (dibungkus `TransactionTemplate`):
 | 6 | Waktu **wajib** lewat `JamKantin` | Zona sekolah konsisten (PRD §11.9) |
 | 7 | `sekolahId` eksplisit di **setiap** query | Tenant scoping terlihat jelas (PRD §11.4) |
 | 8 | Lookup kartu/menu di balik **port** | Menyembunyikan Q7 (kontrak admin-be) & Fase 5 (katalog) → alur tap tetap bisa dibangun & diuji |
-| 9 | `AuditLogger` = placeholder log | Tabel `audit_log` belum ada; kontrak pemanggil tidak akan berubah saat tabel dibuat |
+| 9 | `AuditLogger` **menulis ke tabel `audit_log`** (migrasi `V5__CreateAuditLog.sql`) | Jejak audit tahan-restart & bisa di-query; tabel append-only (trigger `tolak_perubahan_ledger`) |
 
 ---
 
@@ -201,7 +201,7 @@ Satu panggilan = **satu transaksi DB** (dibungkus `TransactionTemplate`):
 | `MenuLookupPort` nyata (katalog) | **Fase 5** (modul katalog) — fallback mengembalikan `null` |
 | Posting Buku Kas saat tutup sesi | **Q3** — ✅ **dibangun (2026-10-06)** lewat `BukuKasPort`; fallback `DILEWATI` sampai admin-be menambah case `refModul` kantin (mitigasi: `refModul=null`) |
 | `BukuKasPort` nyata (REST ke admin-be) | **Q3** — fallback fail-safe mengembalikan `DILEWATI`; impl `@Primary` menyusul |
-| `AuditLogger` ke tabel `audit_log` | Belum ada migrasi tabel audit |
+| ~~`AuditLogger` ke tabel `audit_log`~~ | ✅ **SELESAI** — migrasi `V5__CreateAuditLog.sql`; `AuditLogger` menulis baris audit (append-only) |
 | `TenantResolver` (isi `sekolahId` dari token) | **Q1/Q2** (klaim JWT admin-be belum membawa `sekolah_id`) |
 
 Controller (`KasirController`) sengaja **belum** dihubungkan — itu bagian lapisan
