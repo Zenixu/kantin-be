@@ -169,34 +169,60 @@ GitHub Actions, `main`) memberi hasil konsisten.
 Semua run: `tap_ok` 100%, `http_req_failed` 0%, `tap_rate_limited` 0%; cross-check
 Prometheus (`kantin_tap_duration_seconds`) `lulus_slo=true` di tiap laju.
 
-### 5.3 Catatan penting — JVM dingin vs hangat (temuan #172)
+### 5.3 Cold-start: JVM baru boot tanpa warmup (temuan #172 → diperbaiki di #180)
 
-Pengukuran **100 tap/dtk pada JVM yang baru boot (tanpa warmup)** **melanggar**
-SLO: p95 klien ≈ **1 163–1 398 ms** (dua run independen), sementara **median
-tetap ~7 ms** dan **p95 sisi server ~0,24 dtk**. Artinya tail berasal dari
-**pemanasan JIT/kompilasi + pengisian pool koneksi pada detik-detik awal**, bukan
-kapasitas pemrosesan steady state:
+Pengukuran **100 tap/dtk pada JVM yang baru boot (tanpa warmup)** semula
+**melanggar** SLO: p95 klien ≈ **1 163–1 398 ms**, median ~7 ms, dan **5,74 %**
+permintaan melewati 1 dtk **di sisi server** (histogram
+`kantin_tap_duration_seconds` + `p95-prometheus.py` → `lulus_slo=false`).
 
-| Kondisi (100 tap/dtk) | p95 klien | median | p95 server | Lulus? |
-|---|---|---|---|---|
-| JVM **dingin** (langsung setelah boot) | ~1 163–1 398 ms | ~7 ms | ~0,24 dtk | ❌ |
-| JVM **hangat** (setelah warmup) | ~6–12 ms | ~5 ms | ~0,24 dtk | ✅ |
+Diagnosa (run `38536059471`, artefak nightly) menunjukkan tail **bukan** di
+CPU/JIT: CPU proses hanya 17 %, total jeda GC 0,1 dtk, throughput tetap
+99,3 tap/dtk. Penyebabnya **antrean kolam koneksi** — satu tap mengambil
+koneksi Hikari **~3 kali** (`hikaricp_connections_acquire_seconds_count` ≈ 3 ×
+jumlah tap); saat JVM masih dingin transaksi lebih lama sehingga kolam default
+**10** mendekati jenuh dan waktu tunggu meledak. Saat hangat tunggu itu hanya
+**0,09 ms** (7,6 dtk / 82 810 ambil) — itulah sebabnya warmup menutupi masalah.
 
-Karena SLO PRD §12 no.8 berbicara tentang **jam istirahat** (beban steady state,
-bukan detik pertama setelah deploy), workflow nightly kini menjalankan **warmup
-30 dtk @20 tap/dtk** sebelum pengukuran, sehingga gerbang mengukur kapasitas
-steady state dan tidak flaky. **Temuan cold-start ini tetap dicatat** sebagai
-kandidat optimasi terpisah (mis. `-XX:TieredStopAtLevel`, CDS/AppCDS, atau
-panaskan pool saat start) — lihat tindak lanjut §5.4.
+| 100 tap/dtk, JVM dingin | Sebelum | Sesudah (#180) |
+|---|---|---|
+| p95 klien (k6) | 1 167 ms ❌ | **689 ms** ✅ |
+| p95 server (Prometheus) | bucket `+Inf` ❌ | **676 ms** ✅ |
+| Tunggu ambil koneksi (total) | 1 327 dtk (87 % durasi tap) | 777 dtk |
+| Rata-rata tunggu ambil koneksi | 37 ms (maks 2,3 dtk) | 22 ms |
+| Tap > 1 dtk (server) | 5,74 % | 4,14 % |
+
+Perbaikan: `spring.datasource.hikari.maximum-pool-size=30`
+(`KANTIN_DB_POOL_MAX`), ditambah `server.tomcat.threads.min-spare=100`
+(`KANTIN_TOMCAT_MIN_SPARE`) dan opsi JVM `-Xms=-Xmx -XX:+AlwaysPreTouch` di
+workflow. Dua yang terakhir tidak menambah regresi (run dingin dengan keduanya
+tetapi kolam masih 10 tetap ~1 167 ms) — yang **terukur** memperbaiki adalah
+pelebaran kolam.
+
+Skenario cold-start kini bisa diukur eksplisit (workflow input `warmup`):
+
+```bash
+gh workflow run uji-beban-nightly.yml -f warmup=false -f tap_rate=100 -f duration=2m
+```
+
+SLO PRD §12 no.8 sendiri berbicara tentang **jam istirahat** (beban steady
+state), sehingga workflow nightly **default tetap warmup** 30 dtk @20 tap/dtk
+sebelum pengukuran (§5.2); gerbang cold-start tersedia lewat `warmup=false`.
+
+**Sisa headroom (belum dikerjakan):** 777 dtk dari 1 089 dtk total durasi tap
+masih habis menunggu koneksi, dan **3 pengambilan koneksi per tap** (3
+transaksi terpisah) adalah bau desain yang layak ditinjau ulang.
 
 ### 5.4 Kesimpulan & tindak lanjut
 
 - **SLO p95 ≤ 1 dtk pada laju target (50–100 tap/dtk) TERPENUHI** di runner target
   (GitHub Actions) — p95 klien 6–9 ms, p95 server 0,238 dtk (§5.2). Bukti
   tersimpan sebagai artefak run nightly (Acceptance Criteria #172).
-- **Cold-start** (100 tap/dtk tanpa warmup) melanggar SLO (§5.3). Karena PRD
-  mengukur steady state jam istirahat, warmup ditambahkan; optimasi cold-start
-  (JIT/CDS/pool) dibuka sebagai temuan terpisah.
+- **Cold-start** (100 tap/dtk tanpa warmup) juga **memenuhi** SLO setelah
+  pelebaran kolam Hikari 10 → 30: p95 klien 689 ms / server 676 ms (§5.3,
+  issue #180). Sebelumnya melanggar (p95 1 167 ms) karena antrean kolam.
+- Sisa optimasi cold-start — 3 pengambilan koneksi per tap, dan 777 dtk tunggu
+  kolam yang belum hilang — dicatat di §5.3 sebagai kandidat lanjutan.
 - Bila p95 **steady state** kembali > 1 dtk di runner target (regresi) → buka
   temuan optimasi (indeks DB, cache, N+1, ukuran pool Hikari, tuning JVM)
   sebagai issue terpisah dan tautkan ke #145/#161/#172.
@@ -223,7 +249,9 @@ menjalankan uji beban **terjadwal (nightly)** dan **manual** (`workflow_dispatch
 — **tidak** memblok PR (butuh Docker + boot app). Langkah:
 
 1. Spin up PostgreSQL 18 & Redis 7 (service container) + boot jar + seed.
-2. **Warmup** 30 dtk @20 tap/dtk (di luar pengukuran SLO — lihat §5.3).
+2. **Warmup** 30 dtk @20 tap/dtk (di luar pengukuran SLO — lihat §5.3). Langkah
+   ini **dilewati** bila dispatch memakai input `warmup=false` (skenario
+   cold-start, §5.3).
 3. Untuk **tiap laju** di `TAP_RATES` (default `50 75 100`, seluruh rentang target
    PRD): snapshot `/actuator/prometheus` **sebelum**, jalankan `k6 run` (threshold
    k6 = gerbang klien), snapshot **sesudah**, lalu silang-cek p95 server dengan

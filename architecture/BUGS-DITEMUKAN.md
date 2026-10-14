@@ -356,6 +356,15 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Catatan untuk FE:** `KonteksResponse.peran` untuk token kepsek kini bernilai `KEPSEK` (bukan `ADMIN_SEKOLAH`).
 
 
+## B40 — (performa #180) Cold-start 100 tap/dtk melanggar SLO karena antrean kolam koneksi Hikari
+
+- **Konteks:** SLO PRD §12 no.8 (p95 tap ≤ 1 dtk). Uji beban nightly semula hanya mengukur **steady state** (ada warmup 30 dtk), sehingga temuan cold-start dari #172 belum punya gerbang tersendiri.
+- **Gejala:** 100 tap/dtk pada **JVM baru boot tanpa warmup** → p95 klien 1 163–1 398 ms, dan **5,74 %** permintaan >1 dtk **di sisi server** (`kantin_tap_duration_seconds` → `lulus_slo=false`).
+- **Diagnosa:** CPU proses hanya 17 %, total jeda GC 0,1 dtk, throughput tetap 99,3 tap/dtk → **bukan** CPU/JIT. `hikaricp_connections_acquire_seconds_sum` = **1 327 dtk** dari total 1 522 dtk durasi tap (**87 %**); satu tap mengambil koneksi Hikari **~3×**; saat hangat tunggu itu hanya **0,09 ms**. Jadi tail = **antrean kolam koneksi** (rho → 1 ketika transaksi cold lebih lama).
+- **Perbaikan:** `spring.datasource.hikari.maximum-pool-size=30` (`KANTIN_DB_POOL_MAX`), `server.tomcat.threads.min-spare=100` (`KANTIN_TOMCAT_MIN_SPARE`), opsi JVM `-Xms=-Xmx -XX:+AlwaysPreTouch` di workflow, serta input dispatch `warmup=false` agar skenario cold-start dapat diukur eksplisit.
+- **Bukti:** run `38536059471` (sebelum) vs `38536969811` (sesudah) — p95 klien 1 167 → **689 ms**; p95 server bucket `+Inf` → **676 ms** (`lulus_slo=true`); tunggu kolam 1 327 → 777 dtk. Rincian di `docs/uji-beban-tap.md` §5.3.
+- **Sisa (belum dikerjakan):** **3 pengambilan koneksi per tap** (3 transaksi terpisah — bau desain) dan 777 dtk tunggu kolam yang belum hilang.
+
 ## Ringkasan untuk tim
 
 Saat menyalin kode dari `admin-be`, **selalu periksa**:

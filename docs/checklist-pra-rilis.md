@@ -69,9 +69,12 @@ Keterangan penanda:
 
 ## E. Database & migrasi
 
-- [ ] Seluruh migrasi Flyway **V1 … V22** diterapkan (22 migrasi)
+- [ ] Seluruh migrasi Flyway **V1 … V23** diterapkan (23 migrasi)
 - [ ] **Backup** database sebelum deploy
-- [ ] Ukuran pool Hikari sesuai kapasitas host (lihat `docs/uji-beban-tap.md`)
+- [ ] Ukuran pool Hikari sesuai kapasitas host — default `KANTIN_DB_POOL_MAX=30`.
+      Bukti uji beban 100 tap/dtk: kolam 10 ⇒ antrean koneksi, p95 1,2 dtk;
+      kolam 30 ⇒ p95 0,69 dtk (`docs/uji-beban-tap.md` §5.3, issue #180)
+- [ ] `KANTIN_TOMCAT_MIN_SPARE` (default 100) sesuai kapasitas host
 
 ## F. Observability
 
