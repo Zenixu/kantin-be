@@ -310,8 +310,6 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Uji baru:** `KompatibilitasTokenStafAdminTest` (5).
 
 
-## B35 — (audit RBAC) Peran `PETUGAS_KANTIN` dipetakan ke `PENGELOLA_KANTIN` (eskalasi hak)
-
 ## B36 — (audit keamanan #13) Filter keamanan terdaftar DUA KALI (auto-register + addFilterBefore)
 
 - **Konteks:** menindaklanjuti issue #13 (turunan B33). `RateLimitFilter` & `JwtAuthTokenFilter` adalah `@Component` → Spring Boot **auto-register** keduanya ke rantai filter servlet, **dan** `WebSecurityConfig` mendaftarkannya lagi lewat `http.addFilterBefore(...)`. Reproduksi dibuat lebih dulu (`FilterGandaIT`, gagal sebelum perbaikan).
