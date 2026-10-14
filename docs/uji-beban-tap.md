@@ -169,60 +169,71 @@ GitHub Actions, `main`) memberi hasil konsisten.
 Semua run: `tap_ok` 100%, `http_req_failed` 0%, `tap_rate_limited` 0%; cross-check
 Prometheus (`kantin_tap_duration_seconds`) `lulus_slo=true` di tiap laju.
 
-### 5.3 Cold-start: JVM baru boot tanpa warmup (temuan #172 → diperbaiki di #180)
+### 5.3 Cold-start: JVM baru boot tanpa warmup (temuan #172, lanjutan #180)
 
-Pengukuran **100 tap/dtk pada JVM yang baru boot (tanpa warmup)** semula
-**melanggar** SLO: p95 klien ≈ **1 163–1 398 ms**, median ~7 ms, dan **5,74 %**
-permintaan melewati 1 dtk **di sisi server** (histogram
-`kantin_tap_duration_seconds` + `p95-prometheus.py` → `lulus_slo=false`).
-
-Diagnosa (run `38536059471`, artefak nightly) menunjukkan tail **bukan** di
-CPU/JIT: CPU proses hanya 17 %, total jeda GC 0,1 dtk, throughput tetap
-99,3 tap/dtk. Penyebabnya **antrean kolam koneksi** — satu tap mengambil
-koneksi Hikari **~3 kali** (`hikaricp_connections_acquire_seconds_count` ≈ 3 ×
-jumlah tap); saat JVM masih dingin transaksi lebih lama sehingga kolam default
-**10** mendekati jenuh dan waktu tunggu meledak. Saat hangat tunggu itu hanya
-**0,09 ms** (7,6 dtk / 82 810 ambil) — itulah sebabnya warmup menutupi masalah.
-
-| 100 tap/dtk, JVM dingin | Sebelum | Sesudah (#180) |
-|---|---|---|
-| p95 klien (k6) | 1 167 ms ❌ | **689 ms** ✅ |
-| p95 server (Prometheus) | bucket `+Inf` ❌ | **676 ms** ✅ |
-| Tunggu ambil koneksi (total) | 1 327 dtk (87 % durasi tap) | 777 dtk |
-| Rata-rata tunggu ambil koneksi | 37 ms (maks 2,3 dtk) | 22 ms |
-| Tap > 1 dtk (server) | 5,74 % | 4,14 % |
-
-Perbaikan: `spring.datasource.hikari.maximum-pool-size=30`
-(`KANTIN_DB_POOL_MAX`), ditambah `server.tomcat.threads.min-spare=100`
-(`KANTIN_TOMCAT_MIN_SPARE`) dan opsi JVM `-Xms=-Xmx -XX:+AlwaysPreTouch` di
-workflow. Dua yang terakhir tidak menambah regresi (run dingin dengan keduanya
-tetapi kolam masih 10 tetap ~1 167 ms) — yang **terukur** memperbaiki adalah
-pelebaran kolam.
-
-Skenario cold-start kini bisa diukur eksplisit (workflow input `warmup`):
+Pengukuran **100 tap/dtk pada JVM yang baru boot (tanpa warmup)** **melanggar**
+SLO. Skenario ini kini bisa diukur eksplisit (workflow input `warmup`):
 
 ```bash
 gh workflow run uji-beban-nightly.yml -f warmup=false -f tap_rate=100 -f duration=2m
 ```
 
-SLO PRD §12 no.8 sendiri berbicara tentang **jam istirahat** (beban steady
-state), sehingga workflow nightly **default tetap warmup** 30 dtk @20 tap/dtk
-sebelum pengukuran (§5.2); gerbang cold-start tersedia lewat `warmup=false`.
+**Diagnosa (4 run cold-start).** Tail-nya **bukan** CPU/JIT — CPU proses hanya
+13–21 %, total jeda GC ~0,1 dtk, throughput tetap ~99 tap/dtk. Yang mendominasi
+adalah **waktu tunggu ambil koneksi Hikari**:
 
-**Sisa headroom (belum dikerjakan):** 777 dtk dari 1 089 dtk total durasi tap
-masih habis menunggu koneksi, dan **3 pengambilan koneksi per tap** (3
-transaksi terpisah) adalah bau desain yang layak ditinjau ulang.
+| Run | Kolam | p95 klien | p95 server | `hikaricp…acquire_sum` | Tap > 1 dtk |
+|---|---|---|---|---|---|
+| `38536059471` | 10 | 1 167 ms | `+Inf` ❌ | 1 327 dtk (87 % durasi tap) | 5,74 % |
+| `38536969811` | 30 | **689 ms** ✅ | 676 ms ✅ | 777 dtk | 4,14 % |
+| `38537759753` | 30 | 2 446 ms | `+Inf` ❌ | 2 486 dtk | 11,13 % |
+| `38538444320` | 30 | 2 366 ms | `+Inf` ❌ | 2 439 dtk | 10,49 % |
+
+**Penyebab (terkonfirmasi di kode).** Satu tap mengambil koneksi Hikari **3×**:
+dua pra-cek idempotency **di luar** transaksi
+(`TransaksiRepository.existsBySekolahIdAndIdempotencyKey`,
+`TransaksiMenungguKonfirmasiRepository.findBySekolahIdAndIdempotencyKey`) plus
+satu `TransactionTemplate` utama (`TapService.jalankanTap`); metrik
+`hikaricp_connections_acquire_seconds_count` ≈ 3 × jumlah tap. Saat JVM masih
+dingin transaksi lebih lama sehingga kolam (default **10**) mendekati jenuh dan
+tunggu meledak; saat hangat tunggu itu hanya **0,09 ms** (7,6 dtk / 82 810
+ambil) — itulah sebabnya warmup menutupi masalah.
+
+**Hasilnya TIDAK stabil di runner bersama** — ini temuan penting. Konfigurasi
+yang **sama** (kolam 30) memberi p95 **689 ms** di satu run dan **2 366–2 446 ms**
+di dua run lain; SHA yang sama diulang pun (dan SHA lama tanpa V23) memberi
+1 708 ms. Yang berkorelasi adalah kecepatan runner itu sendiri (boot 8,2 dtk vs
+10,7–11,6 dtk). Jadi **cold-start tidak layak dijadikan gerbang mutlak di runner
+CI bersama**: angka dari satu run tidak bisa dipakai sebagai bukti lulus/gagal.
+SLO PRD §12 no.8 sendiri berbicara tentang **jam istirahat** (steady state),
+sehingga nightly **default tetap warmup** 30 dtk @20 tap/dtk (§5.2).
+
+**Mitigasi yang dipasang:** `spring.datasource.hikari.maximum-pool-size=30`
+(`KANTIN_DB_POOL_MAX`), `server.tomcat.threads.min-spare=100`
+(`KANTIN_TOMCAT_MIN_SPARE`), dan opsi JVM `-Xms=-Xmx -XX:+AlwaysPreTouch` di
+workflow. Dua yang terakhir tidak terukur memberi perbaikan (tidak pula
+regresi); pelebaran kolam menurunkan tunggu ambil koneksi pada run pembanding
+yang sebanding (1 327 → 777 dtk).
+
+**Rekomendasi lanjutan (belum dikerjakan, butuh keputusan tim):**
+
+1. **Kurangi 3 → 1 pengambilan koneksi per tap** — jalankan kedua pra-cek
+   idempotency di dalam satu transaksi (atau di dalam transaksi utama). Ini
+   memangkas permintaan kolam ~66 % dan menyentuh penyebabnya langsung, tetapi
+   mengubah **jalur uang** → perlu tinjauan tersendiri.
+2. Bila angka absolut cold-start memang ingin dijadikan gerbang, ukur di
+   lingkungan terkendali (runner khusus / bare-metal), bukan runner bersama.
 
 ### 5.4 Kesimpulan & tindak lanjut
 
 - **SLO p95 ≤ 1 dtk pada laju target (50–100 tap/dtk) TERPENUHI** di runner target
   (GitHub Actions) — p95 klien 6–9 ms, p95 server 0,238 dtk (§5.2). Bukti
   tersimpan sebagai artefak run nightly (Acceptance Criteria #172).
-- **Cold-start** (100 tap/dtk tanpa warmup) juga **memenuhi** SLO setelah
-  pelebaran kolam Hikari 10 → 30: p95 klien 689 ms / server 676 ms (§5.3,
-  issue #180). Sebelumnya melanggar (p95 1 167 ms) karena antrean kolam.
-- Sisa optimasi cold-start — 3 pengambilan koneksi per tap, dan 777 dtk tunggu
-  kolam yang belum hilang — dicatat di §5.3 sebagai kandidat lanjutan.
+- **Cold-start** (100 tap/dtk tanpa warmup) **belum bisa dijadikan gerbang
+  mutlak**: penyebabnya antrean kolam koneksi (1 tap = 3× ambil koneksi, §5.3)
+  dan hasilnya sangat bervariasi antar runner (p95 689–2 446 ms dengan
+  konfigurasi sama). Mitigasi (kolam 10 → 30) sudah dipasang; perbaikan
+  struktural + cara pengukuran dicatat di §5.3.
 - Bila p95 **steady state** kembali > 1 dtk di runner target (regresi) → buka
   temuan optimasi (indeks DB, cache, N+1, ukuran pool Hikari, tuning JVM)
   sebagai issue terpisah dan tautkan ke #145/#161/#172.
