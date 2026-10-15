@@ -215,14 +215,30 @@ workflow. Dua yang terakhir tidak terukur memberi perbaikan (tidak pula
 regresi); pelebaran kolam menurunkan tunggu ambil koneksi pada run pembanding
 yang sebanding (1 327 → 777 dtk).
 
-**Rekomendasi lanjutan (belum dikerjakan, butuh keputusan tim):**
+**Perbaikan struktural #180 — 1 tap = 1 pengambilan koneksi (SELESAI).**
+Penyebab langsung (1 tap = 3× acquire) **sudah dihilangkan**: kedua pra-cek
+idempotency kini dijalankan **di dalam** transaksi utama (`TapService.jalankanTap`),
+sehingga satu tap hanya mengambil koneksi Hikari **1×** (turun ~66 % permintaan kolam).
+Perubahan ini menyentuh **jalur uang**, jadi diverifikasi ketat:
 
-1. **Kurangi 3 → 1 pengambilan koneksi per tap** — jalankan kedua pra-cek
-   idempotency di dalam satu transaksi (atau di dalam transaksi utama). Ini
-   memangkas permintaan kolam ~66 % dan menyentuh penyebabnya langsung, tetapi
-   mengubah **jalur uang** → perlu tinjauan tersendiri.
+- **Uji regresi** `TapKoneksiPerTapIT` (Testcontainers PostgreSQL) mengukur metrik
+  Micrometer `hikaricp.connections.acquire` sebelum/sesudah tap dan menuntut
+  selisih **tepat 1** — untuk jalur sukses, replay idempotent, tap pending, dan
+  konfirmasi. Ini mencegah regresi bila pra-cek dipindah kembali ke luar transaksi.
+- **Korban yang dijaga tetap utuh:** seluruh `TapServiceIT` (10 kasus — idempotency,
+  saldo/stok kurang, konfirmasi manual, race) **hijau**, `DemoE2EIT` hijau.
+- Semantik idempotency **tidak berubah**: pra-cek masih dijalankan sebelum eksekusi
+  di dalam transaksi yang sama; penanganan balapan (`DataIntegrityViolationException`
+  → pakai pemenang) tetap dipertahankan.
+
+**Rekomendasi lanjutan:**
+
+1. ✅ **Kurangi 3 → 1 pengambilan koneksi per tap** — **selesai** (lihat di atas).
 2. Bila angka absolut cold-start memang ingin dijadikan gerbang, ukur di
    lingkungan terkendali (runner khusus / bare-metal), bukan runner bersama.
+   Dengan acquire turun ~66 %, tekanan pada kolam saat JVM dingin ikut turun,
+   tetapi **varians runner bersama** tetap membuat satu run tidak dapat dijadikan
+   bukti lulus/gagal mutlak (§5.3).
 
 ### 5.4 Kesimpulan & tindak lanjut
 
