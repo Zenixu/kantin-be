@@ -364,7 +364,7 @@ Integration**. Semua sudah ditindaklanjuti kecuali yang ditandai menunggu.
 - **Perbaikan:** `spring.datasource.hikari.maximum-pool-size=30` (`KANTIN_DB_POOL_MAX`), `server.tomcat.threads.min-spare=100` (`KANTIN_TOMCAT_MIN_SPARE`), opsi JVM `-Xms=-Xmx -XX:+AlwaysPreTouch` di workflow, serta input dispatch `warmup=false` agar skenario cold-start dapat diukur eksplisit.
 - **Bukti:** 4 run cold-start — `38536059471` (kolam 10) p95 1 167 ms; `38536969811` (kolam 30) **689 ms**; `38537759753` & `38538444320` (kolam 30, konfigurasi **sama**) 2 446 / 2 366 ms; SHA lama diulang 1 708 ms. Rincian di `docs/uji-beban-tap.md` §5.3.
 - **Kesimpulan:** penyebab terkonfirmasi (antrean kolam; 1 tap = 3× ambil koneksi) dan mitigasi sudah dipasang, tetapi **cold-start tidak stabil di runner bersama** (p95 689–2 446 ms dengan konfigurasi sama) → tidak layak dijadikan gerbang mutlak dari satu run.
-- **Sisa (belum dikerjakan):** kurangi **3 → 1 pengambilan koneksi per tap** (jalankan kedua pra-cek idempotency di dalam satu transaksi / transaksi utama) — memangkas permintaan kolam ~66 %, tetapi mengubah **jalur uang** sehingga perlu tinjauan tersendiri.
+- **Sisa (SELESAI):** kurangi **3 → 1 pengambilan koneksi per tap** — kedua pra-cek idempotency kini dijalankan **di dalam** transaksi utama (`TapService.jalankanTap`), memangkas permintaan kolam ~66 % dan menyentuh penyebab langsung. Diverifikasi uji regresi `TapKoneksiPerTapIT` (metrik `hikaricp.connections.acquire` = 1 per tap) + seluruh `TapServiceIT`/`DemoE2EIT` tetap hijau.
 
 ## Ringkasan untuk tim
 
