@@ -3,7 +3,7 @@
 > **Single source of truth endpoint kantin-be.** Semua path berprefix `/api`.
 > Respons selalu dibungkus `Response<T>` (`{ responseCode, message, data, ... }`).
 >
-> **Sinkron terakhir:** 2026-10-12 · **Total: 87 endpoint** (86 di `controller/` + 1 shim dev)
+> **Sinkron terakhir:** 2026-10-14 · **Total: 87 endpoint** (86 di `controller/` + 1 shim dev)
 > di **14 controller**. Dijaga otomatis oleh `ApiEndpointsDocTest` — uji ini
 > **gagal** bila daftar di bawah tidak lagi sama persis dengan anotasi
 > `@…Mapping` di kode. Bila menambah/mengubah endpoint, perbarui dokumen ini.

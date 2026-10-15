@@ -4,8 +4,8 @@ Backend modul **kantin sekolah cashless** untuk platform SKOOLIA. 100% non-tunai
 pembeli membayar dengan **tap kartu RFID**, saldo didebit dari ledger append-only,
 stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
-> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **256 unit test + 30 integration test** ·
-> **22 migrasi Flyway**. Sisa pekerjaan: **integrasi eksternal** (6 adapter REST **sudah ada**, menunggu
+> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **263 unit test + 34 kelas IT** ·
+> **23 migrasi Flyway**. Sisa pekerjaan: **integrasi eksternal** (6 adapter REST **sudah ada**, menunggu
 > kredensial/kontrak tim SKOOLIA) dan **hardening/operasional**
 > — lihat [Peta Sisa Pekerjaan](#-peta-sisa-pekerjaan).
 >
@@ -109,15 +109,15 @@ karena MSYS mengubah path. Pakai salah satu:
 ## 🧪 Test & Build
 
 ```bash
-./mvnw -o -q test             # 256 unit test (43 file *Test)
-./mvnw -o -q verify           # + 30 integration test (*IT, Testcontainers) + laporan JaCoCo
+./mvnw -o -q test             # 263 unit test (45 file *Test)
+./mvnw -o -q verify           # + 34 kelas IT (*IT, Testcontainers) + laporan JaCoCo
 ./mvnw clean package          # build jar
 ```
 
 > Di Git Bash (MSYS) `./mvnw` bisa gagal — pakai `./mvnw.cmd` atau helper lokal
 > `./mvn-run.sh` (lihat bagian Git Bash di atas).
 
-- Unit test: **256 lolos, 0 gagal** (`target/surefire-reports/`).
+- Unit test: **263 lolos, 0 gagal** (`target/surefire-reports/`).
 - Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata) —
   butuh **Docker aktif**; dijalankan lewat `verify`/`failsafe`.
 - **Cakupan test (JaCoCo)**: `./mvnw verify` menulis `target/site/jacoco/`
@@ -167,7 +167,7 @@ src/main/java/com/asqi/scholia_kantin_be/
 ├── scheduler/       auto-tutup sesi kasir, retry posting Buku Kas
 └── security/        TenantContext, blacklist token
 
-src/main/resources/db/migration/   V1 … V22 (Flyway)
+src/main/resources/db/migration/   V1 … V23 (Flyway)
 architecture/                      dokumentasi teknis (PRD, ADR, konvensi, dsb.)
 docs/                              spesifikasi, plan, integrasi, SQL manual
 ```
