@@ -1,15 +1,17 @@
 # 🍽️ kantin-be — Modul Kantin Cashless SKOOLIA (Backend)
 
 Backend modul **kantin sekolah cashless** untuk platform SKOOLIA. 100% non-tunai:
-pembeli membayar dengan **tap kartu RFID**, saldo didebit dari ledger append-only,
+pembeli membayar dengan **tap kartu RFID**, saldo didebit dari **ledger append-only**,
 stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
-> **Status:** MVP fitur (PRD §4–§11) selesai · **87 endpoint** · **263 unit test + 34 kelas IT** ·
-> **23 migrasi Flyway**. Sisa pekerjaan: **integrasi eksternal** (6 adapter REST **sudah ada**, menunggu
-> kredensial/kontrak tim SKOOLIA) dan **hardening/operasional**
-> — lihat [Peta Sisa Pekerjaan](#-peta-sisa-pekerjaan).
+> **Status:** MVP fitur (PRD §4–§11) selesai. Sisa pekerjaan: **integrasi eksternal**
+> (adapter REST sudah ada, menunggu kredensial tim SKOOLIA) & **hardening/operasional**.
+> Indeks sisa pekerjaan: [#165](https://github.com/Zenixu/kantin-be/issues/165).
 >
-> Daftar endpoint lengkap & tersinkron: [`architecture/API-ENDPOINTS.md`](architecture/API-ENDPOINTS.md)
+> **Stack:** Java 25 · Spring Boot 4 (webmvc) · PostgreSQL + Flyway · Redis 7 ·
+> JWT RS256 · MinIO/S3 · Apache POI (XLSX) · Maven · Docker/Jenkins.
+>
+> Kontrak API lengkap: [`architecture/API-ENDPOINTS.md`](architecture/API-ENDPOINTS.md)
 > (dijaga otomatis oleh `ApiEndpointsDocTest`).
 
 ---
@@ -18,135 +20,52 @@ stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
 | Dokumen | Untuk apa |
 |---|---|
-| [`architecture/README.md`](architecture/README.md) | **Pusat dokumentasi teknis** — baca dalam urutan bernomor |
-| [`architecture/AGENTS.md`](architecture/AGENTS.md) | **Kontrak kerja** — aturan emas, stack, DoD, larangan |
-| [`architecture/ONBOARDING.md`](architecture/ONBOARDING.md) | Anggota baru: alat, setup, checklist hari pertama |
-| [`architecture/2026-10-01-prd-kantin-skoolia.md`](architecture/2026-10-01-prd-kantin-skoolia.md) | PRD (sumber kebenaran kebutuhan produk) |
-| [`architecture/API-ENDPOINTS.md`](architecture/API-ENDPOINTS.md) | Rujukan kontrak API |
+| [`architecture/README.md`](architecture/README.md) | **Pusat dokumentasi teknis** — baca berurutan |
+| [`architecture/AGENTS.md`](architecture/AGENTS.md) | **Kontrak kerja** — aturan emas, stack, DoD |
+| [`architecture/ONBOARDING.md`](architecture/ONBOARDING.md) | Anggota baru: alat, setup, hari pertama |
+| [`architecture/2026-10-01-prd-kantin-skoolia.md`](architecture/2026-10-01-prd-kantin-skoolia.md) | PRD (sumber kebenaran kebutuhan) |
 | [`README-DEV.md`](README-DEV.md) | Panduan dev Database & Integration (PostgreSQL, Redis, MinIO) |
-| [`GIT-WORKFLOW.md`](GIT-WORKFLOW.md) | Branching, PR, review, penanganan konflik |
-
----
-
-## 🧱 Stack
-
-| Lapisan | Teknologi |
-|---|---|
-| Bahasa / Runtime | **Java 25** (`.sdkmanrc`: `java=25-tem`) |
-| Framework | **Spring Boot 4.0.2** (webmvc) |
-| Database | **PostgreSQL** + **Flyway** (migrasi; `ddl-auto=none`) |
-| Persistensi | Spring Data **JPA** + **JDBC** |
-| Cache / Rate limit | **Redis 7** (blacklist token, rate limit, cache) |
-| Auth | **JWT RS256** (tanpa login sendiri — token dari SKOOLIA) |
-| Objek/berkas | **MinIO / S3** (`S3Storage`) |
-| Ekspor | **Apache POI** (XLSX) |
-| Build | **Maven** (`./mvnw`) |
-| Infra & deploy | **Docker** + **Jenkins** → k3s |
+| [`GIT-WORKFLOW.md`](GIT-WORKFLOW.md) | Branching, PR, review, konflik |
 
 ---
 
 ## 🚀 Menjalankan Cepat (Lokal)
 
-### 1. Nyalakan infrastruktur (PostgreSQL + Redis)
-
 ```bash
-docker compose up -d
-docker compose ps          # pastikan keduanya "healthy"
-```
+docker compose up -d                                  # PostgreSQL 18 + Redis 7
+docker compose ps                                     # pastikan keduanya "healthy"
 
-- PostgreSQL 18 → `localhost:5432`, db `kantin_db`, user `kantin`
-- Redis 7 → `localhost:6379`
-
-### 2. Siapkan konfigurasi lokal
-
-```bash
 cp src/main/resources/application-local.properties.example \
-   src/main/resources/application-local.properties
-# isi nilai <GANTI_...> ; file ini sudah di-.gitignore — JANGAN commit kredensial
+   src/main/resources/application-local.properties     # isi nilai <GANTI_...>
+
+./mvnw spring-boot:run                                # profil default = local, port 8082
 ```
 
-> Alternatif berbasis **environment variable** (untuk `docker compose`/container):
-> `cp .env.example .env` lalu isi nilai `<GANTI_...>` (issue #149). Daftar lengkap
-> variabel ada di `.env.example`.
-
-### 3. Jalankan aplikasi
-
-```bash
-./mvnw spring-boot:run        # profil default = local, port 8082
-```
-
-> Port aplikasi **8082** (admin-be 8081, agar tidak bentrok).
-
-### 4. (Opsional) Demo alur kasir E2E tanpa data SKOOLIA
-
-Untuk menguji **tap → potong saldo/stok → tutup sesi → laporan** di lokal
-**tanpa** menunggu tim SKOOLIA (Q7), pakai profil `demo` + seed demo:
-
-```bash
-SPRING_PROFILES_ACTIVE=local,demo ./mvnw spring-boot:run
-psql "postgresql://kantin:kantin_dev@localhost:5432/kantin_db" -f load/seed/seed-demo.sql
-```
-
-Langkah lengkap (token, curl, reset): [`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md).
-⚠️ Profil `demo` **hanya lokal** — jangan dipakai di staging/produksi.
-
-### ⚠️ Git Bash (MSYS) di Windows
-
-`./mvnw` (versi shell) bisa gagal `ClassNotFoundException: ...classworlds.launcher.Launcher`
-karena MSYS mengubah path. Pakai salah satu:
-
-```bash
-./mvnw.cmd clean compile      # Opsi A — PowerShell / CMD
-./mvn-run.sh clean test       # Opsi B — helper lokal Git Bash (tidak di-commit; lihat catatan)
-```
-
-> `mvn-run.sh` adalah helper lokal yang **tidak dilacak git** (berisi path mesin
-> masing-masing) — buat sendiri bila perlu, lihat [`README-DEV.md`](README-DEV.md) §7.
-> Untuk CI/anggota lain, pakai `./mvnw` / `./mvnw.cmd` (Opsi A).
+- PostgreSQL → `localhost:5432` (db `kantin_db`, user `kantin`) · Redis → `localhost:6379`.
+- Port aplikasi **8082** (admin-be 8081, agar tidak bentrok).
+- Alternatif berbasis env var (container): `cp .env.example .env` — daftar lengkap di file itu.
+- **Git Bash (MSYS) di Windows:** `./mvnw` bisa gagal (`classworlds.launcher.Launcher`) karena
+  MSYS mengubah path — pakai `./mvnw.cmd` (PowerShell/CMD) atau helper lokal `./mvn-run.sh`
+  (lihat [`README-DEV.md`](README-DEV.md) §7).
+- **Demo kasir E2E tanpa data SKOOLIA:** profil `demo` + seed demo
+  ([`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md)). Profil `demo` **hanya lokal**.
 
 ---
 
 ## 🧪 Test & Build
 
 ```bash
-./mvnw -o -q test             # 263 unit test (45 file *Test)
-./mvnw -o -q verify           # + 34 kelas IT (*IT, Testcontainers) + laporan JaCoCo
-./mvnw clean package          # build jar
+./mvnw test              # unit test
+./mvnw verify            # + integration test (Testcontainers) + laporan JaCoCo
+./mvnw clean package     # build jar
 ```
 
-> Di Git Bash (MSYS) `./mvnw` bisa gagal — pakai `./mvnw.cmd` atau helper lokal
-> `./mvn-run.sh` (lihat bagian Git Bash di atas).
-
-- Unit test: **263 lolos, 0 gagal** (`target/surefire-reports/`).
-- Integration test: `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata) —
-  butuh **Docker aktif**; dijalankan lewat `verify`/`failsafe`.
-- **Cakupan test (JaCoCo)**: `./mvnw verify` menulis `target/site/jacoco/`
-  (HTML/XML/CSV); diunggah sebagai artefak CI. Angka & skenario UAT/DoD rilis:
+- Integration test `*IT` memakai **Testcontainers** (PostgreSQL + Redis nyata) → butuh **Docker**;
+  dijalankan lewat `verify`/failsafe.
+- **Cakupan (JaCoCo):** `target/site/jacoco/`; angka & skenario UAT/DoD rilis:
   [`docs/uat-dan-dod-rilis.md`](docs/uat-dan-dod-rilis.md).
-- `TODO`/`FIXME` di `src/main`: **0**.
-
-### CI (otomatis per-PR)
-
-- **GitHub Actions** — [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
-  tiap push/PR ke `main` menjalankan `./mvnw verify` (JDK 25 temurin,
-  unit + integration test) dan mengunggah laporan test. **Wajib hijau** sebelum merge
-  (WORKFLOW.md §4).
-- **Jenkinsfile** — stage `Test` (`./mvnw verify`) berjalan **sebelum** build image,
-  jadi pipeline gagal bila ada test merah.
-
-### Observability
-
-- Metrik Prometheus di `GET /actuator/prometheus` (Micrometer). SLO tap p95 ≤ 1 dtk
-  (PRD §12) diukur lewat timer `kantin_tap_duration_seconds`. Detail & contoh query/alert:
-  [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md).
-- **Uji beban** (k6) untuk memverifikasi SLO tap p95 ≤ 1 dtk: [`docs/uji-beban-tap.md`](docs/uji-beban-tap.md)
-  (skrip di `load/`, wiring CI nightly).
-
-### Dokumentasi API (OpenAPI)
-
-- **Swagger UI**: `GET /swagger-ui.html` · **spesifikasi**: `GET /v3/api-docs`
-  (springdoc-openapi, tergenerasi dari kode — issue #149). Publik bila
-  `KANTIN_OPENAPI_PUBLIC=true` (default); set `false` untuk menutupnya di balik JWT.
+- **CI:** GitHub Actions per-PR ([`.github/workflows/ci.yml`](.github/workflows/ci.yml),
+  `./mvnw verify`) + Jenkinsfile stage `Test` sebelum build image. Wajib hijau sebelum merge.
 
 ---
 
@@ -154,21 +73,16 @@ karena MSYS mengubah path. Pakai salah satu:
 
 ```
 src/main/java/com/asqi/scholia_kantin_be/
-├── controller/      13 REST controller (Auth, Kasir, Saldo, Stok, Katalog,
-│                    KartuTamu, KontrolKartu, Laporan, KonfigurasiKantin,
-│                    PengaturanKantin, Storage, Webhook, Internal)
-├── service/         logika domain (kasir, saldo, stok, katalog, kartu,
-│                    laporan, konfigurasi, storage, webhook, integrasi)
-├── repository/      Spring Data JPA
-├── model/           entitas JPA (ledger append-only)
-├── dto/ enums/      kontrak data & enumerasi domain
-├── config/          security (JWT), ratelimit, webhook, internal, notifikasi, aktivasi
-├── component/       audit logger, exception, rate limit
-├── scheduler/       auto-tutup sesi kasir, retry posting Buku Kas
-└── security/        TenantContext, blacklist token
+├── controller/   REST controller (Auth, Kasir, Saldo, Stok, Katalog, KartuTamu,
+│                 KontrolKartu, Laporan, KonfigurasiKantin, PengaturanKantin, Storage, Webhook, Internal)
+├── service/      logika domain (kasir, saldo, stok, katalog, kartu, laporan, integrasi)
+├── repository/   Spring Data JPA        ├── model/    entitas JPA (ledger append-only)
+├── config/       security (JWT), ratelimit, webhook, internal, notifikasi, aktivasi
+├── component/    audit logger, exception, rate limit
+└── scheduler/    auto-tutup sesi kasir, retry posting Buku Kas
 
-src/main/resources/db/migration/   V1 … V23 (Flyway)
-architecture/                      dokumentasi teknis (PRD, ADR, konvensi, dsb.)
+src/main/resources/db/migration/   migrasi Flyway (V1 …)
+architecture/                      dokumentasi teknis (PRD, ADR, konvensi)
 docs/                              spesifikasi, plan, integrasi, SQL manual
 ```
 
@@ -189,79 +103,31 @@ docs/                              spesifikasi, plan, integrasi, SQL manual
 
 ## 🔌 Integrasi Eksternal
 
-Semua panggilan lintas-sistem lewat `service/integrasi/`. **6 adapter REST nyata sudah ada**
-(`config/integrasi/*RestClient`, diuji kontrak WireMock — [#160](https://github.com/Zenixu/kantin-be/issues/160))
-tetapi **default nonaktif** (`kantin.integrasi.*.enabled=false`); selama nonaktif, `*Fallback` yang dipakai.
-Di staging/produksi, `kantin.integrasi.wajib-aktif=true` **menggagalkan start** bila masih ada `*Fallback`
-([#164](https://github.com/Zenixu/kantin-be/issues/164)). Untuk demo tanpa kredensial, profil `demo`
-mengaktifkan adapter **demo** yang meniru sistem eksternal (`dev/*Demo`):
+Semua panggilan lintas-sistem lewat `service/integrasi/`. **Adapter REST nyata sudah ada**
+(diuji kontrak WireMock) tetapi **default nonaktif** (`kantin.integrasi.*.enabled=false`);
+selama nonaktif, `*Fallback` yang dipakai. Di staging/produksi `kantin.integrasi.wajib-aktif=true`
+**menggagalkan start** bila masih ada `*Fallback`. Untuk demo tanpa kredensial, profil `demo`
+memakai adapter `dev/*Demo`.
 
-| Target | Kegunaan | Status |
-|---|---|---|
-| `admin-be` | Buku Kas, lookup kartu/siswa | ⚠️ adapter REST ada; default `*Fallback` (butuh kredensial) |
-| `mobile-be` | Notifikasi, identitas ortu | ⚠️ adapter REST ada; default `*Fallback` (butuh kredensial) |
-| `callback-be` | Callback top-up online | ✅ webhook HMAC terpasang |
-| `internal-be` | Aktivasi modul & fee platform | ⚠️ adapter REST ada; default `*Fallback` (butuh kredensial) |
+| Target | Kegunaan |
+|---|---|
+| `admin-be` | Buku Kas, lookup kartu/siswa |
+| `mobile-be` | Notifikasi, identitas ortu |
+| `callback-be` | Callback top-up online (webhook HMAC) |
+| `internal-be` | Aktivasi modul & fee platform |
 
-Rincian kontrak & pertanyaan yang memblokir: [`architecture/INTEGRATIONS.md`](architecture/INTEGRATIONS.md)
-dan [`architecture/OPEN-QUESTIONS.md`](architecture/OPEN-QUESTIONS.md).
-Jalur demo end-to-end (tanpa API key): [`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md).
+Kontrak & pertanyaan yang memblokir: [`architecture/INTEGRATIONS.md`](architecture/INTEGRATIONS.md)
+· [`architecture/OPEN-QUESTIONS.md`](architecture/OPEN-QUESTIONS.md).
 
 ---
 
-## 🌿 Branch & Alur Kerja
+## 📊 Observability & Dokumentasi API
 
-- Branch tetap: **`main`** saja (model **main-only**; `develop` dihapus 2026-10-14).
-- **Tidak boleh push langsung** ke `main` — selalu via **PR + review**
-  ([`GIT-WORKFLOW.md`](GIT-WORKFLOW.md), [`architecture/WORKFLOW.md`](architecture/WORKFLOW.md)).
-- Branch fitur: `feat/<nama>` · `fix/<nama>` — hapus setelah PR di-merge.
-- Format commit: `type(scope): deskripsi` — `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
-
-```bash
-git checkout main && git pull origin main
-git checkout -b feat/nama-fitur
-# ... kerja ...
-git commit -m "feat(kasir): tambah validasi urutan 6 tahap"
-git push -u origin feat/nama-fitur   # buka PR ke main
-```
-
----
-
-## 🧭 Peta Sisa Pekerjaan
-
-Sisa pekerjaan dilacak sebagai **issue GitHub** di
-[`Zenixu/kantin-be`](https://github.com/Zenixu/kantin-be/issues) (label `tracking`).
-Indeks terkini: **[#165](https://github.com/Zenixu/kantin-be/issues/165)**.
-
-Yang menahan sisa progres:
-
-1. **6 integrasi eksternal** — adapter REST nyata **sudah ada** & diuji WireMock
-   ([#160](https://github.com/Zenixu/kantin-be/issues/160)), tetapi **belum tersambung ke endpoint/kunci
-   produksi**. Menunggu tim admin-be / mobile-be / callback-be / internal-be
-   (OPEN-QUESTIONS Q4–Q8) & public key RS256 produksi (Q1/Q2) —
-   [#164](https://github.com/Zenixu/kantin-be/issues/164) (blocked). Jalur **demo** tanpa API key
-   sudah tersedia ([`docs/demo-e2e-kasir.md`](docs/demo-e2e-kasir.md)).
-2. **Hardening & operasional** — SLO uji beban tap p95 **tervalidasi lulus di laju target 50–100 tap/dtk**
-   pada runner target ([#172](https://github.com/Zenixu/kantin-be/issues/172); hasil di
-   [`docs/uji-beban-tap.md`](docs/uji-beban-tap.md) §5.2, p95 klien 6–9 ms, p95 server 0,238 dtk).
-   Catatan: pada **JVM dingin** (tanpa warmup) laju 100 tap/dtk masih melanggar SLO → temuan
-   cold-start terpisah. Proteksi branch **belum aktif**
-   ([#171](https://github.com/Zenixu/kantin-be/issues/171)); checklist hardening pra-produksi
-   ([#173](https://github.com/Zenixu/kantin-be/issues/173)); UAT & cakupan test
-   ([#174](https://github.com/Zenixu/kantin-be/issues/174)). CI per-PR & metrics sudah aktif (#141/#146).
-3. **Doc drift** ([#175](https://github.com/Zenixu/kantin-be/issues/175)) & **seed demo E2E**
-   ([#163](https://github.com/Zenixu/kantin-be/issues/163)) — sebagian besar sudah dirapikan.
-
-> Laporan **"Setoran kas TU"** & ekspor **"Per siswa"** (PRD §9.5) **sudah selesai**
-> (#143/#144) — bukan lagi bagian dari sisa pekerjaan.
-
----
-
-## 👥 Tim
-
-Dikelola tim PKL SKOOLIA (pembagian jobdesk: *Security & Controller*, *Service & Repository*,
-*Database & Integration*). Lihat [`architecture/AGENTS.md`](architecture/AGENTS.md) & issue
-berlabel `jobdesk-*`.
+- Metrik Prometheus: `GET /actuator/prometheus` (Micrometer); SLO tap p95 ≤ 1 dtk diukur lewat
+  timer `kantin_tap_duration_seconds` — [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md).
+- Uji beban (k6) untuk SLO tap: [`docs/uji-beban-tap.md`](docs/uji-beban-tap.md) (skrip di `load/`).
+- Swagger UI: `GET /swagger-ui.html` · OpenAPI: `GET /v3/api-docs` (springdoc). Publik bila
+  `KANTIN_OPENAPI_PUBLIC=true`; set `false` untuk menutup di balik JWT.
 
 ---
 
