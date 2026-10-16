@@ -6,7 +6,7 @@ stok berkurang otomatis, dan penjualan terposting ke Buku Kas SKOOLIA.
 
 > **Status:** MVP fitur (PRD §4–§11) selesai. Sisa pekerjaan: **integrasi eksternal**
 > (adapter REST sudah ada, menunggu kredensial tim SKOOLIA) & **hardening/operasional**.
-> Indeks sisa pekerjaan: [#165](https://github.com/Zenixu/kantin-be/issues/165).
+> Indeks sisa pekerjaan: [#165](https://github.com/ngahizie/kantin-be/issues/165).
 >
 > **Stack:** Java 25 · Spring Boot 4 (webmvc) · PostgreSQL + Flyway · Redis 7 ·
 > JWT RS256 · MinIO/S3 · Apache POI (XLSX) · Maven · Docker/Jenkins.
@@ -131,4 +131,4 @@ Kontrak & pertanyaan yang memblokir: [`architecture/INTEGRATIONS.md`](architectu
 
 ---
 
-*Repo: `github.com/Zenixu/kantin-be` · Versi 0.0.1-SNAPSHOT*
+*Repo: `github.com/ngahizie/kantin-be` · Versi 0.0.1-SNAPSHOT*

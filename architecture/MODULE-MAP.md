@@ -8,11 +8,11 @@
 
 > **Status per 2026-10-14:** Fase 0–9 **selesai** (kode + test hijau). Fase 10
 > (hardening) hampir tuntas: CI per-PR & metrics aktif, **proteksi branch `main` AKTIF**
-> ([#171](https://github.com/Zenixu/kantin-be/issues/171) CLOSED — model *main-only*,
+> ([#171](https://github.com/ngahizie/kantin-be/issues/171) CLOSED — model *main-only*,
 > lihat [`docs/plan-branch-protection.md`](../docs/plan-branch-protection.md)), uji beban
 > k6 SLO tap **lulus di laju target 50–100 tap/dtk** di runner target
-> ([#172](https://github.com/Zenixu/kantin-be/issues/172) CLOSED; temuan cold-start
-> dipisah ke [#180](https://github.com/Zenixu/kantin-be/issues/180)).
+> ([#172](https://github.com/ngahizie/kantin-be/issues/172) CLOSED; temuan cold-start
+> dipisah ke [#180](https://github.com/ngahizie/kantin-be/issues/180)).
 > Sisa sebenarnya = **integrasi eksternal** (adapter REST sudah ada, belum tersambung
 > ke kredensial/kontrak tim lain), yang **bukan** lagi soal menulis fitur melainkan
 > menunggu tim SKOOLIA.
@@ -32,10 +32,10 @@ FASE 10 Hardening & UAT     →  audit, performa, keamanan, DoD                �
 ```
 
 **Sisa nyata:** 6 integrasi eksternal — adapter REST **sudah ada** & diuji WireMock
-([#160](https://github.com/Zenixu/kantin-be/issues/160)) tetapi belum tersambung ke
+([#160](https://github.com/ngahizie/kantin-be/issues/160)) tetapi belum tersambung ke
 endpoint/kunci produksi; jalur demo tersedia. Menunggu kredensial/kontrak tim SKOOLIA
-([#164](https://github.com/Zenixu/kantin-be/issues/164)). Indeks:
-[#165](https://github.com/Zenixu/kantin-be/issues/165).
+([#164](https://github.com/ngahizie/kantin-be/issues/164)). Indeks:
+[#165](https://github.com/ngahizie/kantin-be/issues/165).
 
 ---
 

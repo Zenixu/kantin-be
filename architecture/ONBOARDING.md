@@ -58,7 +58,7 @@ Cek cepat (harus menampilkan **Java version: 25**):
 - [ ] **1. Clone repo**
   ```bash
   cd ~/Projects/PKL/Kantin-Skoolia
-  git clone git@github.com:Zenixu/kantin-be.git
+  git clone git@github.com:ngahizie/kantin-be.git
   cd kantin-be
   ```
 - [ ] **2. Baca dokumen §1.**

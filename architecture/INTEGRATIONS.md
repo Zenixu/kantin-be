@@ -46,7 +46,7 @@
 > toleran terhadap klaim yang tersedia & memanggil `GET /api/auth/me` admin-be untuk
 > melengkapi identitas bila klaim absen. Yang **masih perlu**: **public key RS256
 > produksi** admin-be & mobile-be (dev memakai keypair temporary). Lihat
-> [`OPEN-QUESTIONS.md`](./OPEN-QUESTIONS.md) Q1/Q2 & [#164](https://github.com/Zenixu/kantin-be/issues/164).
+> [`OPEN-QUESTIONS.md`](./OPEN-QUESTIONS.md) Q1/Q2 & [#164](https://github.com/ngahizie/kantin-be/issues/164).
 
 ---
 
@@ -205,7 +205,7 @@ POST /api/webhook/{sumber}   (mis. CALLBACK_BE)
 > 🟡 **ADAPTER SIAP; TINGGAL AKTIVASI.** Kontrak ditetapkan (`POST /api/internal/notifikasi`
 > ke mobile-be, lihat Q5) — adapter REST + uji kontrak WireMock sudah ada, **default nonaktif**.
 > Untuk demo tanpa kredensial, profil `demo` memakai `NotifikasiDemo`. Aktivasi produksi
-> menunggu endpoint/kredensial ([#164](https://github.com/Zenixu/kantin-be/issues/164)).
+> menunggu endpoint/kredensial ([#164](https://github.com/ngahizie/kantin-be/issues/164)).
 
 ---
 
@@ -219,7 +219,7 @@ POST /api/webhook/{sumber}   (mis. CALLBACK_BE)
 > menegakkan toggle (sekolah nonaktif → 409, fail-open bila status tak diketahui),
 > adapter REST + demo tersedia. Toggle tetap **milik internal-be** (bukan tugas
 > kantin-be). Aktivasi produksi menunggu endpoint/kredensial
-> ([#164](https://github.com/Zenixu/kantin-be/issues/164)).
+> ([#164](https://github.com/ngahizie/kantin-be/issues/164)).
 
 ---
 

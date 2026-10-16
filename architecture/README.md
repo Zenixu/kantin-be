@@ -29,7 +29,7 @@
 - **Apa:** backend modul kantin cashless SKOOLIA (100% non-tunai, tap kartu RFID).
 - **Stack:** Java 25 · Spring Boot 4.0.2 (webmvc) · PostgreSQL · Flyway · JPA/JDBC · Redis · JWT RS256 · MinIO · Apache POI · Maven · Docker + Jenkins.
 - **Prinsip inti:** ledger append-only · saldo/stok tak boleh minus · idempotency · tenant scoping (404) · RBAC backend · blokir kartu instan (tanpa cache) · tap ≤1 dtk.
-- **Repo:** `git@github.com:Zenixu/kantin-be.git`
+- **Repo:** `git@github.com:ngahizie/kantin-be.git`
 - **Dokumen produk:** `../2026-10-01-prd-kantin-skoolia.md` (teknis v4) & `../2026-10-01-prd-kantin-skoolia-non-teknis.md`.
 
 ---

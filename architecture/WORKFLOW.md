@@ -31,14 +31,15 @@ main            ← production-ready. PROTECTED. Satu-satunya branch tetap.
 > **Tidak boleh push langsung ke `main`.** Selalu via PR.
 >
 > ✅ **Proteksi branch AKTIF** (diaktifkan **2026-10-13**, issue
-> [#171](https://github.com/Zenixu/kantin-be/issues/171)) — ditegakkan lewat **ruleset**
+> [#171](https://github.com/ngahizie/kantin-be/issues/171)) — ditegakkan lewat **ruleset**
 > GitHub untuk `main` (id `24626209`), `enforcement=active`, dengan aturan: **wajib PR**,
 > **1 approval**, **status check `Build & Test (JDK 25)` hijau** & **branch up-to-date**,
 > serta **menolak force-push (`non_fast_forward`) & penghapusan branch (`deletion`)**.
 > Push langsung ditolak: `GH013: Changes must be made through a pull request`.
-> Verifikasi: `gh api repos/Zenixu/kantin-be/branches/main --jq .protected` → `true`.
-> **Bypass:** akun owner `Zenixu` boleh **merge PR** tanpa menunggu approval (mode
-> `pull_request`) — karena penulis tak bisa self-approve; **push langsung tetap ditolak**.
+> Verifikasi: `gh api repos/ngahizie/kantin-be/branches/main --jq .protected` → `true`.
+> **Bypass:** **tidak ada** (`bypass_actors: null` setelah migrasi ke organisasi
+> `ngahizie`, 2026-10-15) — **semua** PR, termasuk milik owner, butuh **1 approval**
+> dari akun lain; **push langsung tetap ditolak**.
 > Detail & cara verifikasi: [`docs/plan-branch-protection.md`](../docs/plan-branch-protection.md).
 
 ---

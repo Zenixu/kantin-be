@@ -5,7 +5,7 @@
 > `enforcement=active` dan target ref terisi. Verifikasi 2026-10-13:
 > `branches/main.protected=true`, push langsung ditolak
 > `GH013: Changes must be made through a pull request`.
-> Dilacak & ditutup di [#171](https://github.com/Zenixu/kantin-be/issues/171).
+> Dilacak & ditutup di [#171](https://github.com/ngahizie/kantin-be/issues/171).
 >
 > **2026-10-14 — model main-only.** Branch `develop` **dihapus**; hanya `main` yang
 > dilindungi. Ruleset `develop` (id `24968833`) ikut dihapus.
@@ -46,8 +46,8 @@ Risiko nyata yang dicegah:
 **Proteksi AKTIF untuk `main`.** Bukti verifikasi langsung:
 
 ```bash
-gh api repos/Zenixu/kantin-be/branches/main --jq .protected   # -> true
-gh api repos/Zenixu/kantin-be/rulesets --jq '.[] | "\(.name) \(.enforcement)"'
+gh api repos/ngahizie/kantin-be/branches/main --jq .protected   # -> true
+gh api repos/ngahizie/kantin-be/rulesets --jq '.[] | "\(.name) \(.enforcement)"'
 #   main active
 ```
 
@@ -72,15 +72,15 @@ remote: - Required status check "Build & Test (JDK 25)" is expected.
 | Branch harus up-to-date (`strict`) | ya |
 | Force-push | ditolak (`non_fast_forward`) |
 | Hapus branch | ditolak (`deletion`) |
-| Bypass | **owner `Zenixu`** boleh **merge PR** tanpa menunggu approval (mode `pull_request`); **push langsung tetap diblokir** |
+| Bypass | **tidak ada** (`bypass_actors: null`) — **semua** akun, termasuk owner, wajib PR + 1 approval |
 
-> **Bypass owner (2026-10-13).** Karena penulis PR **tidak boleh** meng-approve
-> PR-nya sendiri, PR yang dibuat akun owner (`Zenixu`) akan selalu berstatus
-> `REVIEW_REQUIRED` dan tak bisa di-merge. Agar owner tetap bisa bekerja, akun
-> `Zenixu` didaftarkan sebagai **bypass actor** dengan mode **`pull_request`**:
-> boleh **merge PR** (tombol *Merge without waiting for requirements* / `gh pr merge
-> --admin`), **tetapi tidak** boleh push/force-push langsung ke `main`.
-> Anggota lain tetap tunduk penuh pada aturan (wajib PR + 1 approval).
+> ⚠️ **Koreksi pasca-migrasi organisasi (2026-10-15).** Saat repo dipindah ke
+> organisasi `ngahizie`, ruleset **kehilangan `bypass_actors`** yang dulu
+> didaftarkan (2026-10-13). Kini **tidak ada bypass**: PR dari siapa pun —
+> termasuk owner — berstatus `REVIEW_REQUIRED` sampai **1 approval** dari akun
+> lain. Karena penulis tak bisa meng-approve PR-nya sendiri, **setiap PR butuh
+> approver lain** (atau owner mengembalikan bypass lewat setelan ruleset).
+> Riwayat bypass lama tetap dicatat di §5.
 
 > **Catatan koreksi (2026-10-12):** klaim §2 sebelumnya ("proteksi aktif, terbukti PR #5
 > ditolak") **tidak berlaku** — ruleset `main` saat itu `enforcement=disabled` **dan**
@@ -107,14 +107,14 @@ request before merging* → *Require approvals* → ubah angka → **Save**.
 
 ```bash
 # contoh: ubah jumlah approval untuk ruleset main (id 24626209)
-gh api -X PUT repos/Zenixu/kantin-be/rulesets/24626209 --input ruleset-main.json
+gh api -X PUT repos/ngahizie/kantin-be/rulesets/24626209 --input ruleset-main.json
 # (ubah "required_approving_review_count" di file JSON sebelum mengirim)
 ```
 
 ### Menonaktifkan sementara (mis. darurat)
 
 ```bash
-gh api -X PUT repos/Zenixu/kantin-be/rulesets/24626209 \
+gh api -X PUT repos/ngahizie/kantin-be/rulesets/24626209 \
   -f "enforcement=disabled"        # atau "evaluate" untuk uji tanpa memblokir
 ```
 
@@ -136,10 +136,10 @@ dibuat 2026-10-13 **dihapus** bersama branch `develop` (2026-10-14, model main-o
 
 ```bash
 # Paling andal: lihat PR -> BLOCKED + REVIEW_REQUIRED = proteksi aktif
-gh pr view <nomor> --repo Zenixu/kantin-be --json mergeStateStatus,reviewDecision
+gh pr view <nomor> --repo ngahizie/kantin-be --json mergeStateStatus,reviewDecision
 
 # Flag cepat (true = ada proteksi)
-gh api repos/Zenixu/kantin-be/branches/main --jq .protected
+gh api repos/ngahizie/kantin-be/branches/main --jq .protected
 ```
 
 Uji langsung: push ke `main` dari branch lokal → **ditolak** GitHub.
@@ -156,9 +156,10 @@ Uji langsung: push ke `main` dari branch lokal → **ditolak** GitHub.
 | 2026-10-06 | Dokumen ini dibuat agar owner dapat menyelesaikan tanpa konteks tambahan. |
 | 2026-10-06 | Owner **mengaktifkan proteksi** (rule klasik). Terbukti: merge PR #5 ke `develop` ditolak *"base branch policy prohibits the merge"*; `--admin` pun ditolak (*"At least 2 approving reviews"*). Owner lalu menembusnya via admin override. |
 | 2026-10-06 | Dokumen diperbarui: status → **AKTIF**, + catatan 2 approval & cara verifikasi yang andal. |
-| 2026-10-12 | **Verifikasi ulang: proteksi BELUM AKTIF** — `branches/{main}.protected=false`, ruleset `main` `enforcement=disabled`. Status dokumen dikoreksi. Dilacak di [#171](https://github.com/Zenixu/kantin-be/issues/171). |
+| 2026-10-12 | **Verifikasi ulang: proteksi BELUM AKTIF** — `branches/{main}.protected=false`, ruleset `main` `enforcement=disabled`. Status dokumen dikoreksi. Dilacak di [#171](https://github.com/ngahizie/kantin-be/issues/171). |
 | 2026-10-13 | Owner (via Zenixu) **mengaktifkan proteksi**: ruleset `main` (24626209) di-`active` + target ref diisi; ruleset `develop` baru dibuat (id `24968833`, `active`). Aturan: PR + approval + status check `Build & Test (JDK 25)` + branch up-to-date + blok force-push/hapus. |
 | 2026-10-13 | **Keputusan owner: jumlah approval = 1** (bukan 2) — cukup sebagai gerbang review untuk tim kecil tanpa memperlambat merge. Kedua ruleset diperbarui (`required_approving_review_count=1`). |
 | 2026-10-13 | **Verifikasi:** `branches/{main,develop}.protected=true`; uji push langsung → `GH013: Changes must be made through a pull request` (ditolak). Status dokumen → **AKTIF**. #171 selesai. |
 | 2026-10-13 | Ditambahkan **bypass owner** (`Zenixu`, mode `pull_request`) — owner boleh merge PR sendiri (penulis tak bisa self-approve), tapi **push langsung tetap diblokir**. Aturan tetap penuh untuk anggota lain. |
 | 2026-10-14 | **Model main-only:** branch `develop` **dihapus** & ruleset `develop` (id `24968833`) dihapus. Hanya `main` yang dilindungi. `WORKFLOW.md`, `AGENTS.md`, `ci.yml`, `README.md` diselaraskan. |
+| 2026-10-15 | **Repo dipindah ke organisasi `ngahizie`** (`Zenixu/kantin-be` → `ngahizie/kantin-be`). Ruleset `main` (24626209) **terbawa & tetap `active`**, tetapi **`bypass_actors` hilang** (`null`) — kini **tanpa bypass**: semua PR butuh 1 approval. Referensi repo di dokumentasi diselaraskan ke `ngahizie`. |

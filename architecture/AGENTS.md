@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Proyek** | Modul Kantin Cashless SKOOLIA — backend (`kantin-be`) |
-| **Repo** | `git@github.com:Zenixu/kantin-be.git` |
+| **Repo** | `git@github.com:ngahizie/kantin-be.git` |
 | **Dokumen acuan produk** | `../2026-10-01-prd-kantin-skoolia.md` (PRD teknis v4) |
 | **Dokumen acuan proses** | `../2026-10-01-prd-kantin-skoolia-non-teknis.md` (PRD non-teknis) |
 | **Referensi implementasi** | Repo SKOOLIA yang di-clone: `admin-be`, `admin-fe` (lihat §N) |
