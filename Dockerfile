@@ -3,7 +3,10 @@
 # ──────────────────────────────────────────
 FROM azul/zulu-openjdk-alpine:25 AS builder
 
-RUN apk add --no-cache maven tzdata ttf-dejavu
+# ttf-dejavu + fontconfig: Apache POI (ekspor Excel) butuh font saat runtime
+# (lihat #215). fontconfig ditarik transitif oleh ttf-dejavu, tapi kita nyatakan
+# EKSPLISIT agar tidak bergantung pada detail dependensi Alpine.
+RUN apk add --no-cache maven tzdata ttf-dejavu fontconfig
 ENV TZ=Asia/Jakarta
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -23,7 +26,11 @@ RUN ./mvnw clean package -DskipTests -q
 # ──────────────────────────────────────────
 FROM azul/zulu-openjdk-alpine:25
 
-RUN apk add --no-cache tzdata ttf-dejavu curl && \
+# ttf-dejavu + fontconfig — WAJIB untuk ekspor Excel (Apache POI). Bila font
+# tidak ada, POI gagal dengan "Fontconfig head is null" → GET /api/laporan/ekspor
+# balas 500 (bug #215). Dinyatakan EKSPLISIT agar tidak bergantung pada
+# dependensi transitif Alpine yang bisa berubah.
+RUN apk add --no-cache tzdata ttf-dejavu fontconfig curl && \
     addgroup -S appgroup && adduser -S appuser -G appgroup
 
 ENV TZ=Asia/Jakarta

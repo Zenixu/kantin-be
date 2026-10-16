@@ -61,3 +61,30 @@ jobs:
           path: target/site/jacoco/
           if-no-files-found: ignore
           retention-days: 7
+
+  # ── Gerbang image produksi (issue #215) ──────────────────────────────────
+  # Unit/IT di job `test` berjalan di JVM runner (PUNYA font) sehingga TIDAK
+  # menangkap bug "font hilang di container" (ekspor Excel → 500). Job ini
+  # membangun image produksi lalu memverifikasi font tersedia di dalamnya.
+  image:
+    name: Verifikasi image produksi (font ekspor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build image produksi
+        run: docker build -t kantin-be:ci .
+
+      # Guard #215: Apache POI butuh font untuk ekspor Excel. Bila font hilang,
+      # endpoint /api/laporan/ekspor balas 500 ("Fontconfig head is null").
+      - name: Pastikan font tersedia di image (guard #215)
+        run: |
+          docker run --rm --entrypoint sh kantin-be:ci -c '
+            set -e
+            test -d /usr/share/fonts/dejavu || { echo "FONT DEJAVU HILANG"; exit 1; }
+            ls /usr/lib/libfontconfig.so.1 >/dev/null 2>&1 || { echo "FONTCONFIG HILANG"; exit 1; }
+            echo "OK: font + fontconfig tersedia di image produksi"
+          '
