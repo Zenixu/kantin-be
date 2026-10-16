@@ -1,9 +1,11 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.dto.HalamanResponse;
 import com.asqi.scholia_kantin_be.dto.HasilRefundResponse;
 import com.asqi.scholia_kantin_be.dto.KandidatRefundItem;
 import com.asqi.scholia_kantin_be.dto.KonfirmasiSetoranRequest;
 import com.asqi.scholia_kantin_be.dto.KoreksiSaldoRequest;
+import com.asqi.scholia_kantin_be.dto.MutasiKoreksiItem;
 import com.asqi.scholia_kantin_be.dto.PindahSaldoRequest;
 import com.asqi.scholia_kantin_be.dto.RefundSaldoRequest;
 import com.asqi.scholia_kantin_be.dto.RekapSetoranTuItem;
@@ -24,6 +26,7 @@ import com.asqi.scholia_kantin_be.service.saldo.SaldoTopUpService;
 import com.asqi.scholia_kantin_be.service.saldo.SetoranTuService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -86,6 +89,31 @@ public class SaldoController {
                 request.getArah(), request.getNominal(), request.getAlasan(),
                 request.getReferensiId(), identitas.aktorIdWajib());
         return CommonResponse.data(hasil, "Koreksi saldo berhasil");
+    }
+
+    /**
+     * <b>Daftar mutasi koreksi saldo</b> (PRD §9.2; issue #213) — bendahara perlu
+     * <i>membaca kembali</i> koreksi yang pernah dilakukan (data koreksi tidak
+     * pernah diedit/dihapus). Hanya mutasi berjenis {@code KOREKSI}, terbaru
+     * dulu, berhalaman.
+     *
+     * <p>Filter opsional: {@code tanggal} ({@code yyyy-MM-dd}, menurut zona waktu
+     * sekolah), {@code subjekTipe}, {@code subjekId}. Tenant selalu dari token
+     * (PRD §11.4), bukan parameter klien. Kepsek boleh (read-only).
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH,
+            AktorKantin.PENGELOLA_KANTIN, AktorKantin.KEPSEK})
+    @GetMapping("koreksi")
+    public ResponseEntity<Response<HalamanResponse<MutasiKoreksiItem>>> daftarKoreksi(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
+            @RequestParam(required = false) SubjekTipe subjekTipe,
+            @RequestParam(required = false) Long subjekId,
+            @RequestParam(defaultValue = "0") int halaman,
+            @RequestParam(defaultValue = "20") int ukuran) {
+
+        return CommonResponse.data(operasi.daftarKoreksi(
+                TenantContext.sekolahIdWajib(), tanggal, subjekTipe, subjekId, halaman, ukuran));
     }
 
     /** Saldo berjalan + belanja hari ini + mutasi terbaru (PRD §9.3). */

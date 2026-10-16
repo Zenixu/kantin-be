@@ -125,6 +125,13 @@ class SmokeGetEndpointIT {
         return Stream.of(
                 // SaldoController
                 "/api/saldo?subjekTipe=SISWA&subjekId=1",
+                // #213 — daftar koreksi bendahara (semua filter)
+                "/api/saldo/koreksi",
+                "/api/saldo/koreksi?tanggal=2026-10-16",
+                "/api/saldo/koreksi?subjekTipe=SISWA",
+                "/api/saldo/koreksi?subjekTipe=KARTU_TAMU&subjekId=1",
+                "/api/saldo/koreksi?tanggal=2026-10-16&subjekTipe=SISWA&subjekId=1",
+                "/api/saldo/koreksi?halaman=0&ukuran=5",
                 "/api/saldo/rekonsiliasi?subjekTipe=SISWA&subjekId=1",
                 "/api/saldo/refund/kandidat",
                 "/api/saldo/setoran-tu/rekap",
