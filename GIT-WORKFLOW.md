@@ -64,7 +64,7 @@ git push -u origin feature/nama-fitur
 
 ```bash
 # Setelah push, buka GitHub:
-# https://github.com/Zenixu/kantin-be/pulls (untuk backend)
+# https://github.com/ngahizie/kantin-be/pulls (untuk backend)
 # https://github.com/Derylfabiensyah/kantin-fe/pulls (untuk frontend)
 
 # Klik "New Pull Request"

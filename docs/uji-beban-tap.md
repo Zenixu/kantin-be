@@ -143,7 +143,7 @@ yang diminta issue #172.** Dijalankan lewat workflow nightly
 `local,loadtest`, rate-limit OFF. Seed `seed-loadtest.sql` (1 menu, 20 kartu).
 
 **Steady state (setelah warmup 30 dtk @20 tap/dtk)** — run
-[38235819198](https://github.com/Zenixu/kantin-be/actions/runs/38235819198):
+[38235819198](https://github.com/ngahizie/kantin-be/actions/runs/38235819198):
 
 | TAP_RATE | Durasi | p95 klien (ms) | p99 (ms) | p95 server (dtk) | Gagal | Lulus SLO? |
 |---|---|---|---|---|---|---|
@@ -162,9 +162,9 @@ GitHub Actions, `main`) memberi hasil konsisten.
 
 | Run (UTC) | 50 tap/dtk | 75 tap/dtk | 100 tap/dtk | p95 server | Lulus |
 |---|---|---|---|---|---|
-| [38235819198](https://github.com/Zenixu/kantin-be/actions/runs/38235819198) · 2026-10-12 | 9 ms | 7 ms | 6 ms | 0,238 dtk | ✅ |
-| [38330464289](https://github.com/Zenixu/kantin-be/actions/runs/38330464289) · 2026-10-13 | 12,97 ms | 9,77 ms | 8,88 ms | 0,2375 dtk | ✅ |
-| [38482656171](https://github.com/Zenixu/kantin-be/actions/runs/38482656171) · 2026-10-13 | 12,46 ms | 9,60 ms | 8,57 ms | 0,2375 dtk | ✅ |
+| [38235819198](https://github.com/ngahizie/kantin-be/actions/runs/38235819198) · 2026-10-12 | 9 ms | 7 ms | 6 ms | 0,238 dtk | ✅ |
+| [38330464289](https://github.com/ngahizie/kantin-be/actions/runs/38330464289) · 2026-10-13 | 12,97 ms | 9,77 ms | 8,88 ms | 0,2375 dtk | ✅ |
+| [38482656171](https://github.com/ngahizie/kantin-be/actions/runs/38482656171) · 2026-10-13 | 12,46 ms | 9,60 ms | 8,57 ms | 0,2375 dtk | ✅ |
 
 Semua run: `tap_ok` 100%, `http_req_failed` 0%, `tap_rate_limited` 0%; cross-check
 Prometheus (`kantin_tap_duration_seconds`) `lulus_slo=true` di tiap laju.
