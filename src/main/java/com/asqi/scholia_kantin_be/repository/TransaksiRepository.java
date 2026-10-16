@@ -5,6 +5,7 @@ import com.asqi.scholia_kantin_be.model.Transaksi;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -20,7 +21,8 @@ import java.util.Optional;
  * di sini dipakai untuk rekap sesi kasir &amp; laporan (PRD §6.4, §9.5).
  */
 @Repository
-public interface TransaksiRepository extends JpaRepository<Transaksi, Long> {
+public interface TransaksiRepository extends JpaRepository<Transaksi, Long>,
+        JpaSpecificationExecutor<Transaksi> {
 
     /** Idempotency: cari transaksi berdasarkan key dari klien kasir (PRD §11.3). */
     Optional<Transaksi> findByIdempotencyKey(String idempotencyKey);

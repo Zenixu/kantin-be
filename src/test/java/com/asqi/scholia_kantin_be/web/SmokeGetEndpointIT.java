@@ -166,6 +166,14 @@ class SmokeGetEndpointIT {
 
                 // KasirController
                 "/api/kasir/tap/menunggu",
+                // #212 — daftar transaksi utk koreksi bendahara (semua filter)
+                "/api/kasir/transaksi",
+                "/api/kasir/transaksi?sesiId=1",
+                "/api/kasir/transaksi?tanggal=2026-10-16",
+                "/api/kasir/transaksi?status=SUKSES",
+                "/api/kasir/transaksi?status=VOID",
+                "/api/kasir/transaksi?sesiId=1&tanggal=2026-10-16&status=SUKSES",
+                "/api/kasir/transaksi?halaman=0&ukuran=5",
 
                 // SiswaController — cari siswa (#214); tanpa demo → daftar kosong 200
                 "/api/siswa",
