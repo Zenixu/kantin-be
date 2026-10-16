@@ -149,6 +149,15 @@ Optional<Siswa> findByRfidUid(String rfidUid);
   - `blokirKartu(...)` → **best-effort** (hanya log) — perpindahan uang di ledger tetap sah &amp; idempoten, tidak dibatalkan kegagalan integrasi.
 - Saat Q7 terjawab: tambahkan implementasi nyata (mis. `SiswaKartuClient`) &amp; tandai `@Primary`. Status blokir **tidak boleh** di-cache (§11.11).
 
+### 4.5 Port pencarian siswa (`CariSiswaPort`, issue #214)
+- Layar TU butuh **mencari siswa berdasarkan nama/NIS** (PRD §9.2 top-up tunai, §9.6 kontrol siswa, §9.3 kandidat refund). Master siswa **milik admin-be** — kantin-be tidak menyimpannya.
+- Dipisah sebagai port `service/integrasi/CariSiswaPort` (kontrak Q7 belum final):
+  - `CariSiswaFallback` → daftar **kosong** (fail-open, bukan error) saat integrasi belum dikonfigurasi;
+  - `CariSiswaDemo` → data siswa tiruan saat profil `demo` aktif, agar FE/alur TU bisa diuji tanpa data SKOOLIA.
+- Saldo tiap hasil diambil dari **ledger lokal** kantin-be (`LedgerSaldoService`), bukan dari admin-be — sehingga angka konsisten dengan data tap/top-up.
+- Endpoint: `GET /api/siswa` (`q`, `hanyaTidakAktif`, `batas`).
+- Saat Q7 terjawab: tambahkan implementasi REST nyata (mis. `CariSiswaRestClient`) &amp; tandai `@Primary`, lalu daftarkan di `PemeriksaIntegrasiProduksi` bila perlu.
+
 ---
 
 ## 5. Top-up Online (callback-be)

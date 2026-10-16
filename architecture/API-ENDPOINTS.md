@@ -3,8 +3,8 @@
 > **Single source of truth endpoint kantin-be.** Semua path berprefix `/api`.
 > Respons selalu dibungkus `Response<T>` (`{ responseCode, message, data, ... }`).
 >
-> **Sinkron terakhir:** 2026-10-14 · **Total: 87 endpoint** (86 di `controller/` + 1 shim dev)
-> di **14 controller**. Dijaga otomatis oleh `ApiEndpointsDocTest` — uji ini
+> **Sinkron terakhir:** 2026-10-15 · **Total: 88 endpoint** (87 di `controller/` + 1 shim dev)
+> di **15 controller**. Dijaga otomatis oleh `ApiEndpointsDocTest` — uji ini
 > **gagal** bila daftar di bawah tidak lagi sama persis dengan anotasi
 > `@…Mapping` di kode. Bila menambah/mengubah endpoint, perbarui dokumen ini.
 >
@@ -275,6 +275,20 @@
 | Method | Path | Auth | Keterangan |
 |---|---|---|---|
 | `POST` | `/api/v1/auth/login` | — (profil `local`) | Terbitkan token RS256 dummy untuk FE dev. Body `{ email/username, sekolah_id }` |
+
+---
+
+## 15. Siswa — Cari siswa (SiswaController) — `/api/siswa`
+
+> Data siswa **milik `admin-be`** (kantin-be tidak menyimpan master siswa). Endpoint
+> ini menjembatani lewat port `CariSiswaPort`; saat kontrak Q7 admin-be belum
+> tersedia, profil `demo` mengaktifkan `CariSiswaDemo` (data tiruan) — lihat #214.
+> Dipakai untuk top-up tunai (§9.2), kontrol siswa (§9.6), dan kandidat refund
+> siswa keluar (§9.3).
+
+| Method | Path | Auth | Keterangan |
+|---|---|---|---|
+| `GET` | `/api/siswa` | TU, admin, pengelola, kepsek (read) | Cari siswa (nama/NIS) + saldo dari ledger lokal. Query: `q` (nama/NIS), `hanyaTidakAktif` (refund §9.3), `batas` (default 20, maks 50) |
 
 ---
 

@@ -167,6 +167,11 @@ class SmokeGetEndpointIT {
                 // KasirController
                 "/api/kasir/tap/menunggu",
 
+                // SiswaController — cari siswa (#214); tanpa demo → daftar kosong 200
+                "/api/siswa",
+                "/api/siswa?q=budi",
+                "/api/siswa?hanyaTidakAktif=true&batas=5",
+
                 // AuthController — identitas dari token
                 "/api/auth/me"
         );
