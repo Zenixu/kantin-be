@@ -1,13 +1,17 @@
 package com.asqi.scholia_kantin_be.controller;
 
+import com.asqi.scholia_kantin_be.dto.HalamanResponse;
 import com.asqi.scholia_kantin_be.dto.TapRequest;
 import com.asqi.scholia_kantin_be.dto.TapResponse;
+import com.asqi.scholia_kantin_be.dto.TransaksiKasirItem;
 import com.asqi.scholia_kantin_be.dto.VoidRequest;
+import com.asqi.scholia_kantin_be.enums.StatusTransaksi;
 import com.asqi.scholia_kantin_be.security.IdentitasKantin;
 import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import com.asqi.scholia_kantin_be.service.kasir.SesiKasirService;
 import com.asqi.scholia_kantin_be.service.kasir.TapService;
+import com.asqi.scholia_kantin_be.service.kasir.TransaksiKasirService;
 import com.asqi.scholia_kantin_be.service.kasir.VoidService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +28,7 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -31,6 +36,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -50,6 +56,7 @@ class KasirControllerTest {
     private VoidService voidService;
     private SesiKasirService sesiKasirService;
     private BukuKasPostingService bukuKasPosting;
+    private TransaksiKasirService transaksiKasirService;
     private MockMvc mockMvc;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -73,8 +80,10 @@ class KasirControllerTest {
         voidService = mock(VoidService.class);
         sesiKasirService = mock(SesiKasirService.class);
         bukuKasPosting = mock(BukuKasPostingService.class);
+        transaksiKasirService = mock(TransaksiKasirService.class);
 
-        KasirController controller = new KasirController(tapService, voidService, sesiKasirService, bukuKasPosting);
+        KasirController controller = new KasirController(
+                tapService, voidService, sesiKasirService, bukuKasPosting, transaksiKasirService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setCustomArgumentResolvers(new PrincipalResolver())
                 .build();
@@ -145,5 +154,30 @@ class KasirControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("daftar transaksi (#212): tenant dari konteks + filter diteruskan ke service")
+    void daftarTransaksiMeneruskanFilter() throws Exception {
+        when(transaksiKasirService.daftar(eq(7L), eq(3L), eq(LocalDate.parse("2026-10-16")),
+                eq(StatusTransaksi.VOID), eq(0), eq(20)))
+                .thenReturn(HalamanResponse.<TransaksiKasirItem>builder()
+                        .items(List.of())
+                        .total(0L)
+                        .halaman(0)
+                        .ukuran(20)
+                        .totalHalaman(0)
+                        .build());
+
+        mockMvc.perform(get("/api/kasir/transaksi")
+                        .param("sesiId", "3")
+                        .param("tanggal", "2026-10-16")
+                        .param("status", "VOID"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+
+        // Tenant WAJIB dari TenantContext (7), bukan dari parameter klien.
+        verify(transaksiKasirService).daftar(eq(7L), eq(3L), eq(LocalDate.parse("2026-10-16")),
+                eq(StatusTransaksi.VOID), eq(0), eq(20));
     }
 }

@@ -1,10 +1,13 @@
 package com.asqi.scholia_kantin_be.controller;
 
 import com.asqi.scholia_kantin_be.dto.BukaSesiRequest;
+import com.asqi.scholia_kantin_be.dto.HalamanResponse;
 import com.asqi.scholia_kantin_be.dto.TapRequest;
 import com.asqi.scholia_kantin_be.dto.TapResponse;
+import com.asqi.scholia_kantin_be.dto.TransaksiKasirItem;
 import com.asqi.scholia_kantin_be.dto.VoidRequest;
 import com.asqi.scholia_kantin_be.enums.AktorKantin;
+import com.asqi.scholia_kantin_be.enums.StatusTransaksi;
 import com.asqi.scholia_kantin_be.model.SesiKasir;
 import com.asqi.scholia_kantin_be.model.Transaksi;
 import com.asqi.scholia_kantin_be.payload.response.CommonResponse;
@@ -14,11 +17,13 @@ import com.asqi.scholia_kantin_be.security.PerluPeran;
 import com.asqi.scholia_kantin_be.security.TenantContext;
 import com.asqi.scholia_kantin_be.service.kasir.SesiKasirService;
 import com.asqi.scholia_kantin_be.service.kasir.TapService;
+import com.asqi.scholia_kantin_be.service.kasir.TransaksiKasirService;
 import com.asqi.scholia_kantin_be.service.kasir.VoidService;
 import com.asqi.scholia_kantin_be.service.integrasi.BukuKasPostingService;
 import com.asqi.scholia_kantin_be.service.integrasi.HasilPostingBukuKas;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,7 +31,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
 
 /**
  * Endpoint kasir: <b>tap</b>, <b>void</b>, dan <b>siklus sesi kasir</b>.
@@ -48,6 +56,7 @@ public class KasirController {
     private final VoidService voidService;
     private final SesiKasirService sesiKasirService;
     private final BukuKasPostingService bukuKasPosting;
+    private final TransaksiKasirService transaksiKasirService;
 
     /**
      * Proses satu tap: validasi 6 tahap → potong saldo → kurangi stok → catat
@@ -140,6 +149,32 @@ public class KasirController {
         Transaksi trx = voidService.koreksiTransaksiSesiTertutup(
                 TenantContext.sekolahIdWajib(), transaksiId, identitas.aktorIdWajib(), request.getAlasan());
         return CommonResponse.data(trx, "Transaksi sesi tertutup berhasil dikoreksi");
+    }
+
+    /**
+     * <b>Daftar transaksi</b> untuk koreksi bendahara (PRD §6.3, §9.2; issue #212)
+     * — melengkapi aksi koreksi di atas: sebelum mengoreksi, bendahara harus
+     * <i>menemukan</i> {@code transaksiId}-nya. Terbaru dulu, berhalaman.
+     *
+     * <p>Filter opsional: {@code sesiId}, {@code tanggal} ({@code yyyy-MM-dd},
+     * menurut zona waktu sekolah), {@code status} ({@code SUKSES}/{@code VOID}).
+     * Tenant selalu dari token (PRD §11.4), bukan dari parameter klien.
+     *
+     * <p>RBAC sengaja disamakan dengan aksi koreksinya (TU/bendahara, admin,
+     * pengelola) — petugas kasir tidak membutuhkannya.
+     */
+    @PerluPeran({AktorKantin.TU_SEKOLAH, AktorKantin.ADMIN_SEKOLAH, AktorKantin.PENGELOLA_KANTIN})
+    @GetMapping("transaksi")
+    public ResponseEntity<Response<HalamanResponse<TransaksiKasirItem>>> daftarTransaksi(
+            @RequestParam(required = false) Long sesiId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate tanggal,
+            @RequestParam(required = false) StatusTransaksi status,
+            @RequestParam(defaultValue = "0") int halaman,
+            @RequestParam(defaultValue = "20") int ukuran) {
+
+        return CommonResponse.data(transaksiKasirService.daftar(
+                TenantContext.sekolahIdWajib(), sesiId, tanggal, status, halaman, ukuran));
     }
 
     /**
