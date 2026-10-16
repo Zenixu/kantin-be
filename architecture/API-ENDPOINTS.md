@@ -3,7 +3,7 @@
 > **Single source of truth endpoint kantin-be.** Semua path berprefix `/api`.
 > Respons selalu dibungkus `Response<T>` (`{ responseCode, message, data, ... }`).
 >
-> **Sinkron terakhir:** 2026-10-16 · **Total: 89 endpoint** (88 di `controller/` + 1 shim dev)
+> **Sinkron terakhir:** 2026-10-16 · **Total: 90 endpoint** (89 di `controller/` + 1 shim dev)
 > di **15 controller**. Dijaga otomatis oleh `ApiEndpointsDocTest` — uji ini
 > **gagal** bila daftar di bawah tidak lagi sama persis dengan anotasi
 > `@…Mapping` di kode. Bila menambah/mengubah endpoint, perbarui dokumen ini.
@@ -50,6 +50,7 @@
 |---|---|---|---|
 | `POST` | `/api/saldo/topup` | TU, admin, pengelola | Top-up tunai (PRD §9.1); `referensiId` = kunci idempotensi |
 | `POST` | `/api/saldo/koreksi` | TU, admin, pengelola | Koreksi saldo (arah KREDIT/DEBIT, alasan + berita acara wajib) |
+| `GET` | `/api/saldo/koreksi` | TU, admin, pengelola, **kepsek (read)** | **Daftar mutasi koreksi saldo** (PRD §9.2, issue #213) — terbaru dulu, berhalaman; filter opsional `tanggal` (`yyyy-MM-dd`, zona sekolah), `subjekTipe`, `subjekId`, `halaman`, `ukuran`. Data koreksi tak pernah diedit/dihapus |
 | `GET` | `/api/saldo` | petugas, TU, pengelola, admin | Saldo berjalan + belanja hari ini + mutasi terbaru. Query: `subjekTipe`, `subjekId`, `batasMutasi` |
 | `GET` | `/api/saldo/rekonsiliasi` | TU, admin, pengelola | Hitung ulang saldo dari ledger. Query: `subjekTipe`, `subjekId` |
 | `GET` | `/api/saldo/refund/kandidat` | TU, admin, pengelola, **kepsek (read)** | Daftar siswa bersisa saldo (kandidat refund/pindah). Query: `hanyaTidakAktif`. Kepsek **hanya baca** (§9.6) |

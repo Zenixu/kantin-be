@@ -6,6 +6,7 @@ import com.asqi.scholia_kantin_be.enums.SubjekTipe;
 import com.asqi.scholia_kantin_be.model.SaldoLedger;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,7 +26,8 @@ import java.util.Optional;
  * (PRD §11.4) terlihat jelas di setiap pemanggilan.
  */
 @Repository
-public interface SaldoLedgerRepository extends JpaRepository<SaldoLedger, Long> {
+public interface SaldoLedgerRepository extends JpaRepository<SaldoLedger, Long>,
+        JpaSpecificationExecutor<SaldoLedger> {
 
     /**
      * Idempotency: satu key hanya boleh menghasilkan satu mutasi (PRD §11.3).
